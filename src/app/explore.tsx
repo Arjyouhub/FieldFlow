@@ -1,180 +1,341 @@
-import { Image } from 'expo-image';
-import { SymbolView } from 'expo-symbols';
-import { Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Pressable,
+  ActivityIndicator,
+  RefreshControl,
+  Platform,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import { API_BASE_URL } from "../config/api";
+import { getAuthSession } from "../utils/storage";
+import { Colors, Spacing, Radii, Shadows } from "../constants/theme";
 
-import { ExternalLink } from '@/components/external-link';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Collapsible } from '@/components/ui/collapsible';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+export default function ExploreActivityScreen() {
+  const router = useRouter();
+  const theme = Colors.light;
 
-export default function TabTwoScreen() {
-  const safeAreaInsets = useSafeAreaInsets();
-  const insets = {
-    ...safeAreaInsets,
-    bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.three,
+  const [token, setToken] = useState("");
+  const [user, setUser] = useState<any>(null);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const session = await getAuthSession();
+      if (!session.token) {
+        router.replace("/");
+        return;
+      }
+      setToken(session.token);
+      setUser(session.user);
+
+      const res = await fetch(`${API_BASE_URL}/customers/assigned`, {
+        headers: { Authorization: `Bearer ${session.token}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCustomers(data.customers || []);
+      }
+    } catch {
+      // Ignore network warning
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
-  const theme = useTheme();
 
-  const contentPlatformStyle = Platform.select({
-    android: {
-      paddingTop: insets.top,
-      paddingLeft: insets.left,
-      paddingRight: insets.right,
-      paddingBottom: insets.bottom,
-    },
-    web: {
-      paddingTop: Spacing.six,
-      paddingBottom: Spacing.four,
-    },
-  });
+  const visitedCases = customers.filter(
+    (c) => c.status === "visited" || c.status === "collected" || c.status === "ptp"
+  );
 
   return (
-    <ScrollView
-      style={[styles.scrollView, { backgroundColor: theme.background }]}
-      contentInset={insets}
-      contentContainerStyle={[styles.contentContainer, contentPlatformStyle]}>
-      <ThemedView style={styles.container}>
-        <ThemedView style={styles.titleContainer}>
-          <ThemedText type="subtitle">Explore</ThemedText>
-          <ThemedText style={styles.centerText} themeColor="textSecondary">
-            This starter app includes example{'\n'}code to help you get started.
-          </ThemedText>
+    <SafeAreaView style={styles.container} edges={["top", "bottom", "left", "right"]}>
+      <View style={styles.header}>
+        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
+          <Text style={styles.backBtnText}>← Dashboard</Text>
+        </Pressable>
+        <Text style={styles.headerTitle}>Field Activity & Audit Feed</Text>
+        <View style={{ width: 45 }} />
+      </View>
 
-          <ExternalLink href="https://docs.expo.dev" asChild>
-            <Pressable style={({ pressed }) => pressed && styles.pressed}>
-              <ThemedView type="backgroundElement" style={styles.linkButton}>
-                <ThemedText type="link">Expo documentation</ThemedText>
-                <SymbolView
-                  tintColor={theme.text}
-                  name={{ ios: 'arrow.up.right.square', android: 'link', web: 'link' }}
-                  size={12}
-                />
-              </ThemedView>
-            </Pressable>
-          </ExternalLink>
-        </ThemedView>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              loadData();
+            }}
+            tintColor={theme.primary}
+          />
+        }
+      >
+        {/* SUMMARY HERO */}
+        <View style={styles.heroCard}>
+          <Text style={styles.heroSub}>FIELD EFFICIENCY REPORT</Text>
+          <Text style={styles.heroTitle}>{user?.name || "Field Officer"}</Text>
+          <Text style={styles.heroArea}>Territory: {user?.assignedArea || "Kozhikode Central"}</Text>
 
-        <ThemedView style={styles.sectionsWrapper}>
-          <Collapsible title="File-based routing">
-            <ThemedText type="small">
-              This app has two screens: <ThemedText type="code">src/app/index.tsx</ThemedText> and{' '}
-              <ThemedText type="code">src/app/explore.tsx</ThemedText>
-            </ThemedText>
-            <ThemedText type="small">
-              The layout file in <ThemedText type="code">src/app/_layout.tsx</ThemedText> sets up
-              the tab navigator.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/router/introduction">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
+          <View style={styles.heroStatsRow}>
+            <View style={styles.heroStatItem}>
+              <Text style={styles.heroStatVal}>{visitedCases.length}</Text>
+              <Text style={styles.heroStatLabel}>Visits Done</Text>
+            </View>
+            <View style={styles.heroStatItem}>
+              <Text style={[styles.heroStatVal, { color: "#34D399" }]}>
+                {customers.filter((c) => c.status === "collected").length}
+              </Text>
+              <Text style={styles.heroStatLabel}>Collections</Text>
+            </View>
+            <View style={styles.heroStatItem}>
+              <Text style={[styles.heroStatVal, { color: "#FBBF24" }]}>
+                {customers.filter((c) => c.status === "ptp").length}
+              </Text>
+              <Text style={styles.heroStatLabel}>PTP Logged</Text>
+            </View>
+          </View>
+        </View>
 
-          <Collapsible title="Android, iOS, and web support">
-            <ThemedView type="backgroundElement" style={styles.collapsibleContent}>
-              <ThemedText type="small">
-                You can open this project on Android, iOS, and the web. To open the web version,
-                press <ThemedText type="smallBold">w</ThemedText> in the terminal running this
-                project.
-              </ThemedText>
-              <Image
-                source={require('@/assets/images/tutorial-web.png')}
-                style={styles.imageTutorial}
-              />
-            </ThemedView>
-          </Collapsible>
+        {/* GUIDELINES & PROTOCOL CARD */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Field Compliance & Geofence Policy</Text>
+          <View style={styles.policyRow}>
+            <Text style={styles.policyIcon}>🎯</Text>
+            <Text style={styles.policyText}>
+              <Text style={styles.policyBold}>100-Metre Radius Rule:</Text> Visits must be initiated within 100 metres of verified customer coordinates to pass automated compliance checks.
+            </Text>
+          </View>
+          <View style={styles.policyRow}>
+            <Text style={styles.policyIcon}>📷</Text>
+            <Text style={styles.policyText}>
+              <Text style={styles.policyBold}>Evidence Timestamping:</Text> Property photos captured in the app are automatically cryptographically signed with satellite latitude and longitude.
+            </Text>
+          </View>
+          <View style={styles.policyRow}>
+            <Text style={styles.policyIcon}>🔒</Text>
+            <Text style={styles.policyText}>
+              <Text style={styles.policyBold}>Instant Payment Verification:</Text> UPI transaction references are validated by administrative operations before reconciliation.
+            </Text>
+          </View>
+        </View>
 
-          <Collapsible title="Images">
-            <ThemedText type="small">
-              For static images, you can use the <ThemedText type="code">@2x</ThemedText> and{' '}
-              <ThemedText type="code">@3x</ThemedText> suffixes to provide files for different
-              screen densities.
-            </ThemedText>
-            <Image source={require('@/assets/images/react-logo.png')} style={styles.imageReact} />
-            <ExternalLink href="https://reactnative.dev/docs/images">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
+        {/* RECENT CASE ACTIONS TIMELINE */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Recent Case Activity</Text>
+          <Text style={styles.cardSubtitle}>Real-time audit log of your portfolio</Text>
 
-          <Collapsible title="Light and dark mode components">
-            <ThemedText type="small">
-              This template has light and dark mode support. The{' '}
-              <ThemedText type="code">useColorScheme()</ThemedText> hook lets you inspect what the
-              user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
-
-          <Collapsible title="Animations">
-            <ThemedText type="small">
-              This template includes an example of an animated component. The{' '}
-              <ThemedText type="code">src/components/ui/collapsible.tsx</ThemedText> component uses
-              the powerful <ThemedText type="code">react-native-reanimated</ThemedText> library to
-              animate opening this hint.
-            </ThemedText>
-          </Collapsible>
-        </ThemedView>
-        {Platform.OS === 'web' && <WebBadge />}
-      </ThemedView>
-    </ScrollView>
+          {loading ? (
+            <ActivityIndicator color={theme.primary} style={{ marginVertical: Spacing.four }} />
+          ) : visitedCases.length === 0 ? (
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyText}>No customer actions logged in this session yet.</Text>
+            </View>
+          ) : (
+            visitedCases.map((cust) => (
+              <Pressable
+                key={cust._id}
+                style={styles.activityItem}
+                onPress={() => router.push({ pathname: "/customer/[id]", params: { id: cust._id } })}
+              >
+                <View style={styles.actTopRow}>
+                  <Text style={styles.actCustName}>{cust.name}</Text>
+                  <View style={styles.actBadge}>
+                    <Text style={styles.actBadgeText}>{cust.status?.toUpperCase()}</Text>
+                  </View>
+                </View>
+                <Text style={styles.actMeta}>
+                  A/C: {cust.loanAccountNo} • Outstanding: ₹{cust.outstandingAmount?.toLocaleString("en-IN")}
+                </Text>
+                <Text style={styles.actAddress} numberOfLines={1}>
+                  📍 {cust.address}
+                </Text>
+              </Pressable>
+            ))
+          )}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollView: {
+  container: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: Spacing.five,
+    paddingVertical: Spacing.three,
+    backgroundColor: Colors.light.card,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
+  },
+  backBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: Radii.sm,
+    backgroundColor: Colors.light.cardSubtle,
+  },
+  backBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: Colors.light.textSecondary,
+  },
+  headerTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: Colors.light.text,
+  },
+  scrollContent: {
+    padding: Spacing.five,
+    paddingBottom: Spacing.nine,
+  },
+  heroCard: {
+    backgroundColor: Colors.light.text,
+    borderRadius: Radii.xl,
+    padding: Spacing.five,
+    marginBottom: Spacing.four,
+    ...Shadows.md,
+  },
+  heroSub: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#34D399",
+    letterSpacing: 0.6,
+  },
+  heroTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    marginTop: 2,
+  },
+  heroArea: {
+    fontSize: 12,
+    color: "#94A3B8",
+    marginTop: 2,
+  },
+  heroStatsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.12)",
+    paddingTop: Spacing.four,
+    marginTop: Spacing.four,
+  },
+  heroStatItem: {
+    alignItems: "center",
     flex: 1,
   },
-  contentContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+  heroStatVal: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#FFFFFF",
   },
-  container: {
-    maxWidth: MaxContentWidth,
-    flexGrow: 1,
+  heroStatLabel: {
+    fontSize: 11,
+    color: "#94A3B8",
+    marginTop: 2,
   },
-  titleContainer: {
-    gap: Spacing.three,
-    alignItems: 'center',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.six,
+  card: {
+    backgroundColor: Colors.light.card,
+    borderRadius: Radii.xl,
+    padding: Spacing.five,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    marginBottom: Spacing.four,
+    ...Shadows.sm,
   },
-  centerText: {
-    textAlign: 'center',
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: Colors.light.text,
+    marginBottom: 4,
   },
-  pressed: {
-    opacity: 0.7,
+  cardSubtitle: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    marginBottom: Spacing.four,
   },
-  linkButton: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-    borderRadius: Spacing.five,
-    justifyContent: 'center',
-    gap: Spacing.one,
-    alignItems: 'center',
+  policyRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: Spacing.three,
   },
-  sectionsWrapper: {
-    gap: Spacing.five,
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
+  policyIcon: {
+    fontSize: 16,
+    marginRight: Spacing.two,
+    marginTop: 1,
   },
-  collapsibleContent: {
-    alignItems: 'center',
+  policyText: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.light.textSecondary,
+    lineHeight: 18,
   },
-  imageTutorial: {
-    width: '100%',
-    aspectRatio: 296 / 171,
-    borderRadius: Spacing.three,
-    marginTop: Spacing.two,
+  policyBold: {
+    fontWeight: "700",
+    color: Colors.light.text,
   },
-  imageReact: {
-    width: 100,
-    height: 100,
-    alignSelf: 'center',
+  activityItem: {
+    backgroundColor: Colors.light.cardSubtle,
+    borderRadius: Radii.md,
+    padding: Spacing.three,
+    marginBottom: Spacing.two,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  actTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  actCustName: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: Colors.light.text,
+  },
+  actBadge: {
+    backgroundColor: Colors.light.primaryLight,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radii.xs,
+  },
+  actBadgeText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: Colors.light.primary,
+  },
+  actMeta: {
+    fontSize: 11,
+    color: Colors.light.textSecondary,
+    marginTop: 3,
+  },
+  actAddress: {
+    fontSize: 11,
+    color: Colors.light.textMuted,
+    marginTop: 2,
+  },
+  emptyBox: {
+    padding: Spacing.four,
+    alignItems: "center",
+  },
+  emptyText: {
+    fontSize: 13,
+    color: Colors.light.textMuted,
   },
 });

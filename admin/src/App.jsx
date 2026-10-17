@@ -62,6 +62,15 @@ import PtpView from './components/PtpView';
 import NonWorkableView from './components/NonWorkableView';
 import AuditLogsView from './components/AuditLogsView';
 import SuspiciousVisitsView from './components/SuspiciousVisitsView';
+import WhatsAppShareModal from './components/WhatsAppShareModal';
+import {
+  generateCollectionModelImage,
+  generateCollectionLedgerImage,
+  generateVisitModelImage,
+  generateVisitSummaryImage,
+  generateStaffPerformanceImage,
+  generateStaffVisitImage,
+} from './utils/reportImageGenerator';
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('fieldflow_admin_token') || '');
@@ -120,6 +129,15 @@ export default function App() {
   const [staffAreaOverrides, setStaffAreaOverrides] = useState({});
   const [staffRejectionModal, setStaffRejectionModal] = useState(null); // { staffId, name, phone, reason }
   const [customRejectReason, setCustomRejectReason] = useState('');
+
+  // WhatsApp Photo Share Modal State
+  const [whatsAppModal, setWhatsAppModal] = useState({
+    isOpen: false,
+    imageData: null,
+    title: '',
+    recipientName: '',
+    phone: '',
+  });
 
   // File Upload & Batch Import states
   const [importModalTab, setImportModalTab] = useState('file'); // 'file' | 'single' | 'json'
@@ -733,115 +751,113 @@ export default function App() {
     document.body.removeChild(link);
   };
 
-  // Share active report formatted summary via WhatsApp
-  const shareReportViaWhatsApp = () => {
+  // Handle processing & sharing canvas image to WhatsApp
+  const processImageForWhatsApp = async (imageData, { title, recipientName, phone }) => {
+    if (!imageData) return;
+
+    // 1. Automatically copy high-res PNG photo to clipboard
+    try {
+      if (imageData?.blob && window.ClipboardItem && navigator.clipboard?.write) {
+        await navigator.clipboard.write([
+          new ClipboardItem({ 'image/png': imageData.blob }),
+        ]);
+      }
+    } catch (err) {
+      console.warn('Clipboard image auto-copy:', err);
+    }
+
+    // 2. Open WhatsApp Photo Share Modal with preview
+    setWhatsAppModal({
+      isOpen: true,
+      imageData,
+      title,
+      recipientName,
+      phone,
+    });
+  };
+
+  // Share active report formatted summary via WhatsApp as a Photo Card
+  const shareReportViaWhatsApp = async () => {
     const dateLabel = reportDateRange === 'today' ? 'Today' : reportDateRange === 'yesterday' ? 'Yesterday' : reportDateRange === 'this_month' ? 'This Month' : `${reportStartDate} to ${reportEndDate}`;
 
-    let text = '';
+    let imageData = null;
+    let title = 'FieldFlow Report';
 
     if (reportType === 'collections') {
-      if (collectionSubView === 'model' && reportPerformanceMatrix && reportPerformanceMatrix.length > 0) {
-        const total = reportPerformanceGrandTotal || {};
-        text += `📊 *FIELDFLOW — COLLECTION MODEL REPORT*\n`;
-        text += `📅 *Period:* ${dateLabel}\n`;
-        text += `━━━━━━━━━━━━━━━━━━━━━\n`;
-        text += `💰 *Total POS:* ₹${(total.sumOfPos || 0).toLocaleString('en-IN')}\n`;
-        text += `💵 *Total Collection:* ₹${(total.sumOfCollection || 0).toLocaleString('en-IN')}\n`;
-        text += `🎯 *Target (10%):* ₹${(total.target || 0).toLocaleString('en-IN')}\n`;
-        text += `📈 *Achievement:* ${total.achPercent || 0}%\n`;
-        text += `🏃 *Yet To Go:* ₹${(total.yetToGo || 0).toLocaleString('en-IN')}\n`;
-        text += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
-        text += `*Field Staff Performance:*\n`;
-        reportPerformanceMatrix.slice(0, 10).forEach((r, idx) => {
-          text += `${idx + 1}. *${r.fsName}*\n   • Coll: ₹${(r.sumOfCollection || 0).toLocaleString('en-IN')} | Target: ₹${(r.target || 0).toLocaleString('en-IN')} | Ach: ${r.achPercent || 0}%\n`;
+      if (collectionSubView === 'model') {
+        title = `Collection Report (${dateLabel})`;
+        imageData = await generateCollectionModelImage({
+          period: dateLabel,
+          total: reportPerformanceGrandTotal || {},
+          rows: reportPerformanceMatrix || [],
         });
-        if (reportPerformanceMatrix.length > 10) {
-          text += `...and ${reportPerformanceMatrix.length - 10} more field staff.\n`;
-        }
       } else {
         const totalAmount = reportCollections.reduce((sum, c) => sum + (c.amount || 0), 0);
         const verifiedCount = reportCollections.filter((c) => c.status === 'approved' || c.status === 'verified').length;
-        text += `📊 *FIELDFLOW — COLLECTION LEDGER REPORT*\n`;
-        text += `📅 *Period:* ${dateLabel}\n`;
-        text += `💰 *Total Amount:* ₹${totalAmount.toLocaleString('en-IN')}\n`;
-        text += `📝 *Total Receipts:* ${reportCollections.length} (Verified: ${verifiedCount})\n\n`;
-        text += `*Recent Collections:*\n`;
-        reportCollections.slice(0, 8).forEach((c, idx) => {
-          const cust = c.caseId?.customerId?.name || c.customerId?.name || 'Customer';
-          const officer = c.collectedBy?.name || 'Officer';
-          text += `${idx + 1}. ₹${(c.amount || 0).toLocaleString('en-IN')} — ${cust} (Officer: ${officer})\n`;
+        title = `Collection Ledger Report (${dateLabel})`;
+        imageData = await generateCollectionLedgerImage({
+          period: dateLabel,
+          totalAmount,
+          totalCount: reportCollections.length,
+          verifiedCount,
+          rows: reportCollections,
         });
-        if (reportCollections.length > 8) {
-          text += `...and ${reportCollections.length - 8} more receipts.\n`;
-        }
       }
     } else {
-      if (visitSubView === 'model' && reportTimeSlotMatrix && reportTimeSlotMatrix.length > 0) {
-        text += `📍 *FIELDFLOW — DAILY VISIT REPORT MODEL*\n`;
-        text += `📅 *Date:* ${reportStartDate}\n`;
-        text += `👥 *Total Recorded Visits:* ${reportGrandTotalVisits || 0}\n`;
-        text += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
-        text += `*Field Officer Daily Visits:*\n`;
-        reportTimeSlotMatrix.slice(0, 10).forEach((r, idx) => {
-          text += `${idx + 1}. *${r.feName}*: ${r.totalVisits || 0} visits ${r.isAbsent ? '(Absent)' : ''}\n`;
+      if (visitSubView === 'model') {
+        title = `Daily Visit Update (${reportStartDate})`;
+        imageData = await generateVisitModelImage({
+          date: reportStartDate,
+          totalVisits: reportGrandTotalVisits || 0,
+          rows: reportTimeSlotMatrix || [],
+          columnTotals: reportColumnTotals || {},
+          grandTotalVisits: reportGrandTotalVisits || 0,
         });
-        if (reportTimeSlotMatrix.length > 10) {
-          text += `...and ${reportTimeSlotMatrix.length - 10} more field staff.\n`;
-        }
       } else {
-        text += `📍 *FIELDFLOW — DAILY VISITS SUMMARY*\n`;
-        text += `📅 *Period:* ${dateLabel}\n`;
-        text += `👥 *Total Field Visits:* ${reportVisits.length}\n\n`;
-        text += `*Recent Visits:*\n`;
-        reportVisits.slice(0, 8).forEach((v, idx) => {
-          const cust = v.caseId?.customerId?.name || v.customerName || 'Customer';
-          const officer = v.staffId?.name || v.staffName || 'Officer';
-          const outcome = (v.outcome || 'Visit').toUpperCase();
-          text += `${idx + 1}. ${cust} — ${outcome} (Staff: ${officer})\n`;
+        title = `Daily Visits Summary (${dateLabel})`;
+        imageData = await generateVisitSummaryImage({
+          period: dateLabel,
+          totalVisits: reportVisits.length,
+          rows: reportVisits,
         });
-        if (reportVisits.length > 8) {
-          text += `...and ${reportVisits.length - 8} more visits.\n`;
-        }
       }
     }
 
-    text += `\n📲 *Shared from FieldFlow Operations Center*`;
-
-    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-    window.open(url, '_blank');
+    if (imageData) {
+      await processImageForWhatsApp(imageData, {
+        title,
+        recipientName: 'Field Team Report',
+        phone: '',
+      });
+    }
   };
 
-  // Share individual officer performance directly to officer on WhatsApp
-  const shareStaffPerformanceWhatsApp = (row) => {
-    let text = `👋 Hello *${row.fsName}*,\nHere is your collection performance update:\n\n`;
-    text += `💰 *Portfolio POS:* ₹${(row.sumOfPos || 0).toLocaleString('en-IN')} (${row.countOfPos || 0} accounts)\n`;
-    text += `💵 *Your Total Collections:* ₹${(row.sumOfCollection || 0).toLocaleString('en-IN')}\n`;
-    text += `🎯 *Target (10%):* ₹${(row.target || 0).toLocaleString('en-IN')}\n`;
-    text += `📈 *Achievement:* ${row.achPercent || 0}%\n`;
-    text += `🏃 *Remaining Yet To Go:* ₹${(row.yetToGo || 0).toLocaleString('en-IN')}\n\n`;
-    text += `Keep pushing to hit today's DRR! 🚀\n— FieldFlow Operations`;
-
-    const phone = row.phone || '';
-    const cleanPhone = phone.replace(/\D/g, '');
-    const url = cleanPhone ? `https://api.whatsapp.com/send?phone=91${cleanPhone.length === 10 ? cleanPhone : phone}&text=${encodeURIComponent(text)}` : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-    window.open(url, '_blank');
+  // Share individual officer performance directly to officer on WhatsApp as a Photo Card
+  const shareStaffPerformanceWhatsApp = async (row) => {
+    const staffObj = staffList.find((s) => s._id === row.staffId || s.name === row.fsName || s.name === row.feName);
+    const phone = row.phone || staffObj?.phone || '';
+    const imageData = await generateStaffPerformanceImage(row);
+    if (imageData) {
+      await processImageForWhatsApp(imageData, {
+        title: `Performance Update: ${row.fsName}`,
+        recipientName: row.fsName,
+        phone,
+      });
+    }
   };
 
-  // Share individual officer daily visit counts on WhatsApp
-  const shareStaffVisitWhatsApp = (row) => {
-    let text = `👋 Hello *${row.feName}*,\nHere is your Daily Visit summary for *${reportStartDate}*:\n\n`;
-    text += `📍 *Total Visits Done:* ${row.totalVisits || 0}\n`;
-    text += `• 9-11 AM: ${row.slots?.['9-11']?.total || 0}\n`;
-    text += `• 11-1 PM: ${row.slots?.['11-1']?.total || 0}\n`;
-    text += `• 1-3 PM: ${row.slots?.['1-3']?.total || 0}\n`;
-    text += `• 3-5 PM: ${row.slots?.['3-5']?.total || 0}\n`;
-    text += `• 5-6 PM: ${row.slots?.['5-6']?.total || 0}\n\n`;
-    text += `Great work! Continue recording verified field visits.\n— FieldFlow Operations`;
-
-    const phone = row.phone || '';
-    const cleanPhone = phone.replace(/\D/g, '');
-    const url = cleanPhone ? `https://api.whatsapp.com/send?phone=91${cleanPhone.length === 10 ? cleanPhone : phone}&text=${encodeURIComponent(text)}` : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-    window.open(url, '_blank');
+  // Share individual officer daily visit counts on WhatsApp as a Photo Card
+  const shareStaffVisitWhatsApp = async (row) => {
+    const staffObj = staffList.find((s) => s._id === row.staffId || s.name === row.fsName || s.name === row.feName);
+    const phone = row.phone || staffObj?.phone || '';
+    const imageData = await generateStaffVisitImage(row, reportStartDate);
+    if (imageData) {
+      await processImageForWhatsApp(imageData, {
+        title: `Daily Visits: ${row.feName}`,
+        recipientName: row.feName,
+        phone,
+      });
+    }
   };
 
   // Toggle inline Navi edit mode
@@ -4531,10 +4547,7 @@ export default function App() {
                     <div className="card table-card">
                       <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)' }}>
                         <div>
-                          <strong style={{ fontSize: '15px' }}>Field Staff Collection Performance & Target Matrix</strong>
-                          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                            POS Portfolio Outstanding, Recovery Target (10%), Daily Run-rate (DRR) & Achievement %
-                          </div>
+                          <strong style={{ fontSize: '16px' }}>Collection Report</strong>
                         </div>
                       </div>
 
@@ -4851,10 +4864,7 @@ export default function App() {
                     <div className="card table-card">
                       <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)' }}>
                         <div>
-                          <strong style={{ fontSize: '15px' }}>Daily Field Staff Visit Matrix (Time-Slot & Portfolio Breakdown)</strong>
-                          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                            Hourly interval tracking across KreditBee (KB), SmartCoin (SC), Navi (NAVI - Separate App), and MoneyView (MV)
-                          </div>
+                          <strong style={{ fontSize: '16px' }}>Daily Visit Update</strong>
                         </div>
                       </div>
 
@@ -6512,6 +6522,16 @@ export default function App() {
         onSuccess={() => {
           loadData();
         }}
+      />
+
+      {/* WHATSAPP PHOTO SHARE MODAL */}
+      <WhatsAppShareModal
+        isOpen={whatsAppModal.isOpen}
+        onClose={() => setWhatsAppModal((prev) => ({ ...prev, isOpen: false }))}
+        imageData={whatsAppModal.imageData}
+        title={whatsAppModal.title}
+        recipientName={whatsAppModal.recipientName}
+        phone={whatsAppModal.phone}
       />
     </div>
   );

@@ -44,8 +44,8 @@ router.get('/assigned', async (req, res) => {
             dueAmount: c.dueAmount !== undefined ? c.dueAmount : cust.emiAmount,
             status: c.status || cust.status,
             portfolioId: c.portfolioId?._id || cust.portfolioId,
-            portfolioName: c.portfolioId?.name || 'KreditBee',
-            portfolioCode: c.portfolioId?.code || 'KREDITBEE',
+            portfolioName: c.portfolioId?.name || cust.portfolioName || 'General',
+            portfolioCode: c.portfolioId?.code || cust.portfolioCode || 'GENERAL',
             batchMonth: c.batchMonth || cust.batchMonth,
             locations,
           };
@@ -69,8 +69,8 @@ router.get('/assigned', async (req, res) => {
         const locations = await CustomerLocation.find({ customerId: cust._id, isActive: true });
         return {
           ...cust.toObject(),
-          portfolioName: cust.portfolioId?.name || 'KreditBee',
-          portfolioCode: cust.portfolioId?.code || 'KREDITBEE',
+          portfolioName: cust.portfolioId?.name || cust.portfolioName || 'General',
+          portfolioCode: cust.portfolioId?.code || cust.portfolioCode || 'GENERAL',
           locations,
         };
       })

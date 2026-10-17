@@ -37,11 +37,12 @@ export default function DashboardScreen() {
   const [token, setToken] = useState("");
   const [user, setUser] = useState<any>(null);
   const [customers, setCustomers] = useState<any[]>([]);
+  const [adminPortfolios, setAdminPortfolios] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [portfolioFilter, setPortfolioFilter] = useState("ALL");
-  const [batchFilter, setBatchFilter] = useState("Oct 2026");
+  const [batchFilter, setBatchFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [sortBy, setSortBy] = useState<SortOption>("DEFAULT");
 
@@ -72,7 +73,22 @@ export default function DashboardScreen() {
     }
     setToken(session.token);
     setUser(session.user);
+    fetchAdminPortfolios(session.token);
     fetchAssignedCases(session.token);
+  };
+
+  const fetchAdminPortfolios = async (authToken: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/portfolios?status=active`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.portfolios)) {
+        setAdminPortfolios(data.portfolios);
+      }
+    } catch {
+      // Non-blocking
+    }
   };
 
   const fetchAssignedCases = async (authToken: string) => {
@@ -130,23 +146,31 @@ export default function DashboardScreen() {
     }
   };
 
-  // Distinct Portfolios List
+  // Distinct Portfolios List: ONLY portfolios added/active in Admin Page
   const availablePortfolios = useMemo(() => {
+    if (adminPortfolios && adminPortfolios.length > 0) {
+      const activeList = adminPortfolios
+        .filter((p) => p.isActive !== false)
+        .map((p) => p.name)
+        .filter(Boolean);
+      return ["ALL", ...activeList];
+    }
+    // Fallback if offline: only distinct portfolios actually present in assigned cases
     const set = new Set<string>();
     customers.forEach((c) => {
-      if (c.portfolioName) set.add(c.portfolioName);
+      if (c.portfolioName && c.portfolioName !== "General" && c.portfolioName.trim()) {
+        set.add(c.portfolioName.trim());
+      }
     });
-    ["KreditBee", "Money Smart", "SmartCoin", "Other Finance"].forEach((p) => set.add(p));
     return ["ALL", ...Array.from(set)];
-  }, [customers]);
+  }, [adminPortfolios, customers]);
 
-  // Distinct Batches List
+  // Distinct Batches List: only batches actually present in assigned cases
   const availableBatches = useMemo(() => {
     const set = new Set<string>();
     customers.forEach((c) => {
-      if (c.batchMonth) set.add(c.batchMonth);
+      if (c.batchMonth && c.batchMonth.trim()) set.add(c.batchMonth.trim());
     });
-    ["Oct 2026", "Nov 2026", "Dec 2026"].forEach((b) => set.add(b));
     return ["ALL", ...Array.from(set)];
   }, [customers]);
 
@@ -329,10 +353,20 @@ export default function DashboardScreen() {
   };
 
   const getPortfolioBadge = (portfolioName: string) => {
-    const p = (portfolioName || "").toLowerCase();
+    const raw = (portfolioName || "").trim();
+    if (!raw || raw.toLowerCase() === "general") {
+      return {
+        name: raw || "General",
+        bg: "#F1F5F9",
+        text: "#475569",
+        icon: "folder-outline",
+        iconColor: "#64748B",
+      };
+    }
+    const p = raw.toLowerCase();
     if (p.includes("kreditbee") || p.includes("kbee")) {
       return {
-        name: "KreditBee",
+        name: raw,
         bg: "#FEF08A",
         text: "#713F12",
         icon: "flash",
@@ -341,28 +375,37 @@ export default function DashboardScreen() {
     }
     if (p.includes("smartcoin") || p.includes("scoin")) {
       return {
-        name: "SmartCoin",
+        name: raw,
         bg: "#FFEDD5",
         text: "#C2410C",
         icon: "disc",
         iconColor: "#EA580C",
       };
     }
-    if (p.includes("money smart") || p.includes("msmart")) {
+    if (p.includes("money") || p.includes("msmart") || p.includes("moneyview")) {
       return {
-        name: "Money Smart",
+        name: raw,
         bg: "#DBEAFE",
         text: "#1D4ED8",
         icon: "wallet",
         iconColor: "#2563EB",
       };
     }
+    if (p.includes("navi")) {
+      return {
+        name: raw,
+        bg: "#DCFCE7",
+        text: "#15803D",
+        icon: "trending-up",
+        iconColor: "#16A34A",
+      };
+    }
     return {
-      name: portfolioName || "Other Finance",
-      bg: "#F1F5F9",
-      text: "#334155",
-      icon: "checkmark-circle",
-      iconColor: "#64748B",
+      name: raw,
+      bg: "#F3E8FF",
+      text: "#6B21A8",
+      icon: "business",
+      iconColor: "#9333EA",
     };
   };
 

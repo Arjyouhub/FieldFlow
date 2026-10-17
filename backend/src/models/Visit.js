@@ -68,16 +68,8 @@ const visitSchema = new mongoose.Schema(
     },
     outcome: {
       type: String,
-      enum: [
-        'Payment Collected',
-        'Promise to Pay (PTP)',
-        'Customer Unavailable',
-        'House Locked',
-        'Wrong Address',
-        'Refused to Pay',
-        'Other Feedback',
-      ],
       required: true,
+      trim: true,
     },
     collectedAmount: {
       type: Number,

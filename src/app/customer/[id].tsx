@@ -410,13 +410,13 @@ export default function CustomerDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAF9",
+    backgroundColor: "#F1F5F9",
   },
   centerContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#F8FAF9",
+    backgroundColor: "#F1F5F9",
   },
   loadingText: {
     fontSize: fontScale(14),
@@ -445,7 +445,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: "#E2E8F0",
   },
   backButtonIcon: {
@@ -465,8 +465,8 @@ const styles = StyleSheet.create({
     borderRadius: Radii.xl,
     padding: 20,
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E5EAE7",
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
     marginBottom: 16,
     ...Shadows.sm,
   },
@@ -533,13 +533,13 @@ const styles = StyleSheet.create({
   },
   kpiPillCard: {
     flex: 1,
-    backgroundColor: "#F8FAF9",
+    backgroundColor: "#FFFFFF",
     borderRadius: Radii.lg,
     paddingVertical: 10,
     paddingHorizontal: 8,
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E5EAE7",
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
   },
   kpiPillLabel: {
     fontSize: fontScale(11),
@@ -586,8 +586,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: Radii.xl,
     padding: 16,
-    borderWidth: 1,
-    borderColor: "#E5EAE7",
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
     ...Shadows.sm,
   },
   detailRow: {

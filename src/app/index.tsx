@@ -119,6 +119,7 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState("");
+  const [focusedField, setFocusedField] = useState<"phone" | "password" | null>(null);
 
   // OTP State (Screen 3: 6 individual boxes)
   const [otpPhone, setOtpPhone] = useState("9876543211");
@@ -180,7 +181,7 @@ export default function LoginScreen() {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
       const res = await fetch(`${API_BASE_URL}/auth/login`, {
         method: "POST",
@@ -574,9 +575,9 @@ export default function LoginScreen() {
   if (currentView === "otp") {
     return (
       <View style={styles.screenContainer}>
-        {/* Decorative corner leaves */}
-        <View style={styles.cornerLeafDecoTopRight} pointerEvents="none" />
-        <View style={styles.cornerLeafDecoBottom} pointerEvents="none" />
+        {/* Ambient background glows */}
+        <View style={styles.ambientGlowTop} pointerEvents="none" />
+        <View style={styles.ambientGlowBottom} pointerEvents="none" />
 
         <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
           <KeyboardAvoidingView
@@ -729,9 +730,9 @@ export default function LoginScreen() {
   // =============================================================
   return (
     <View style={styles.screenContainer}>
-      {/* Decorative leaf shapes */}
-      <View style={styles.cornerLeafDecoTopLeft} pointerEvents="none" />
-      <View style={styles.cornerLeafDecoBottom} pointerEvents="none" />
+      {/* Ambient background glows */}
+      <View style={styles.ambientGlowTop} pointerEvents="none" />
+      <View style={styles.ambientGlowBottom} pointerEvents="none" />
 
       <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
         <KeyboardAvoidingView
@@ -743,99 +744,121 @@ export default function LoginScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {/* Top Row: Language Pill top-right & optional Splash trigger */}
+            {/* Top Bar: Security Pill & Language Pill */}
             <View style={styles.topBarRow}>
-              <Pressable
-                style={styles.splashPreviewLink}
-                onPress={() => setCurrentView("splash")}
-                hitSlop={8}
-              >
-                <Text style={styles.splashPreviewLinkText}>About App</Text>
-              </Pressable>
+              <View style={styles.securityBadge}>
+                <View style={styles.securityDot} />
+                <Ionicons name="shield-checkmark" size={13} color="#059669" />
+                <Text style={styles.securityBadgeText}>FieldFlow v2.0</Text>
+              </View>
 
               <Pressable style={styles.languagePill} hitSlop={8}>
-                <Ionicons name="globe-outline" size={15} color={BRAND_DARK_GREEN} />
+                <Ionicons name="globe-outline" size={14} color={BRAND_DARK_GREEN} />
                 <Text style={styles.languagePillText}>English</Text>
-                <Ionicons name="chevron-down" size={14} color={BRAND_DARK_GREEN} />
+                <Ionicons name="chevron-down" size={13} color="#64748B" />
               </Pressable>
             </View>
 
-            {/* FieldFlow Logo (Dual-tone Leaf + Bold Title) */}
-            <View style={styles.brandContainer}>
-              <DualLeafLogo size={36} />
-              <Text style={styles.brandTitleText}>FieldFlow</Text>
-            </View>
-
-            {/* Welcome Back & Subtitle */}
-            <View style={styles.welcomeContainer}>
-              <Text style={styles.welcomeTitle}>Welcome Back</Text>
-              <Text style={styles.welcomeSubtitle}>Sign in to continue</Text>
+            {/* Modern App Brand Header */}
+            <View style={styles.brandHeroSection}>
+              <View style={styles.logoTileWrapper}>
+                <View style={styles.logoTile}>
+                  <DualLeafLogo size={38} />
+                </View>
+              </View>
+              <Text style={styles.brandHeroTitle}>FieldFlow</Text>
+              <Text style={styles.brandHeroSubtitle}>Field Operations & Recovery Suite</Text>
             </View>
 
             {/* Error Message Banner */}
             {errorText ? (
               <View style={styles.errorBox}>
-                <Ionicons name="alert-circle" size={18} color="#DC2626" style={{ marginRight: 6 }} />
+                <Ionicons name="alert-circle" size={18} color="#DC2626" style={{ marginRight: 8 }} />
                 <Text style={styles.errorBoxText}>{errorText}</Text>
               </View>
             ) : null}
 
-            {/* Input Card Container */}
-            <View style={styles.cardContainer}>
+            {/* Modern Elevated Login Card */}
+            <View style={styles.modernCard}>
+              <View style={styles.cardHeaderBox}>
+                <Text style={styles.cardHeaderTitle}>Sign In</Text>
+                <Text style={styles.cardHeaderSub}>Enter your officer mobile & password</Text>
+              </View>
+
               {/* Field 1: Mobile Number */}
-              <Text style={styles.inputLabel}>Mobile Number</Text>
-              <View style={styles.inputFieldWrapper}>
-                <Ionicons
-                  name="call-outline"
-                  size={19}
-                  color="#64748B"
-                  style={styles.inputPrefixIcon}
-                />
-                <TextInput
-                  style={styles.textInputField}
-                  placeholder="Enter your mobile number"
-                  placeholderTextColor="#94A3B8"
-                  value={phone}
-                  onChangeText={(val) => {
-                    setPhone(val);
-                    if (errorText) setErrorText("");
-                  }}
-                  keyboardType="phone-pad"
-                  maxLength={10}
-                />
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Mobile Number</Text>
+                <View
+                  style={[
+                    styles.modernInputWrapper,
+                    focusedField === "phone" && styles.inputWrapperFocused,
+                  ]}
+                >
+                  <View style={styles.inputIconBox}>
+                    <Ionicons
+                      name="call-outline"
+                      size={18}
+                      color={focusedField === "phone" ? BRAND_DARK_GREEN : "#64748B"}
+                    />
+                  </View>
+                  <TextInput
+                    style={styles.modernTextInput}
+                    placeholder="Enter mobile number"
+                    placeholderTextColor="#94A3B8"
+                    value={phone}
+                    onFocus={() => setFocusedField("phone")}
+                    onBlur={() => setFocusedField(null)}
+                    onChangeText={(val) => {
+                      setPhone(val);
+                      if (errorText) setErrorText("");
+                    }}
+                    keyboardType="phone-pad"
+                    maxLength={10}
+                  />
+                </View>
               </View>
 
               {/* Field 2: Password */}
-              <Text style={styles.inputLabel}>Password</Text>
-              <View style={styles.inputFieldWrapper}>
-                <Ionicons
-                  name="lock-closed-outline"
-                  size={19}
-                  color="#64748B"
-                  style={styles.inputPrefixIcon}
-                />
-                <TextInput
-                  style={styles.textInputField}
-                  placeholder="Enter your password"
-                  placeholderTextColor="#94A3B8"
-                  secureTextEntry={!showPassword}
-                  value={password}
-                  onChangeText={(val) => {
-                    setPassword(val);
-                    if (errorText) setErrorText("");
-                  }}
-                />
-                <Pressable
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={styles.eyeToggleBtn}
-                  hitSlop={10}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Password</Text>
+                <View
+                  style={[
+                    styles.modernInputWrapper,
+                    focusedField === "password" && styles.inputWrapperFocused,
+                  ]}
                 >
-                  <Ionicons
-                    name={showPassword ? "eye-outline" : "eye-off-outline"}
-                    size={20}
-                    color="#64748B"
+                  <View style={styles.inputIconBox}>
+                    <Ionicons
+                      name="lock-closed-outline"
+                      size={18}
+                      color={focusedField === "password" ? BRAND_DARK_GREEN : "#64748B"}
+                    />
+                  </View>
+                  <TextInput
+                    style={styles.modernTextInput}
+                    placeholder="Enter password"
+                    placeholderTextColor="#94A3B8"
+                    secureTextEntry={!showPassword}
+                    value={password}
+                    onFocus={() => setFocusedField("password")}
+                    onBlur={() => setFocusedField(null)}
+                    onChangeText={(val) => {
+                      setPassword(val);
+                      if (errorText) setErrorText("");
+                    }}
                   />
-                </Pressable>
+                  <Pressable
+                    onPress={() => setShowPassword(!showPassword)}
+                    style={styles.eyeToggleBtn}
+                    hitSlop={10}
+                  >
+                    <Ionicons
+                      name={showPassword ? "eye-outline" : "eye-off-outline"}
+                      size={20}
+                      color="#64748B"
+                    />
+                  </Pressable>
+                </View>
               </View>
 
               {/* Options Row: Remember Me & Forgot Password */}
@@ -843,7 +866,7 @@ export default function LoginScreen() {
                 <Pressable
                   style={styles.rememberMeRow}
                   onPress={() => setRememberMe(!rememberMe)}
-                  hitSlop={6}
+                  hitSlop={8}
                 >
                   <View style={[styles.checkbox, rememberMe && styles.checkboxActive]}>
                     {rememberMe && <Ionicons name="checkmark" size={13} color="#FFFFFF" />}
@@ -853,13 +876,13 @@ export default function LoginScreen() {
 
                 <Pressable
                   onPress={() => handleRequestOtp(phone, "forgot_password")}
-                  hitSlop={6}
+                  hitSlop={8}
                 >
                   <Text style={styles.forgotPasswordLink}>Forgot Password?</Text>
                 </Pressable>
               </View>
 
-              {/* Primary Green Login Button: "Login →" */}
+              {/* Primary Login Button */}
               <Pressable
                 style={({ pressed }) => [
                   styles.primaryButton,
@@ -873,7 +896,7 @@ export default function LoginScreen() {
                   <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
                   <View style={styles.btnRowContent}>
-                    <Text style={styles.primaryButtonText}>Login</Text>
+                    <Text style={styles.primaryButtonText}>Sign In</Text>
                     <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
                   </View>
                 )}
@@ -886,7 +909,7 @@ export default function LoginScreen() {
                 <View style={styles.dividerLine} />
               </View>
 
-              {/* Outlined Button: "Login with OTP" */}
+              {/* Outlined Button: "Sign In with OTP" */}
               <Pressable
                 style={({ pressed }) => [
                   styles.outlineOtpBtn,
@@ -899,14 +922,14 @@ export default function LoginScreen() {
                   <ActivityIndicator color={BRAND_DARK_GREEN} size="small" />
                 ) : (
                   <View style={styles.btnRowContent}>
-                    <Ionicons name="call" size={18} color={BRAND_DARK_GREEN} style={{ marginRight: 8 }} />
-                    <Text style={styles.outlineOtpBtnText}>Login with OTP</Text>
+                    <Ionicons name="chatbubble-ellipses-outline" size={18} color={BRAND_DARK_GREEN} style={{ marginRight: 8 }} />
+                    <Text style={styles.outlineOtpBtnText}>Sign In with OTP</Text>
                   </View>
                 )}
               </Pressable>
             </View>
 
-            {/* Quick Demo Fill Pill (convenient for testing officer 9876543211) */}
+            {/* Quick Demo Fill Pill */}
             <Pressable
               style={styles.demoFillPill}
               onPress={() => {
@@ -915,7 +938,8 @@ export default function LoginScreen() {
                 setErrorText("");
               }}
             >
-              <Text style={styles.demoFillPillText}>⚡ Fill Demo Officer (9876543211)</Text>
+              <Ionicons name="flash" size={13} color="#0D5D37" style={{ marginRight: 4 }} />
+              <Text style={styles.demoFillPillText}>Quick Fill Demo Officer (9876543211)</Text>
             </Pressable>
 
             {/* Bottom Footer: Activate Account */}
@@ -1145,63 +1169,65 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F8FAFC",
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 32,
+    paddingHorizontal: 22,
+    paddingTop: 16,
+    paddingBottom: 36,
     justifyContent: "center",
   },
 
-  // Corner leaf silhouettes for subtle aesthetic
-  cornerLeafDecoTopLeft: {
+  // Soft ambient background glows
+  ambientGlowTop: {
     position: "absolute",
-    top: -20,
-    left: -20,
-    width: 110,
-    height: 110,
-    borderRadius: 55,
+    top: -80,
+    alignSelf: "center",
+    width: 340,
+    height: 340,
+    borderRadius: 170,
     backgroundColor: "rgba(16, 185, 129, 0.08)",
-    transform: [{ rotate: "25deg" }],
   },
-  cornerLeafDecoTopRight: {
+  ambientGlowBottom: {
     position: "absolute",
-    top: -15,
-    right: -25,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: "rgba(16, 185, 129, 0.08)",
-    transform: [{ rotate: "-30deg" }],
-  },
-  cornerLeafDecoBottom: {
-    position: "absolute",
-    bottom: -30,
-    right: -20,
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: "rgba(13, 93, 55, 0.07)",
-    transform: [{ rotate: "15deg" }],
+    bottom: -60,
+    right: -50,
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    backgroundColor: "rgba(13, 93, 55, 0.05)",
   },
 
-  // Top Bar Row
+  // Top Bar Row: Security Pill & Language
   topBarRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 20,
   },
-  splashPreviewLink: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+  securityBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ECFDF5",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radii.full,
+    gap: 6,
   },
-  splashPreviewLinkText: {
-    fontSize: fontScale(12),
-    color: "#94A3B8",
-    fontWeight: "600",
+  securityDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#10B981",
+  },
+  securityBadgeText: {
+    fontSize: fontScale(11),
+    fontWeight: "700",
+    color: "#065F46",
+    letterSpacing: 0.3,
   },
   languagePill: {
     flexDirection: "row",
@@ -1213,81 +1239,124 @@ const styles = StyleSheet.create({
     borderColor: "#E2E8F0",
     backgroundColor: "#FFFFFF",
     gap: 6,
+    ...Shadows.sm,
   },
   languagePillText: {
-    fontSize: fontScale(13),
+    fontSize: fontScale(12.5),
     fontWeight: "600",
     color: BRAND_DARK_GREEN,
   },
 
-  // FieldFlow Branding (Centered Leaf + Bold Title)
-  brandContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    marginBottom: 20,
-  },
-  brandTitleText: {
-    fontSize: fontScale(26),
-    fontWeight: "800",
-    color: "#0F172A",
-    letterSpacing: -0.4,
-  },
-
-  // Welcome Header
-  welcomeContainer: {
+  // Modern Hero Branding
+  brandHeroSection: {
     alignItems: "center",
     marginBottom: 24,
   },
-  welcomeTitle: {
-    fontSize: fontScale(24),
+  logoTileWrapper: {
+    padding: 6,
+    borderRadius: 24,
+    backgroundColor: "rgba(16, 185, 129, 0.12)",
+    marginBottom: 12,
+  },
+  logoTile: {
+    width: 64,
+    height: 64,
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(16, 185, 129, 0.25)",
+    ...Shadows.sm,
+  },
+  brandHeroTitle: {
+    fontSize: fontScale(27),
     fontWeight: "800",
     color: "#0F172A",
-    letterSpacing: -0.3,
+    letterSpacing: -0.5,
   },
-  welcomeSubtitle: {
-    fontSize: fontScale(14),
+  brandHeroSubtitle: {
+    fontSize: fontScale(13),
     color: "#64748B",
     marginTop: 4,
     fontWeight: "400",
   },
 
-  // Form Card Container
-  cardContainer: {
+  // Modern Elevated Card
+  modernCard: {
     width: "100%",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 22,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.05,
+    shadowRadius: 20,
+    elevation: 3,
+  },
+  cardHeaderBox: {
+    marginBottom: 18,
+  },
+  cardHeaderTitle: {
+    fontSize: fontScale(18),
+    fontWeight: "800",
+    color: "#0F172A",
+    letterSpacing: -0.3,
+  },
+  cardHeaderSub: {
+    fontSize: fontScale(12.5),
+    color: "#64748B",
+    marginTop: 3,
+  },
+
+  inputGroup: {
+    marginBottom: 15,
   },
   inputLabel: {
-    fontSize: fontScale(13),
-    fontWeight: "600",
+    fontSize: fontScale(12.5),
+    fontWeight: "700",
     color: "#1E293B",
     marginBottom: 6,
+    letterSpacing: 0.2,
   },
-  inputFieldWrapper: {
+  modernInputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1.2,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1.5,
     borderColor: "#E2E8F0",
     borderRadius: 14,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     height: 52,
-    marginBottom: 16,
   },
-  inputPrefixIcon: {
-    marginRight: 10,
+  inputWrapperFocused: {
+    borderColor: BRAND_DARK_GREEN,
+    backgroundColor: "#FFFFFF",
+    shadowColor: BRAND_DARK_GREEN,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 1,
   },
-  textInputField: {
+  inputIconBox: {
+    width: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modernTextInput: {
     flex: 1,
     fontSize: fontScale(14),
     color: "#0F172A",
     fontWeight: "500",
+    paddingHorizontal: 8,
   },
   eyeToggleBtn: {
     padding: 6,
   },
 
-  // Remember Me & Forgot Password Row
+  // Options Row
   optionsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1303,7 +1372,7 @@ const styles = StyleSheet.create({
   checkbox: {
     width: 20,
     height: 20,
-    borderRadius: 5,
+    borderRadius: 6,
     borderWidth: 1.5,
     borderColor: "#CBD5E1",
     alignItems: "center",
@@ -1325,20 +1394,24 @@ const styles = StyleSheet.create({
     color: BRAND_DARK_GREEN,
   },
 
-  // Buttons
+  // Primary Button
   primaryButton: {
     backgroundColor: BRAND_DARK_GREEN,
     height: 52,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    ...Shadows.sm,
+    shadowColor: BRAND_DARK_GREEN,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 3,
   },
   primaryButtonText: {
     color: "#FFFFFF",
     fontSize: fontScale(15),
     fontWeight: "700",
-    letterSpacing: 0.2,
+    letterSpacing: 0.3,
   },
   btnRowContent: {
     flexDirection: "row",
@@ -1358,41 +1431,45 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: "#F1F5F9",
   },
   dividerText: {
-    paddingHorizontal: 14,
-    fontSize: fontScale(12),
-    fontWeight: "600",
+    paddingHorizontal: 12,
+    fontSize: fontScale(11.5),
+    fontWeight: "700",
     color: "#94A3B8",
+    letterSpacing: 0.5,
   },
 
-  // Secondary Outlined OTP Button
+  // Outlined OTP Button
   outlineOtpBtn: {
     height: 52,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: BRAND_DARK_GREEN,
-    backgroundColor: "#FFFFFF",
+    borderColor: "#A7F3D0",
+    backgroundColor: "#F0FDF4",
     alignItems: "center",
     justifyContent: "center",
   },
   outlineOtpBtnText: {
-    fontSize: fontScale(15),
+    fontSize: fontScale(14.5),
     fontWeight: "700",
     color: BRAND_DARK_GREEN,
   },
 
-  // Demo fill shortcut
+  // Demo shortcut pill
   demoFillPill: {
+    flexDirection: "row",
+    alignItems: "center",
     alignSelf: "center",
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#E2E8F0",
     paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingVertical: 8,
     borderRadius: Radii.full,
     marginTop: 20,
+    ...Shadows.sm,
   },
   demoFillPillText: {
     fontSize: fontScale(12),

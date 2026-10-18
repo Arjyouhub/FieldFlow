@@ -495,12 +495,12 @@ export default function DashboardScreen() {
             </Text>
 
             <View style={styles.customerMetaRow}>
-              <Ionicons name="call-outline" size={12} color="#64748B" />
+              <Ionicons name="call" size={11} color="#059669" />
               <Text style={styles.customerPhone}>{formattedPhone}</Text>
             </View>
 
             <View style={styles.customerMetaRow}>
-              <Ionicons name="location-outline" size={12} color="#64748B" />
+              <Ionicons name="location" size={11} color="#64748B" />
               <Text style={styles.customerAddress} numberOfLines={1}>
                 {cust.address || cust.area || "Kozhikode, Kerala"}
               </Text>
@@ -514,77 +514,94 @@ export default function DashboardScreen() {
               <Text style={[styles.portfolioBadgeText, { color: pBadge.text }]}>{pBadge.name}</Text>
             </View>
 
-            <View style={styles.distanceRow}>
-              {displayDistance ? (
-                <>
-                  <Ionicons name="location-sharp" size={13} color="#00A86B" />
-                  <Text style={styles.distanceValue}>{displayDistance}</Text>
-                </>
-              ) : null}
-              <Ionicons name="chevron-forward" size={15} color="#94A3B8" style={{ marginLeft: 2 }} />
-            </View>
-            {displayDistance ? <Text style={styles.nearestSubText}>Nearest</Text> : null}
+            {displayDistance ? (
+              <View style={styles.distanceBadgePill}>
+                <Ionicons name="navigate-circle" size={12} color="#00A86B" />
+                <Text style={styles.distanceValue}>{displayDistance}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
-        {/* Subtle Horizontal Divider */}
-        <View style={styles.cardDivider} />
+        {/* STRUCTURED DETAIL BOX (High-contrast inner card) */}
+        <View style={styles.cardDetailBox}>
+          {/* Sub-row 1: Loan Account & Status */}
+          <View style={styles.detailBoxHeaderRow}>
+            <View style={styles.loanAccTag}>
+              <Text style={styles.loanAccPrefix}>A/C</Text>
+              <Text style={styles.loanAccValue} numberOfLines={1}>
+                {cust.loanAccountNo || cust.caseId || "KB" + String(cust._id).slice(-8).toUpperCase()}
+              </Text>
+            </View>
 
-        {/* BOTTOM ROW: Account ID + Outstanding + Due + Status + Action Buttons */}
-        <View style={styles.cardBottomRow}>
-          {/* 1. Account / Case ID & Ref */}
-          <View style={styles.accCol}>
-            <Text style={styles.loanAccountText} numberOfLines={1}>
-              {cust.loanAccountNo || cust.caseId || "KB" + String(cust._id).slice(-8).toUpperCase()}
-            </Text>
-            <Text style={styles.refText}>
-              REF: {cust.referenceNumber || "-"}
-            </Text>
+            <View style={[styles.caseStatusBadge, { backgroundColor: badge.bg }]}>
+              <Ionicons name={badge.icon as any} size={11} color={badge.text} style={{ marginRight: 4 }} />
+              <Text style={[styles.caseStatusText, { color: badge.text }]}>
+                {badge.label}
+              </Text>
+            </View>
           </View>
 
-          {/* 2. Outstanding */}
-          <View style={styles.amountCol}>
-            <Text style={styles.amountValue}>
-              ₹{(cust.outstandingAmount || 0).toLocaleString("en-IN")}
-            </Text>
-            <Text style={styles.amountLabel}>Outstanding</Text>
+          {/* Sub-row 2: Financial Split */}
+          <View style={styles.detailBoxFinanceRow}>
+            <View style={styles.financeCol}>
+              <Text style={styles.financeLabel}>OUTSTANDING</Text>
+              <Text style={styles.financeValueOutstanding}>
+                ₹{(cust.outstandingAmount || 0).toLocaleString("en-IN")}
+              </Text>
+            </View>
+
+            <View style={styles.financeColDivider} />
+
+            <View style={styles.financeCol}>
+              <Text style={styles.financeLabel}>DUE AMOUNT</Text>
+              <Text style={styles.financeValueDue}>
+                ₹{(cust.dueAmount || cust.emiAmount || 0).toLocaleString("en-IN")}
+              </Text>
+            </View>
+
+            {cust.referenceNumber ? (
+              <>
+                <View style={styles.financeColDivider} />
+                <View style={styles.financeCol}>
+                  <Text style={styles.financeLabel}>REF</Text>
+                  <Text style={styles.financeValueRef} numberOfLines={1}>
+                    {cust.referenceNumber}
+                  </Text>
+                </View>
+              </>
+            ) : null}
+          </View>
+        </View>
+
+        {/* CARD FOOTER ROW: Action Buttons & Navigation hint */}
+        <View style={styles.cardFooterRow}>
+          <View style={styles.cardFooterHintRow}>
+            <Text style={styles.cardFooterHintText}>View Case Details</Text>
+            <Ionicons name="chevron-forward" size={13} color="#059669" />
           </View>
 
-          {/* 3. Due */}
-          <View style={styles.amountCol}>
-            <Text style={[styles.amountValue, { color: "#DC2626" }]}>
-              ₹{(cust.dueAmount || cust.emiAmount || 0).toLocaleString("en-IN")}
-            </Text>
-            <Text style={styles.amountLabel}>Due</Text>
-          </View>
-
-          {/* 4. Status Badge */}
-          <View style={[styles.caseStatusBadge, { backgroundColor: badge.bg }]}>
-            <Ionicons name={badge.icon as any} size={11} color={badge.text} style={{ marginRight: 3 }} />
-            <Text style={[styles.caseStatusText, { color: badge.text }]}>
-              {badge.label}
-            </Text>
-          </View>
-
-          {/* 5. Action Buttons (Call & Navigate) */}
           <View style={styles.actionsRow}>
             <Pressable
-              style={styles.cardActionBtn}
+              style={styles.cardActionBtnCall}
               onPress={() => Linking.openURL(`tel:${cust.phone}`)}
-              hitSlop={6}
+              hitSlop={8}
             >
-              <Ionicons name="call-outline" size={15} color="#0F172A" />
+              <Ionicons name="call" size={13} color="#15803D" />
+              <Text style={styles.cardActionBtnCallText}>Call</Text>
             </Pressable>
+
             <Pressable
-              style={styles.cardActionBtn}
+              style={styles.cardActionBtnNav}
               onPress={() => {
                 const lat = cust.locations?.[0]?.coordinates?.lat || 11.2588;
                 const lng = cust.locations?.[0]?.coordinates?.lng || 75.7725;
                 Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
               }}
-              hitSlop={6}
+              hitSlop={8}
             >
-              <Ionicons name="navigate-outline" size={15} color="#00A86B" />
+              <Ionicons name="navigate" size={13} color="#0284C7" />
+              <Text style={styles.cardActionBtnNavText}>Directions</Text>
             </Pressable>
           </View>
         </View>
@@ -1334,7 +1351,7 @@ export default function DashboardScreen() {
     <SafeAreaView
       style={[
         styles.container,
-        { backgroundColor: activeTab === "cases" ? "#0B4628" : "#F8FAF9" },
+        { backgroundColor: activeTab === "cases" ? "#0B4628" : "#F1F5F9" },
       ]}
       edges={["top", "left", "right"]}
     >
@@ -1870,7 +1887,7 @@ const styles = StyleSheet.create({
   // Cases Tab Curved White Sheet
   casesWhiteSheet: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F1F5F9",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: 16,
@@ -2054,15 +2071,19 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
 
-  // Customer Case Card (Matches Reference Screenshot)
+  // Customer Case Card (High-contrast structured box design)
   cardContainer: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: 16,
+    borderWidth: 1.5,
     borderColor: "#E2E8F0",
-    padding: 12,
-    marginBottom: 10,
-    ...Shadows.sm,
+    padding: 14,
+    marginBottom: 12,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 2,
   },
   cardTopRow: {
     flexDirection: "row",
@@ -2077,23 +2098,25 @@ const styles = StyleSheet.create({
   avatarImage: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: 12,
   },
   avatarInitial: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: 12,
     backgroundColor: "#ECFDF5",
-    color: "#00A86B",
+    color: "#059669",
     fontSize: fontScale(16),
     fontWeight: "800",
     textAlign: "center",
     lineHeight: 44,
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
   },
   avatarBadgeCircle: {
     position: "absolute",
-    bottom: -2,
-    right: -2,
+    bottom: -3,
+    right: -3,
     width: 17,
     height: 17,
     borderRadius: 8.5,
@@ -2112,19 +2135,19 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   customerName: {
-    fontSize: fontScale(14),
+    fontSize: fontScale(15),
     fontWeight: "800",
     color: "#0F172A",
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
   },
   customerMetaRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 2,
+    marginTop: 3,
     gap: 4,
   },
   customerPhone: {
-    fontSize: fontScale(11.5),
+    fontSize: fontScale(12),
     color: "#334155",
     fontWeight: "600",
   },
@@ -2139,71 +2162,76 @@ const styles = StyleSheet.create({
   portfolioBadgePill: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 6,
-    marginBottom: 4,
+    marginBottom: 5,
   },
   portfolioBadgeText: {
     fontSize: fontScale(10.5),
     fontWeight: "700",
   },
-  distanceRow: {
+  distanceBadgePill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    paddingHorizontal: 6,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+    gap: 3,
   },
   distanceValue: {
-    fontSize: fontScale(11.5),
-    fontWeight: "800",
-    color: "#0F172A",
+    fontSize: fontScale(11),
+    fontWeight: "700",
+    color: "#15803D",
   },
-  nearestSubText: {
-    fontSize: fontScale(9.5),
-    color: "#64748B",
-    fontWeight: "500",
+
+  // Detail Box (Inner structured container)
+  cardDetailBox: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 10,
+    marginVertical: 10,
   },
-  cardDivider: {
-    height: 1,
-    backgroundColor: "#F1F5F9",
-    marginVertical: 8,
+  detailBoxHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+    paddingBottom: 7,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EDF2F7",
   },
-  cardBottomRow: {
+  loanAccTag: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: 5,
+    flex: 1,
+    marginRight: 8,
   },
-  accCol: {
-    minWidth: 72,
-    maxWidth: 96,
-  },
-  loanAccountText: {
-    fontSize: fontScale(10.5),
-    fontWeight: "800",
-    color: "#0F172A",
-  },
-  refText: {
+  loanAccPrefix: {
     fontSize: fontScale(9.5),
-    color: "#94A3B8",
-    marginTop: 1,
-  },
-  amountCol: {
-    alignItems: "flex-start",
-  },
-  amountValue: {
-    fontSize: fontScale(12),
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#64748B",
+    backgroundColor: "#E2E8F0",
+    paddingHorizontal: 4,
+    paddingVertical: 1.5,
+    borderRadius: 4,
   },
-  amountLabel: {
-    fontSize: fontScale(9),
-    color: "#94A3B8",
-    marginTop: 1,
+  loanAccValue: {
+    fontSize: fontScale(11.5),
+    fontWeight: "700",
+    color: "#0F172A",
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
   },
   caseStatusBadge: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 7,
+    paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
   },
@@ -2211,19 +2239,94 @@ const styles = StyleSheet.create({
     fontSize: fontScale(10.5),
     fontWeight: "700",
   },
+  detailBoxFinanceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  financeCol: {
+    flex: 1,
+  },
+  financeColDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: "#E2E8F0",
+    marginHorizontal: 8,
+  },
+  financeLabel: {
+    fontSize: fontScale(9),
+    fontWeight: "700",
+    color: "#64748B",
+    letterSpacing: 0.3,
+    marginBottom: 2,
+  },
+  financeValueOutstanding: {
+    fontSize: fontScale(13.5),
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  financeValueDue: {
+    fontSize: fontScale(13.5),
+    fontWeight: "800",
+    color: "#DC2626",
+  },
+  financeValueRef: {
+    fontSize: fontScale(11),
+    fontWeight: "600",
+    color: "#475569",
+  },
+
+  // Footer Row
+  cardFooterRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 2,
+  },
+  cardFooterHintRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  cardFooterHintText: {
+    fontSize: fontScale(11.5),
+    fontWeight: "700",
+    color: "#059669",
+  },
   actionsRow: {
     flexDirection: "row",
-    gap: 6,
+    gap: 8,
   },
-  cardActionBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
+  cardActionBtnCall: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: 4,
+    backgroundColor: "#ECFDF5",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  cardActionBtnCallText: {
+    fontSize: fontScale(11.5),
+    fontWeight: "700",
+    color: "#15803D",
+  },
+  cardActionBtnNav: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#F0F9FF",
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  cardActionBtnNavText: {
+    fontSize: fontScale(11.5),
+    fontWeight: "700",
+    color: "#0284C7",
   },
 
   // Modal styles
@@ -2320,6 +2423,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 96,
+    backgroundColor: "#F1F5F9",
   },
 
   // Header Bar (Reference Screen 4)
@@ -2406,9 +2510,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: Radii.lg,
     padding: 14,
-    borderWidth: 1,
-    borderColor: "#E5EAE7",
-    ...Shadows.sm,
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
   },
   kpiTopRow: {
     flexDirection: "row",

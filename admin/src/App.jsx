@@ -17,6 +17,8 @@ import {
   CheckCircle,
   XCircle,
   Eye,
+  EyeOff,
+  Lock,
   RefreshCw,
   Phone,
   ShieldAlert,
@@ -242,6 +244,7 @@ export default function App() {
   // Auth Form
   const [loginPhone, setLoginPhone] = useState('9876543210');
   const [loginPassword, setLoginPassword] = useState('password123');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   // Base URL configuration for production vs local dev
   const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
@@ -258,14 +261,14 @@ export default function App() {
     const finalUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
       res = await fetch(finalUrl, { ...options, headers, signal: controller.signal });
       clearTimeout(timeoutId);
     } catch (netErr) {
       if (netErr.name === 'AbortError') {
-        throw new Error('Connection timed out. Please verify backend server.');
+        throw new Error('Connection timed out. Please check that FieldFlow backend is running on port 5000.');
       }
-      throw new Error(`Cannot connect to FieldFlow backend server (${finalUrl}). Please verify backend is running.`);
+      throw new Error(`Cannot connect to FieldFlow backend server (${finalUrl}). Please verify backend is running on port 5000.`);
     }
 
     const text = await res.text();
@@ -1624,65 +1627,176 @@ export default function App() {
   // LOGIN SCREEN
   if (!token || !adminUser) {
     return (
-      <div style={{ minHeight: '100vh', background: 'radial-gradient(ellipse at top, #1e293b 0%, #0f172a 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-        <div className="card login-card" style={{ maxWidth: '440px', width: '100%', padding: '36px', boxShadow: 'var(--shadow-xl)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '18px' }}>
-            <div style={{ background: 'var(--primary)', color: '#fff', borderRadius: '12px', padding: '10px', display: 'flex' }}>
-              <LayoutDashboard size={26} />
+      <div style={{
+        minHeight: '100vh',
+        background: 'radial-gradient(ellipse at 50% 15%, rgba(14, 165, 233, 0.15) 0%, #0f172a 75%)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        {/* Subtle decorative glow */}
+        <div style={{
+          position: 'absolute',
+          width: '500px',
+          height: '500px',
+          borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(13, 148, 136, 0.12) 0%, transparent 70%)',
+          top: '-150px',
+          pointerEvents: 'none'
+        }} />
+
+        <div className="card login-card" style={{
+          maxWidth: '440px',
+          width: '100%',
+          padding: '36px 32px',
+          borderRadius: '20px',
+          background: 'rgba(255, 255, 255, 0.98)',
+          boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.45)',
+          border: '1px solid rgba(226, 232, 240, 0.9)',
+          position: 'relative',
+          zIndex: 1
+        }}>
+          {/* Brand Header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '24px' }}>
+            <div style={{
+              background: 'linear-gradient(135deg, #0d9488 0%, #0891b2 100%)',
+              color: '#fff',
+              borderRadius: '14px',
+              padding: '12px',
+              display: 'flex',
+              boxShadow: '0 8px 16px -4px rgba(13, 148, 136, 0.35)'
+            }}>
+              <LayoutDashboard size={24} />
             </div>
             <div>
-              <h1 style={{ fontSize: '22px', fontWeight: '800', color: 'var(--text-main)', letterSpacing: '-0.3px' }}>FieldFlow</h1>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Operations & Admin Portal</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#0f172a', letterSpacing: '-0.4px', margin: 0 }}>FieldFlow</h1>
+                <span style={{ fontSize: '10.5px', fontWeight: '700', padding: '2px 7px', background: '#ecfeff', color: '#0891b2', borderRadius: '12px', border: '1px solid #cffafe', textTransform: 'uppercase' }}>Admin</span>
+              </div>
+              <p style={{ fontSize: '12.5px', color: '#64748b', margin: '2px 0 0 0' }}>Operations & Recovery Portal</p>
             </div>
           </div>
 
-          <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '24px', lineHeight: 1.5 }}>
-            Sign in with administrative credentials to manage field cases, verify visits, and monitor staff.
-          </p>
-
           {errorMsg && (
-            <div style={{ padding: '12px', background: 'var(--danger-light)', border: '1px solid var(--danger-border)', borderRadius: '8px', color: 'var(--danger-text)', fontSize: '13px', marginBottom: '16px' }}>
-              {errorMsg}
+            <div style={{ padding: '12px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '10px', color: '#dc2626', fontSize: '13px', marginBottom: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <ShieldAlert size={16} style={{ flexShrink: 0 }} />
+              <span>{errorMsg}</span>
             </div>
           )}
 
           <form onSubmit={handleLogin}>
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px', color: 'var(--text-main)' }}>
+            {/* Field: Mobile Number */}
+            <div style={{ marginBottom: '18px' }}>
+              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', marginBottom: '6px', color: '#1e293b', letterSpacing: '0.2px' }}>
                 Mobile Number
               </label>
-              <input
-                type="text"
-                className="input-field"
-                value={loginPhone}
-                onChange={(e) => setLoginPhone(e.target.value)}
-                placeholder="Admin Mobile (9876543210)"
-                required
-              />
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <span style={{ position: 'absolute', left: '12px', color: '#94a3b8', display: 'flex', pointerEvents: 'none' }}>
+                  <Phone size={17} />
+                </span>
+                <input
+                  type="text"
+                  className="input-field"
+                  style={{ width: '100%', height: '46px', paddingLeft: '38px', borderRadius: '10px', fontSize: '14px', border: '1.5px solid #e2e8f0', background: '#f8fafc' }}
+                  value={loginPhone}
+                  onChange={(e) => setLoginPhone(e.target.value)}
+                  placeholder="e.g. 9876543210"
+                  required
+                />
+              </div>
             </div>
 
+            {/* Field: Password */}
             <div style={{ marginBottom: '24px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px', color: 'var(--text-main)' }}>
-                Password
-              </label>
-              <input
-                type="password"
-                className="input-field"
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                placeholder="Admin Password"
-                required
-              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <label style={{ fontSize: '12.5px', fontWeight: '700', color: '#1e293b', letterSpacing: '0.2px' }}>
+                  Password
+                </label>
+              </div>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <span style={{ position: 'absolute', left: '12px', color: '#94a3b8', display: 'flex', pointerEvents: 'none' }}>
+                  <Lock size={17} />
+                </span>
+                <input
+                  type={showLoginPassword ? 'text' : 'password'}
+                  className="input-field"
+                  style={{ width: '100%', height: '46px', paddingLeft: '38px', paddingRight: '40px', borderRadius: '10px', fontSize: '14px', border: '1.5px solid #e2e8f0', background: '#f8fafc' }}
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="Enter administrator password"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowLoginPassword(!showLoginPassword)}
+                  style={{ position: 'absolute', right: '10px', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '6px', display: 'flex' }}
+                  title={showLoginPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showLoginPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
-            <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '12px', fontSize: '14px' }} disabled={loading}>
-              {loading ? <RefreshCw size={16} className="animate-spin" /> : 'Sign In to Operations Center'}
+            <button
+              type="submit"
+              className="btn btn-primary"
+              style={{
+                width: '100%',
+                height: '46px',
+                fontSize: '14.5px',
+                fontWeight: '700',
+                borderRadius: '10px',
+                background: 'linear-gradient(135deg, #0d9488 0%, #0891b2 100%)',
+                borderColor: '#0d9488',
+                boxShadow: '0 4px 12px rgba(13, 148, 136, 0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}
+              disabled={loading}
+            >
+              {loading ? (
+                <RefreshCw size={18} className="animate-spin" />
+              ) : (
+                <>
+                  <span>Sign In to Admin Portal</span>
+                  <ArrowRight size={17} />
+                </>
+              )}
             </button>
           </form>
 
-          <div style={{ marginTop: '20px', padding: '12px', background: 'var(--bg-card-subtle)', borderRadius: '8px', fontSize: '12px', color: 'var(--text-secondary)', textAlign: 'center' }}>
-            Demo Admin: <strong>9876543210</strong> / <strong>password123</strong>
-          </div>
+          {/* Quick Demo Fill Shortcut */}
+          <button
+            type="button"
+            onClick={() => {
+              setLoginPhone('9876543210');
+              setLoginPassword('password123');
+            }}
+            style={{
+              marginTop: '20px',
+              width: '100%',
+              padding: '10px 14px',
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '10px',
+              fontSize: '12px',
+              color: '#64748b',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              transition: 'background 0.15s ease'
+            }}
+          >
+            <ShieldCheck size={14} color="#0d9488" />
+            <span>Fill Demo Admin (<strong>9876543210</strong> / <strong>password123</strong>)</span>
+          </button>
         </div>
       </div>
     );
@@ -6407,37 +6521,39 @@ export default function App() {
 
       {/* NAVI OFFICIAL APP MANUAL VISIT ENTRY MODAL */}
       {showNaviModal && (
-        <div className="modal-backdrop">
-          <div className="modal" style={{ maxWidth: '480px' }}>
-            <div className="modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ background: '#cffafe', color: '#0891b2', padding: '8px', borderRadius: '10px', display: 'flex' }}>
+        <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setShowNaviModal(false); }}>
+          <div className="modal-card" style={{ maxWidth: '500px', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.35)', border: '1px solid var(--border)' }}>
+            <div className="modal-header" style={{ padding: '20px 24px', background: '#ffffff', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ background: '#ecfeff', color: '#0891b2', width: '40px', height: '40px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #cffafe', flexShrink: 0 }}>
                   <Edit3 size={20} />
                 </div>
                 <div>
-                  <h3 className="card-title" style={{ fontSize: '16px' }}>Enter Navi App Visit Counts</h3>
-                  <p className="card-subtitle" style={{ fontSize: '12px' }}>
-                    Separate third-party Navi mobile application recovery visits for {reportStartDate}
+                  <h3 style={{ fontSize: '16.5px', fontWeight: 700, color: 'var(--text-main, #0f172a)', margin: '0 0 3px 0' }}>Enter Navi App Visit Counts</h3>
+                  <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary, #64748b)' }}>
+                    Separate third-party Navi mobile recovery visits for <span style={{ fontWeight: 600, color: '#0891b2' }}>{reportStartDate}</span>
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowNaviModal(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+                className="modal-close-btn"
+                title="Close"
               >
                 <X size={18} />
               </button>
             </div>
 
             <form onSubmit={handleSaveSingleNaviModal}>
-              <div className="modal-body">
-                <div style={{ marginBottom: '14px' }}>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>
-                    Select Field Staff *
+              <div className="modal-body" style={{ padding: '22px 24px', background: '#ffffff' }}>
+                <div style={{ marginBottom: '18px' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-main, #1e293b)' }}>
+                    Select Field Staff <span style={{ color: 'var(--danger, #ef4444)' }}>*</span>
                   </label>
                   <select
                     className="input-field"
+                    style={{ width: '100%', height: '42px', fontSize: '13.5px', borderRadius: '8px', border: '1px solid var(--border, #cbd5e1)', background: '#f8fafc' }}
                     value={naviModalForm.staffId}
                     onChange={(e) => {
                       const sId = e.target.value;
@@ -6462,47 +6578,92 @@ export default function App() {
                   </select>
                 </div>
 
-                <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px', textTransform: 'uppercase' }}>
-                  Enter Visit Counts by Time Slot:
-                </div>
+                <div style={{ marginBottom: '18px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary, #64748b)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Enter Visit Counts by Time Slot:
+                  </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px', marginBottom: '16px' }}>
-                  {['9-11', '11-1', '1-3', '3-5', '5-6'].map((slot) => (
-                    <div key={slot} style={{ textAlign: 'center' }}>
-                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, marginBottom: '4px', color: '#0e7490' }}>
-                        {slot}
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        className="input-field"
-                        style={{ textAlign: 'center', fontWeight: 800, fontSize: '14px', padding: '6px' }}
-                        value={naviModalForm.slots[slot] ?? 0}
-                        onChange={(e) => {
-                          const v = Math.max(0, parseInt(e.target.value || 0, 10));
-                          setNaviModalForm({
-                            ...naviModalForm,
-                            slots: { ...naviModalForm.slots, [slot]: isNaN(v) ? 0 : v },
-                          });
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
+                    {['9-11', '11-1', '1-3', '3-5', '5-6'].map((slot) => (
+                      <div
+                        key={slot}
+                        style={{
+                          background: '#f8fafc',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '10px',
+                          padding: '10px 4px',
+                          textAlign: 'center'
                         }}
-                      />
-                    </div>
-                  ))}
+                      >
+                        <div style={{ fontSize: '11px', fontWeight: 700, marginBottom: '6px', color: '#0891b2' }}>
+                          {slot}
+                        </div>
+                        <input
+                          type="number"
+                          min="0"
+                          className="input-field no-spinner"
+                          style={{
+                            width: '100%',
+                            textAlign: 'center',
+                            fontWeight: 700,
+                            fontSize: '15px',
+                            padding: '6px 2px',
+                            background: '#ffffff',
+                            borderRadius: '6px',
+                            border: '1px solid #cbd5e1'
+                          }}
+                          value={naviModalForm.slots[slot] ?? 0}
+                          onFocus={(e) => e.target.select()}
+                          onChange={(e) => {
+                            const v = Math.max(0, parseInt(e.target.value || 0, 10));
+                            setNaviModalForm({
+                              ...naviModalForm,
+                              slots: { ...naviModalForm.slots, [slot]: isNaN(v) ? 0 : v },
+                            });
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
-                <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>Total Navi Visits for Day:</span>
-                  <strong style={{ fontSize: '16px', color: '#0891b2' }}>
+                <div style={{
+                  background: 'linear-gradient(135deg, #ecfeff 0%, #f0fdf4 100%)',
+                  border: '1px solid #a5f3fc',
+                  padding: '12px 16px',
+                  borderRadius: '10px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <div>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#0e7490', display: 'block' }}>Total Navi Visits for Day:</span>
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>Calculated across all 5 slots</span>
+                  </div>
+                  <strong style={{ fontSize: '20px', fontWeight: 800, color: '#0891b2' }}>
                     {Object.values(naviModalForm.slots).reduce((a, b) => a + (Number(b) || 0), 0)}
                   </strong>
                 </div>
               </div>
 
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowNaviModal(false)}>
+              <div className="modal-footer" style={{ padding: '14px 24px', background: '#f8fafc', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button type="button" className="btn btn-secondary" style={{ padding: '8px 18px', fontSize: '13.5px', borderRadius: '8px' }} onClick={() => setShowNaviModal(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary" style={{ background: '#0891b2', borderColor: '#0891b2' }} disabled={savingNavi}>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{
+                    background: '#0891b2',
+                    borderColor: '#0891b2',
+                    padding: '8px 20px',
+                    fontSize: '13.5px',
+                    fontWeight: 600,
+                    borderRadius: '8px',
+                    boxShadow: '0 2px 4px rgba(8, 145, 178, 0.25)'
+                  }}
+                  disabled={savingNavi}
+                >
                   {savingNavi ? 'Saving...' : 'Save Navi Visits'}
                 </button>
               </div>

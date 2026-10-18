@@ -673,31 +673,31 @@ export default function CasesView({ apiFetch, staffList = [], portfolios = [], o
 
               {/* Financials & Customer Info */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px', marginBottom: '16px' }}>
-                <div style={{ padding: '12px', border: '1px solid var(--border)', borderRadius: '8px' }}>
-                  <div style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>Customer Information</div>
-                  <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-main)' }}>{activeCaseDetails.customerId?.name}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>Phone: {activeCaseDetails.customerId?.phone}</div>
+                <div style={{ padding: '14px', background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: '10px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', color: '#64748b', marginBottom: '8px', letterSpacing: '0.04em' }}>Customer Information</div>
+                  <div style={{ fontSize: '15px', fontWeight: '800', color: '#0f172a' }}>{activeCaseDetails.customerId?.name}</div>
+                  <div style={{ fontSize: '12.5px', color: '#334155', marginTop: '4px', fontWeight: '500' }}>Phone: {activeCaseDetails.customerId?.phone}</div>
                   {activeCaseDetails.customerId?.alternatePhone && (
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Alt: {activeCaseDetails.customerId.alternatePhone}</div>
+                    <div style={{ fontSize: '12px', color: '#64748b' }}>Alt: {activeCaseDetails.customerId.alternatePhone}</div>
                   )}
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
                     Address: {activeCaseDetails.customerId?.address}, {activeCaseDetails.customerId?.area}
                   </div>
                 </div>
 
-                <div style={{ padding: '12px', border: '1px solid var(--border)', borderRadius: '8px' }}>
-                  <div style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>Loan Recovery Details</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Outstanding:</span>
-                    <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-main)' }}>₹{(activeCaseDetails.outstandingAmount || 0).toLocaleString('en-IN')}</span>
+                <div style={{ padding: '14px', background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: '10px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', color: '#64748b', marginBottom: '8px', letterSpacing: '0.04em' }}>Loan Recovery Details</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '12.5px', color: '#64748b' }}>Outstanding:</span>
+                    <span style={{ fontSize: '14px', fontWeight: '800', color: '#0f172a' }}>₹{(activeCaseDetails.outstandingAmount || 0).toLocaleString('en-IN')}</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Due Amount:</span>
-                    <span style={{ fontSize: '13px', fontWeight: '600' }}>₹{(activeCaseDetails.dueAmount || 0).toLocaleString('en-IN')}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '12.5px', color: '#64748b' }}>Due Amount:</span>
+                    <span style={{ fontSize: '14px', fontWeight: '800', color: '#dc2626' }}>₹{(activeCaseDetails.dueAmount || 0).toLocaleString('en-IN')}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Assigned Staff:</span>
-                    <span style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--primary-dark)' }}>
+                    <span style={{ fontSize: '12.5px', color: '#64748b' }}>Assigned Staff:</span>
+                    <span style={{ fontSize: '13px', fontWeight: '800', color: '#0891b2' }}>
                       {activeCaseDetails.assignedStaff?.name || 'Unassigned'}
                     </span>
                   </div>

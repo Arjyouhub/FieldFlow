@@ -4,6 +4,7 @@ import {
   getPortfolioById,
   createPortfolio,
   updatePortfolio,
+  deletePortfolio,
   listBatches,
   createBatch,
 } from '../controllers/portfolioController.js';
@@ -21,6 +22,7 @@ router.get('/:id', getPortfolioById);
 // Admin-only mutations
 router.post('/', authorize('admin', 'super_admin'), createPortfolio);
 router.put('/:id', authorize('admin', 'super_admin'), updatePortfolio);
+router.delete('/:id', authorize('admin', 'super_admin'), deletePortfolio);
 router.post('/batches', authorize('admin', 'super_admin'), createBatch);
 
 export default router;

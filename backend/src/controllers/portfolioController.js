@@ -302,3 +302,41 @@ export async function createBatch(req, res) {
     return res.status(500).json({ success: false, message: error.message });
   }
 }
+
+/**
+ * 6. Delete a portfolio
+ */
+export async function deletePortfolio(req, res) {
+  try {
+    const { id } = req.params;
+    const portfolio = await Portfolio.findById(id);
+
+    if (!portfolio) {
+      return res.status(404).json({ success: false, message: 'Portfolio not found.' });
+    }
+
+    const casesCount = await Case.countDocuments({ portfolioId: id });
+    if (casesCount > 0 && req.query.force !== 'true') {
+      return res.status(400).json({
+        success: false,
+        casesCount,
+        message: `Cannot delete "${portfolio.name}" because it contains ${casesCount} cases. Please confirm force delete to remove it along with its cases.`,
+      });
+    }
+
+    // Delete associated monthly batches
+    await MonthlyBatch.deleteMany({ portfolioId: id });
+    if (req.query.force === 'true') {
+      await Case.deleteMany({ portfolioId: id });
+    }
+    await Portfolio.findByIdAndDelete(id);
+
+    return res.json({
+      success: true,
+      message: `Portfolio "${portfolio.name}" deleted successfully.`,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+

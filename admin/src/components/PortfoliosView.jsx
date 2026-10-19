@@ -14,6 +14,7 @@ import {
   Clock,
   RefreshCw,
   FolderPlus,
+  Trash2,
 } from 'lucide-react';
 
 export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload }) {
@@ -27,12 +28,13 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingPortfolio, setEditingPortfolio] = useState(null);
   const [batchModalPortfolio, setBatchModalPortfolio] = useState(null);
+  const [deleteConfirmPortfolio, setDeleteConfirmPortfolio] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Forms
   const [formData, setFormData] = useState({
     name: '',
     code: '',
-    description: '',
     defaultRadiusMetres: 100,
   });
 
@@ -73,7 +75,7 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
       });
       setSuccessMsg(res.message || 'Portfolio created successfully!');
       setShowCreateModal(false);
-      setFormData({ name: '', code: '', description: '', defaultRadiusMetres: 100 });
+      setFormData({ name: '', code: '', defaultRadiusMetres: 100 });
       loadPortfolios();
     } catch (err) {
       setErrorMsg(err.message);
@@ -89,7 +91,6 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
         method: 'PUT',
         body: JSON.stringify({
           name: editingPortfolio.name,
-          description: editingPortfolio.description,
           defaultRadiusMetres: editingPortfolio.defaultRadiusMetres,
           isActive: editingPortfolio.isActive,
         }),
@@ -111,6 +112,24 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
       loadPortfolios();
     } catch (err) {
       setErrorMsg(err.message);
+    }
+  };
+
+  const handleDeletePortfolio = async () => {
+    if (!deleteConfirmPortfolio) return;
+    setIsDeleting(true);
+    setErrorMsg('');
+    try {
+      const res = await apiFetch(`/api/portfolios/${deleteConfirmPortfolio._id}?force=true`, {
+        method: 'DELETE',
+      });
+      setSuccessMsg(res.message || `Portfolio "${deleteConfirmPortfolio.name}" deleted successfully.`);
+      setDeleteConfirmPortfolio(null);
+      loadPortfolios();
+    } catch (err) {
+      setErrorMsg(err.message);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -139,8 +158,7 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
   const filteredPortfolios = portfolios.filter(
     (p) =>
       p.name?.toLowerCase().includes(search.toLowerCase()) ||
-      p.code?.toLowerCase().includes(search.toLowerCase()) ||
-      p.description?.toLowerCase().includes(search.toLowerCase())
+      p.code?.toLowerCase().includes(search.toLowerCase())
   );
 
   const totalCasesAll = portfolios.reduce((acc, p) => acc + (p.stats?.totalCases || 0), 0);
@@ -286,12 +304,6 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
                     </div>
                   </div>
 
-                  {p.description && (
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '8px 0' }}>
-                      {p.description}
-                    </div>
-                  )}
-
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', margin: '10px 0', padding: '10px', background: 'var(--bg-subtle, #f9fafb)', borderRadius: '6px' }}>
                     <div>
                       <div className="mobile-card-label">Total Cases</div>
@@ -313,11 +325,11 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
                     </div>
                   </div>
 
-                  <div className="mobile-card-actions">
+                  <div className="mobile-card-actions" style={{ flexWrap: 'wrap', gap: '6px' }}>
                     <button
                       onClick={() => setEditingPortfolio(p)}
                       className="btn btn-secondary btn-sm"
-                      style={{ flex: 1, justifyContent: 'center' }}
+                      style={{ flex: '1 1 45%', justifyContent: 'center' }}
                     >
                       <Edit2 size={13} style={{ marginRight: '4px' }} /> Edit
                     </button>
@@ -327,7 +339,7 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
                         setBatchFormData({ batchMonth: 'NOV-2026', year: 2026, notes: '' });
                       }}
                       className="btn btn-secondary btn-sm"
-                      style={{ flex: 1, justifyContent: 'center' }}
+                      style={{ flex: '1 1 45%', justifyContent: 'center' }}
                     >
                       <Calendar size={13} style={{ marginRight: '4px' }} /> Batch
                     </button>
@@ -335,11 +347,18 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
                       <button
                         onClick={() => onSelectPortfolioForUpload(p._id)}
                         className="btn btn-primary btn-sm"
-                        style={{ flex: 1, justifyContent: 'center' }}
+                        style={{ flex: '1 1 45%', justifyContent: 'center' }}
                       >
                         <FolderPlus size={13} style={{ marginRight: '4px' }} /> Import
                       </button>
                     )}
+                    <button
+                      onClick={() => setDeleteConfirmPortfolio(p)}
+                      className="btn btn-danger btn-sm"
+                      style={{ flex: '1 1 45%', justifyContent: 'center' }}
+                    >
+                      <Trash2 size={13} style={{ marginRight: '4px' }} /> Delete
+                    </button>
                   </div>
                 </div>
               );
@@ -348,21 +367,21 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
         </div>
 
         {/* Laptop Page Model (> 768px) */}
-        <div className="responsive-auto-table table-responsive">
-          <table className="data-table">
+        <div className="responsive-auto-table table-responsive" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <table className="data-table" style={{ minWidth: '1150px' }}>
             <thead>
               <tr>
-                <th>Portfolio</th>
-                <th>Code</th>
-                <th>Status</th>
-                <th>Geofence Radius</th>
-                <th>Total Cases</th>
-                <th>Visited</th>
-                <th>Paid Cases</th>
-                <th>PTP / Broken</th>
-                <th>Suspicious</th>
-                <th>Collections (₹)</th>
-                <th>Actions</th>
+                <th style={{ minWidth: '170px', whiteSpace: 'nowrap' }}>Portfolio</th>
+                <th style={{ minWidth: '95px', whiteSpace: 'nowrap' }}>Code</th>
+                <th style={{ minWidth: '90px', whiteSpace: 'nowrap' }}>Status</th>
+                <th style={{ minWidth: '120px', whiteSpace: 'nowrap' }}>Geofence Radius</th>
+                <th style={{ minWidth: '85px', textAlign: 'center', whiteSpace: 'nowrap' }}>Total Cases</th>
+                <th style={{ minWidth: '70px', textAlign: 'center', whiteSpace: 'nowrap' }}>Visited</th>
+                <th style={{ minWidth: '85px', textAlign: 'center', whiteSpace: 'nowrap' }}>Paid Cases</th>
+                <th style={{ minWidth: '95px', textAlign: 'center', whiteSpace: 'nowrap' }}>PTP / Broken</th>
+                <th style={{ minWidth: '85px', textAlign: 'center', whiteSpace: 'nowrap' }}>Suspicious</th>
+                <th style={{ minWidth: '120px', textAlign: 'right', whiteSpace: 'nowrap' }}>Collections (₹)</th>
+                <th style={{ minWidth: '220px', textAlign: 'center', whiteSpace: 'nowrap' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -377,23 +396,22 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
                   const s = p.stats || {};
                   return (
                     <tr key={p._id}>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', fontSize: '12px' }}>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{ width: '30px', height: '30px', minWidth: '30px', borderRadius: '8px', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', fontSize: '13px' }}>
                             {p.name.substring(0, 1)}
                           </div>
-                          <div>
-                            <div style={{ fontWeight: '600', color: 'var(--text-main)', fontSize: '13.5px' }}>{p.name}</div>
-                            {p.description && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{p.description}</div>}
-                          </div>
+                          <span style={{ fontWeight: '600', color: 'var(--text-main)', fontSize: '13.5px' }}>
+                            {p.name}
+                          </span>
                         </div>
                       </td>
-                      <td>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', fontWeight: '700', background: 'var(--bg-card-subtle)', padding: '2px 6px', borderRadius: '4px' }}>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', fontWeight: '700', background: 'var(--bg-card-subtle)', padding: '2px 8px', borderRadius: '4px' }}>
                           {p.code}
                         </span>
                       </td>
-                      <td>
+                      <td style={{ whiteSpace: 'nowrap' }}>
                         <button
                           onClick={() => handleToggleActive(p)}
                           style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
@@ -404,40 +422,40 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
                           </span>
                         </button>
                       </td>
-                      <td>
-                        <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <span style={{ fontSize: '12.5px', color: 'var(--text-secondary)', fontWeight: '500' }}>
                           {p.defaultRadiusMetres || 100}m
                         </span>
                       </td>
-                      <td>
+                      <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                         <span style={{ fontWeight: '700', color: 'var(--text-main)' }}>{s.totalCases || 0}</span>
                       </td>
-                      <td>
+                      <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                         <span style={{ color: 'var(--info-text)', fontWeight: '600' }}>{s.visitedCases || 0}</span>
                       </td>
-                      <td>
+                      <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                         <span style={{ color: 'var(--success-text)', fontWeight: '700' }}>{s.paidCases || 0}</span>
                       </td>
-                      <td>
+                      <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                         <span style={{ fontSize: '12px' }}>
                           <span style={{ color: '#0284c7', fontWeight: '600' }}>{s.ptpCases || 0}</span> /{' '}
                           <span style={{ color: 'var(--danger-text)', fontWeight: '600' }}>{s.brokenPtpCases || 0}</span>
                         </span>
                       </td>
-                      <td>
+                      <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                         {s.suspiciousVisits > 0 ? (
                           <span className="badge badge-danger">{s.suspiciousVisits}</span>
                         ) : (
                           <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>0</span>
                         )}
                       </td>
-                      <td>
+                      <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                         <span style={{ fontWeight: '700', color: 'var(--success-text)' }}>
                           ₹{(s.verifiedCollectionsTotal || 0).toLocaleString('en-IN')}
                         </span>
                       </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '6px' }}>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                           <button
                             onClick={() => setEditingPortfolio(p)}
                             className="btn btn-secondary btn-xs"
@@ -464,6 +482,13 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
                               <FolderPlus size={12} /> Import
                             </button>
                           )}
+                          <button
+                            onClick={() => setDeleteConfirmPortfolio(p)}
+                            className="btn btn-danger btn-xs"
+                            title="Delete Portfolio"
+                          >
+                            <Trash2 size={12} /> Delete
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -478,7 +503,7 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
       {/* CREATE PORTFOLIO MODAL */}
       {showCreateModal && (
         <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setShowCreateModal(false); }}>
-          <div className="modal-card" style={{ maxWidth: '480px' }}>
+          <div className="modal-card" style={{ maxWidth: '460px' }}>
             <div className="modal-header">
               <h3 className="modal-title">Create Finance Portfolio</h3>
               <button onClick={() => setShowCreateModal(false)} className="modal-close-btn">✕</button>
@@ -509,19 +534,6 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
                   required
-                />
-              </div>
-
-              <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '600', marginBottom: '6px' }}>
-                  Description (Optional)
-                </label>
-                <textarea
-                  className="input-field"
-                  rows={2}
-                  placeholder="Lending partner terms, region, or branch notes..."
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 />
               </div>
 
@@ -558,7 +570,7 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
       {/* EDIT PORTFOLIO MODAL */}
       {editingPortfolio && (
         <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setEditingPortfolio(null); }}>
-          <div className="modal-card" style={{ maxWidth: '480px' }}>
+          <div className="modal-card" style={{ maxWidth: '460px' }}>
             <div className="modal-header">
               <h3 className="modal-title">Edit Portfolio: {editingPortfolio.name}</h3>
               <button onClick={() => setEditingPortfolio(null)} className="modal-close-btn">✕</button>
@@ -574,18 +586,6 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
                   value={editingPortfolio.name}
                   onChange={(e) => setEditingPortfolio({ ...editingPortfolio, name: e.target.value })}
                   required
-                />
-              </div>
-
-              <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '600', marginBottom: '6px' }}>
-                  Description
-                </label>
-                <textarea
-                  className="input-field"
-                  rows={2}
-                  value={editingPortfolio.description || ''}
-                  onChange={(e) => setEditingPortfolio({ ...editingPortfolio, description: e.target.value })}
                 />
               </div>
 
@@ -625,6 +625,55 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {deleteConfirmPortfolio && (
+        <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget && !isDeleting) setDeleteConfirmPortfolio(null); }}>
+          <div className="modal-card" style={{ maxWidth: '440px' }}>
+            <div className="modal-header" style={{ borderBottom: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--danger-text)' }}>
+                <AlertTriangle size={18} />
+                <h3 className="modal-title" style={{ color: 'var(--danger-text)' }}>Delete Portfolio</h3>
+              </div>
+              <button onClick={() => !isDeleting && setDeleteConfirmPortfolio(null)} className="modal-close-btn" disabled={isDeleting}>✕</button>
+            </div>
+            <div style={{ padding: '20px' }}>
+              <p style={{ fontSize: '14px', color: 'var(--text-main)', marginBottom: '12px', lineHeight: '1.5' }}>
+                Are you sure you want to permanently delete <strong>{deleteConfirmPortfolio.name}</strong> ({deleteConfirmPortfolio.code})?
+              </p>
+              {deleteConfirmPortfolio.stats?.totalCases > 0 ? (
+                <div style={{ padding: '10px 14px', background: 'var(--danger-light)', border: '1px solid var(--danger-border)', borderRadius: '8px', color: 'var(--danger-text)', fontSize: '12.5px', marginBottom: '16px', lineHeight: '1.4' }}>
+                  ⚠️ <strong>Warning:</strong> This portfolio currently contains <strong>{deleteConfirmPortfolio.stats.totalCases} cases</strong>. Deleting it will permanently remove the portfolio and its associated cases.
+                </div>
+              ) : (
+                <div style={{ padding: '10px 14px', background: 'var(--bg-card-subtle)', borderRadius: '8px', color: 'var(--text-secondary)', fontSize: '12.5px', marginBottom: '16px' }}>
+                  This portfolio has 0 cases and will be cleanly removed.
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmPortfolio(null)}
+                  className="btn btn-secondary"
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeletePortfolio}
+                  className="btn btn-danger"
+                  disabled={isDeleting}
+                  style={{ gap: '6px' }}
+                >
+                  {isDeleting ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                  {isDeleting ? 'Deleting...' : 'Yes, Delete Portfolio'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

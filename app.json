@@ -39,6 +39,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "08d9d48c-78b7-4142-b571-6bdd008ae2bf"
+      }
+    },
+    "owner": "arju.exe"
   }
 }

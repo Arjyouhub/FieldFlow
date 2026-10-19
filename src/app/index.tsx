@@ -757,30 +757,27 @@ export default function LoginScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {/* Top Bar: Security Pill & Language Pill */}
-            <View style={styles.topBarRow}>
-              <View style={styles.securityBadge}>
-                <View style={styles.securityDot} />
-                <Ionicons name="shield-checkmark" size={13} color="#059669" />
-                <Text style={styles.securityBadgeText}>FieldFlow v2.0</Text>
+            {/* Ultra-Modern Header Bar */}
+            <View style={styles.modernTopRow}>
+              <View style={styles.securityStatusPill}>
+                <View style={styles.pulseLiveDot} />
+                <Text style={styles.securityStatusText}>Field Operations Portal</Text>
               </View>
-
-              <Pressable style={styles.languagePill} hitSlop={8}>
-                <Ionicons name="globe-outline" size={14} color={BRAND_DARK_GREEN} />
-                <Text style={styles.languagePillText}>English</Text>
-                <Ionicons name="chevron-down" size={13} color="#64748B" />
-              </Pressable>
+              <View style={styles.encryptedBadge}>
+                <Ionicons name="shield-checkmark" size={13} color="#059669" />
+                <Text style={styles.encryptedText}>Encrypted</Text>
+              </View>
             </View>
 
             {/* Modern App Brand Header */}
             <View style={styles.brandHeroSection}>
               <View style={styles.logoTileWrapper}>
                 <View style={styles.logoTile}>
-                  <DualLeafLogo size={38} />
+                  <DualLeafLogo size={42} />
                 </View>
               </View>
               <Text style={styles.brandHeroTitle}>FieldFlow</Text>
-              <Text style={styles.brandHeroSubtitle}>Field Operations & Recovery Suite</Text>
+              <Text style={styles.brandHeroSubtitle}>Debt Collection & Field Recovery</Text>
             </View>
 
             {/* Error Message Banner */}
@@ -944,15 +941,20 @@ export default function LoginScreen() {
 
             {/* Quick Demo Fill Pill */}
             <Pressable
-              style={styles.demoFillPill}
+              style={({ pressed }) => [
+                styles.demoFillPill,
+                pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
+              ]}
               onPress={() => {
                 setPhone("9876543211");
                 setPassword("password123");
                 setErrorText("");
               }}
             >
-              <Ionicons name="flash" size={13} color="#0D5D37" style={{ marginRight: 4 }} />
-              <Text style={styles.demoFillPillText}>Quick Fill Demo Officer (9876543211)</Text>
+              <View style={styles.demoFillIconBadge}>
+                <Ionicons name="flash" size={12} color="#059669" />
+              </View>
+              <Text style={styles.demoFillPillText}>Auto-Fill Demo Officer (Rahul Kumar)</Text>
             </Pressable>
 
             {/* Bottom Footer: Activate Account */}
@@ -1212,69 +1214,73 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(13, 93, 55, 0.05)",
   },
 
-  // Top Bar Row: Security Pill & Language
-  topBarRow: {
+  // Ultra-Modern Header Bar
+  modernTopRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 24,
   },
-  securityBadge: {
+  securityStatusPill: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#ECFDF5",
     borderWidth: 1,
     borderColor: "#A7F3D0",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: Radii.full,
-    gap: 6,
+    gap: 7,
   },
-  securityDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+  pulseLiveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
     backgroundColor: "#10B981",
   },
-  securityBadgeText: {
-    fontSize: fontScale(11),
+  securityStatusText: {
+    fontSize: fontScale(11.5),
     fontWeight: "700",
     color: "#065F46",
     letterSpacing: 0.3,
   },
-  languagePill: {
+  encryptedBadge: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: Radii.full,
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    backgroundColor: "#FFFFFF",
-    gap: 6,
-    ...Shadows.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radii.full,
+    gap: 5,
   },
-  languagePillText: {
-    fontSize: fontScale(12.5),
+  encryptedText: {
+    fontSize: fontScale(11.5),
     fontWeight: "600",
-    color: BRAND_DARK_GREEN,
+    color: "#64748B",
   },
 
   // Modern Hero Branding
   brandHeroSection: {
     alignItems: "center",
-    marginBottom: 24,
+    marginBottom: 26,
   },
   logoTileWrapper: {
-    padding: 6,
-    borderRadius: 24,
+    padding: 8,
+    borderRadius: 26,
     backgroundColor: "rgba(16, 185, 129, 0.12)",
-    marginBottom: 12,
+    marginBottom: 14,
+    shadowColor: BRAND_EMERALD,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 14,
+    elevation: 2,
   },
   logoTile: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
+    width: 68,
+    height: 68,
+    borderRadius: 20,
     backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
@@ -1283,16 +1289,16 @@ const styles = StyleSheet.create({
     ...Shadows.sm,
   },
   brandHeroTitle: {
-    fontSize: fontScale(27),
+    fontSize: fontScale(28),
     fontWeight: "800",
     color: "#0F172A",
-    letterSpacing: -0.5,
+    letterSpacing: -0.6,
   },
   brandHeroSubtitle: {
     fontSize: fontScale(13),
     color: "#64748B",
-    marginTop: 4,
-    fontWeight: "400",
+    marginTop: 5,
+    fontWeight: "500",
   },
 
   // Modern Elevated Card
@@ -1475,14 +1481,23 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
     borderColor: "#E2E8F0",
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: Radii.full,
     marginTop: 20,
-    ...Shadows.sm,
+    gap: 8,
+    ...Shadows.xs,
+  },
+  demoFillIconBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#ECFDF5",
+    alignItems: "center",
+    justifyContent: "center",
   },
   demoFillPillText: {
     fontSize: fontScale(12),

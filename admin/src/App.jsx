@@ -58,7 +58,6 @@ import {
 
 import PortfoliosView from './components/PortfoliosView';
 import CasesView from './components/CasesView';
-import BatchesView from './components/BatchesView';
 import BulkImportModal from './components/BulkImportModal';
 import PtpView from './components/PtpView';
 import NonWorkableView from './components/NonWorkableView';
@@ -1842,7 +1841,6 @@ export default function App() {
             { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
             { id: 'portfolios', label: 'Portfolios', icon: Layers, badge: portfolios?.length, badgeColor: 'info' },
             { id: 'cases', label: 'Cases & Recovery', icon: Briefcase, badge: stats?.pendingCases },
-            { id: 'batches', label: 'Monthly Cases', icon: Calendar },
             { id: 'customers', label: 'Customer Details', icon: Users },
             { id: 'locations', label: 'Customer Locations', icon: MapPin },
             { id: 'suspicious', label: 'Suspicious Visits', icon: AlertTriangle, badge: stats?.suspiciousCount, badgeColor: 'danger' },
@@ -1911,7 +1909,6 @@ export default function App() {
               {activeTab === 'dashboard' ? 'Operations Dashboard' :
                activeTab === 'portfolios' ? 'Portfolios' :
                activeTab === 'cases' ? 'Cases & Recovery' :
-               activeTab === 'batches' ? 'Monthly Cases' :
                activeTab === 'approvals' ? 'Staff Approvals' :
                activeTab === 'customers' ? 'Customer Details' :
                activeTab === 'locations' ? 'Customer Locations' :
@@ -2789,20 +2786,6 @@ export default function App() {
               portfolios={portfolios}
               onOpenImport={() => {
                 setBulkImportInitialPortfolio(selectedGlobalPortfolio !== 'ALL' ? selectedGlobalPortfolio : '');
-                setShowBulkImportModal(true);
-              }}
-            />
-          )}
-
-          {/* ================================================================ */}
-          {/* TAB: MONTHLY ALLOCATION BATCHES */}
-          {/* ================================================================ */}
-          {activeTab === 'batches' && (
-            <BatchesView
-              apiFetch={apiFetch}
-              portfolios={portfolios}
-              onSelectBatchForUpload={(pId) => {
-                setBulkImportInitialPortfolio(pId);
                 setShowBulkImportModal(true);
               }}
             />

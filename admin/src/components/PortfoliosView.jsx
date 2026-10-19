@@ -6,15 +6,13 @@ import {
   CheckCircle,
   XCircle,
   Edit2,
-  Calendar,
   AlertTriangle,
   TrendingUp,
   CreditCard,
-  ShieldAlert,
-  Clock,
   RefreshCw,
   FolderPlus,
   Trash2,
+  Filter,
 } from 'lucide-react';
 
 export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload }) {
@@ -23,25 +21,19 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
 
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingPortfolio, setEditingPortfolio] = useState(null);
-  const [batchModalPortfolio, setBatchModalPortfolio] = useState(null);
   const [deleteConfirmPortfolio, setDeleteConfirmPortfolio] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Forms
+  // Form
   const [formData, setFormData] = useState({
     name: '',
     code: '',
     defaultRadiusMetres: 100,
-  });
-
-  const [batchFormData, setBatchFormData] = useState({
-    batchMonth: 'NOV-2026',
-    year: 2026,
-    notes: '',
   });
 
   const loadPortfolios = async () => {
@@ -133,33 +125,17 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
     }
   };
 
-  const handleCreateBatch = async (e) => {
-    e.preventDefault();
-    if (!batchModalPortfolio) return;
-    setErrorMsg('');
-    try {
-      const res = await apiFetch('/api/portfolios/batches', {
-        method: 'POST',
-        body: JSON.stringify({
-          portfolioId: batchModalPortfolio._id,
-          batchMonth: batchFormData.batchMonth,
-          year: batchFormData.year,
-          notes: batchFormData.notes,
-        }),
-      });
-      setSuccessMsg(res.message || `Monthly batch ${batchFormData.batchMonth} created!`);
-      setBatchModalPortfolio(null);
-      loadPortfolios();
-    } catch (err) {
-      setErrorMsg(err.message);
-    }
-  };
-
-  const filteredPortfolios = portfolios.filter(
-    (p) =>
+  const filteredPortfolios = portfolios.filter((p) => {
+    const matchesSearch =
+      !search.trim() ||
       p.name?.toLowerCase().includes(search.toLowerCase()) ||
-      p.code?.toLowerCase().includes(search.toLowerCase())
-  );
+      p.code?.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus =
+      statusFilter === 'ALL' ||
+      (statusFilter === 'ACTIVE' && p.isActive) ||
+      (statusFilter === 'INACTIVE' && !p.isActive);
+    return matchesSearch && matchesStatus;
+  });
 
   const totalCasesAll = portfolios.reduce((acc, p) => acc + (p.stats?.totalCases || 0), 0);
   const totalCollectionsAll = portfolios.reduce((acc, p) => acc + (p.stats?.verifiedCollectionsTotal || 0), 0);
@@ -225,8 +201,8 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
       {/* Header & Controls */}
       <div className="card" style={{ padding: '12px 16px', marginBottom: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '220px' }}>
-            <div style={{ position: 'relative', width: '100%', maxWidth: '300px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '220px', flexWrap: 'wrap' }}>
+            <div style={{ position: 'relative', width: '100%', maxWidth: '280px' }}>
               <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
               <input
                 type="text"
@@ -236,6 +212,16 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
+            <select
+              className="input-field"
+              style={{ width: 'auto', padding: '6px 12px', fontSize: '13px', height: '34px' }}
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="ALL">All Statuses ({portfolios.length})</option>
+              <option value="ACTIVE">Active ({portfolios.filter(p => p.isActive).length})</option>
+              <option value="INACTIVE">Inactive ({portfolios.filter(p => !p.isActive).length})</option>
+            </select>
             <button onClick={loadPortfolios} className="btn btn-secondary btn-sm" style={{ width: '34px', padding: 0 }} title="Refresh">
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
             </button>
@@ -258,16 +244,16 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
         <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
           <div>
             <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-main)' }}>Configured Portfolios</h3>
-            <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Each portfolio maintains independent customer cases, monthly cycles, and verification rules.</p>
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Each portfolio maintains independent customer cases and verification rules.</p>
           </div>
-          <span className="badge badge-info">{filteredPortfolios.length} Portfolios</span>
+          <span className="badge badge-info">{filteredPortfolios.length} of {portfolios.length} Portfolios</span>
         </div>
 
         {/* Mobile Card Model (<= 768px) */}
         <div className="responsive-auto-cards" style={{ padding: '12px' }}>
           {filteredPortfolios.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--text-muted)' }}>
-              {loading ? 'Loading portfolios...' : 'No portfolios found. Click "Create Portfolio" to add your first partner.'}
+              {loading ? 'Loading portfolios...' : 'No portfolios match your filters.'}
             </div>
           ) : (
             filteredPortfolios.map((p) => {
@@ -329,25 +315,15 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
                     <button
                       onClick={() => setEditingPortfolio(p)}
                       className="btn btn-secondary btn-sm"
-                      style={{ flex: '1 1 45%', justifyContent: 'center' }}
+                      style={{ flex: '1 1 30%', justifyContent: 'center' }}
                     >
                       <Edit2 size={13} style={{ marginRight: '4px' }} /> Edit
-                    </button>
-                    <button
-                      onClick={() => {
-                        setBatchModalPortfolio(p);
-                        setBatchFormData({ batchMonth: 'NOV-2026', year: 2026, notes: '' });
-                      }}
-                      className="btn btn-secondary btn-sm"
-                      style={{ flex: '1 1 45%', justifyContent: 'center' }}
-                    >
-                      <Calendar size={13} style={{ marginRight: '4px' }} /> Batch
                     </button>
                     {onSelectPortfolioForUpload && (
                       <button
                         onClick={() => onSelectPortfolioForUpload(p._id)}
                         className="btn btn-primary btn-sm"
-                        style={{ flex: '1 1 45%', justifyContent: 'center' }}
+                        style={{ flex: '1 1 30%', justifyContent: 'center' }}
                       >
                         <FolderPlus size={13} style={{ marginRight: '4px' }} /> Import
                       </button>
@@ -355,7 +331,7 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
                     <button
                       onClick={() => setDeleteConfirmPortfolio(p)}
                       className="btn btn-danger btn-sm"
-                      style={{ flex: '1 1 45%', justifyContent: 'center' }}
+                      style={{ flex: '1 1 30%', justifyContent: 'center' }}
                     >
                       <Trash2 size={13} style={{ marginRight: '4px' }} /> Delete
                     </button>
@@ -368,7 +344,7 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
 
         {/* Laptop Page Model (> 768px) */}
         <div className="responsive-auto-table table-responsive" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          <table className="data-table" style={{ minWidth: '1150px' }}>
+          <table className="data-table" style={{ minWidth: '1050px' }}>
             <thead>
               <tr>
                 <th style={{ minWidth: '170px', whiteSpace: 'nowrap' }}>Portfolio</th>
@@ -381,14 +357,14 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
                 <th style={{ minWidth: '95px', textAlign: 'center', whiteSpace: 'nowrap' }}>PTP / Broken</th>
                 <th style={{ minWidth: '85px', textAlign: 'center', whiteSpace: 'nowrap' }}>Suspicious</th>
                 <th style={{ minWidth: '120px', textAlign: 'right', whiteSpace: 'nowrap' }}>Collections (₹)</th>
-                <th style={{ minWidth: '220px', textAlign: 'center', whiteSpace: 'nowrap' }}>Actions</th>
+                <th style={{ minWidth: '180px', textAlign: 'center', whiteSpace: 'nowrap' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredPortfolios.length === 0 ? (
                 <tr>
                   <td colSpan={11} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
-                    {loading ? 'Loading portfolios...' : 'No portfolios found. Click "Create Portfolio" to add your first partner.'}
+                    {loading ? 'Loading portfolios...' : 'No portfolios match your filters.'}
                   </td>
                 </tr>
               ) : (
@@ -462,16 +438,6 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
                             title="Edit Portfolio Settings"
                           >
                             <Edit2 size={12} /> Edit
-                          </button>
-                          <button
-                            onClick={() => {
-                              setBatchModalPortfolio(p);
-                              setBatchFormData({ batchMonth: 'NOV-2026', year: 2026, notes: '' });
-                            }}
-                            className="btn btn-secondary btn-xs"
-                            title="Add Monthly Batch"
-                          >
-                            <Calendar size={12} /> Batch
                           </button>
                           {onSelectPortfolioForUpload && (
                             <button
@@ -674,68 +640,6 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* CREATE BATCH MODAL */}
-      {batchModalPortfolio && (
-        <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setBatchModalPortfolio(null); }}>
-          <div className="modal-card" style={{ maxWidth: '440px' }}>
-            <div className="modal-header">
-              <h3 className="modal-title">New Batch: {batchModalPortfolio.name}</h3>
-              <button onClick={() => setBatchModalPortfolio(null)} className="modal-close-btn">✕</button>
-            </div>
-            <form onSubmit={handleCreateBatch} style={{ padding: '20px' }}>
-              <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '600', marginBottom: '6px' }}>
-                  Batch Month Label <span style={{ color: 'var(--danger)' }}>*</span>
-                </label>
-                <input
-                  type="text"
-                  className="input-field"
-                  placeholder="e.g. NOV-2026, DEC-2026"
-                  value={batchFormData.batchMonth}
-                  onChange={(e) => setBatchFormData({ ...batchFormData, batchMonth: e.target.value.toUpperCase() })}
-                  required
-                />
-              </div>
-
-              <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '600', marginBottom: '6px' }}>
-                  Year
-                </label>
-                <input
-                  type="number"
-                  className="input-field"
-                  value={batchFormData.year}
-                  onChange={(e) => setBatchFormData({ ...batchFormData, year: Number(e.target.value) })}
-                  required
-                />
-              </div>
-
-              <div style={{ marginBottom: '18px' }}>
-                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '600', marginBottom: '6px' }}>
-                  Notes (Optional)
-                </label>
-                <input
-                  type="text"
-                  className="input-field"
-                  placeholder="e.g. Q4 Priority Recovery Batch"
-                  value={batchFormData.notes}
-                  onChange={(e) => setBatchFormData({ ...batchFormData, notes: e.target.value })}
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                <button type="button" onClick={() => setBatchModalPortfolio(null)} className="btn btn-secondary">
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  Create Monthly Batch
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}

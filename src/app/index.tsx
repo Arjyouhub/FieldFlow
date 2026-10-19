@@ -20,7 +20,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { API_BASE_URL } from "../config/api";
-import { saveAuthSession, getAuthSession } from "../utils/storage";
+import { saveAuthSession, getAuthSession, clearAuthSession } from "../utils/storage";
 import { Colors, Spacing, Radii, Shadows } from "../constants/theme";
 import { fontScale, scale, verticalScale } from "../utils/responsive";
 
@@ -153,7 +153,20 @@ export default function LoginScreen() {
     (async () => {
       const { token } = await getAuthSession();
       if (token) {
-        router.replace("/dashboard");
+        try {
+          const res = await fetch(`${API_BASE_URL}/customers/assigned`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.status === 401) {
+            // Expired or invalid token detected, clear it immediately
+            await clearAuthSession();
+            return;
+          }
+          router.replace("/dashboard");
+        } catch {
+          // If offline, still allow proceeding to dashboard
+          router.replace("/dashboard");
+        }
       }
     })();
   }, []);

@@ -82,6 +82,11 @@ export default function DashboardScreen() {
       const res = await fetch(`${API_BASE_URL}/portfolios?status=active`, {
         headers: { Authorization: `Bearer ${authToken}` },
       });
+      if (res.status === 401) {
+        await clearAuthSession();
+        router.replace("/");
+        return;
+      }
       const data = await res.json();
       if (res.ok && Array.isArray(data.portfolios)) {
         setAdminPortfolios(data.portfolios);
@@ -97,6 +102,12 @@ export default function DashboardScreen() {
       const res = await fetch(`${API_BASE_URL}/customers/assigned`, {
         headers: { Authorization: `Bearer ${authToken}` },
       });
+      if (res.status === 401) {
+        await clearAuthSession();
+        router.replace("/");
+        Alert.alert("Session Expired", "Your session has expired. Please log in again.");
+        return;
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
 
@@ -115,7 +126,9 @@ export default function DashboardScreen() {
         setCustomers(data.customers || []);
       }
     } catch (err: any) {
-      Alert.alert("Network Notice", err.message || "Failed to load assigned field cases.");
+      if (err.message && !err.message.includes("token")) {
+        Alert.alert("Network Notice", err.message || "Failed to load assigned field cases.");
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);

@@ -8,7 +8,7 @@ import mongoose from 'mongoose';
 let isConnecting = false;
 
 export async function connectDB() {
-  const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/fieldflow';
+  const uri = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/fieldflow';
   const isAtlas = uri.startsWith('mongodb+srv://');
 
   if (mongoose.connection.readyState === 1) {

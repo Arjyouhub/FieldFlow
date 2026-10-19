@@ -54,6 +54,9 @@ export default function App() {
   const [loginPhone, setLoginPhone] = useState('9876543212');
   const [loginPassword, setLoginPassword] = useState('password123');
 
+  // Base URL configuration for production vs local dev
+  const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+
   const apiFetch = async (url, options = {}) => {
     const headers = {
       'Content-Type': 'application/json',
@@ -61,10 +64,11 @@ export default function App() {
       ...options.headers,
     };
     let res;
+    const finalUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
     try {
-      res = await fetch(url, { ...options, headers });
+      res = await fetch(finalUrl, { ...options, headers });
     } catch (netErr) {
-      throw new Error(`Cannot connect to FieldFlow backend server. Please verify backend is running on port 5000.`);
+      throw new Error(`Cannot connect to FieldFlow backend server (${finalUrl}). Please verify backend is running on port 5000.`);
     }
 
     const text = await res.text();

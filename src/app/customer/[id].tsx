@@ -318,7 +318,7 @@ export default function CustomerDetailScreen() {
               </View>
             ) : (
               locations.map((loc, idx) => (
-                <View key={loc._id || idx} style={styles.savedLocationItem}>
+                <View key={`loc-${loc._id || 'l'}-${idx}`} style={styles.savedLocationItem}>
                   <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                       <Text style={{ fontSize: fontScale(14), fontWeight: "700", color: "#0F172A" }}>
@@ -365,7 +365,7 @@ export default function CustomerDetailScreen() {
               </View>
             ) : (
               visits.map((v, i) => (
-                <View key={v._id || i} style={styles.historyItemRow}>
+                <View key={`visit-${v._id || 'v'}-${i}`} style={styles.historyItemRow}>
                   <Text style={styles.historyItemDot}>•</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.historyItemTitle}>{v.outcome || "Field Visit"}</Text>

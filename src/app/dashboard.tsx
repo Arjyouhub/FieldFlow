@@ -161,30 +161,32 @@ export default function DashboardScreen() {
 
   // Distinct Portfolios List: ONLY portfolios added/active in Admin Page
   const availablePortfolios = useMemo(() => {
-    if (adminPortfolios && adminPortfolios.length > 0) {
-      const activeList = adminPortfolios
-        .filter((p) => p.isActive !== false)
-        .map((p) => p.name)
-        .filter(Boolean);
-      return ["ALL", ...activeList];
-    }
-    // Fallback if offline: only distinct portfolios actually present in assigned cases
     const set = new Set<string>();
-    customers.forEach((c) => {
-      if (c.portfolioName && c.portfolioName !== "General" && c.portfolioName.trim()) {
-        set.add(c.portfolioName.trim());
-      }
-    });
-    return ["ALL", ...Array.from(set)];
+    set.add("ALL");
+    if (adminPortfolios && adminPortfolios.length > 0) {
+      adminPortfolios
+        .filter((p) => p.isActive !== false)
+        .forEach((p) => {
+          if (p.name && p.name.trim()) set.add(p.name.trim());
+        });
+    } else {
+      customers.forEach((c) => {
+        if (c.portfolioName && c.portfolioName !== "General" && c.portfolioName.trim()) {
+          set.add(c.portfolioName.trim());
+        }
+      });
+    }
+    return Array.from(set);
   }, [adminPortfolios, customers]);
 
   // Distinct Batches List: only batches actually present in assigned cases
   const availableBatches = useMemo(() => {
     const set = new Set<string>();
+    set.add("ALL");
     customers.forEach((c) => {
       if (c.batchMonth && c.batchMonth.trim()) set.add(c.batchMonth.trim());
     });
-    return ["ALL", ...Array.from(set)];
+    return Array.from(set);
   }, [customers]);
 
   // Comprehensive Real KPI Metrics matching Reference Screenshot
@@ -481,9 +483,10 @@ export default function DashboardScreen() {
         ? `${cust.distance} km`
         : null;
 
+    const uniqueKey = `case-${cust.caseDbId || cust.loanAccountNo || cust._id || 'card'}-${index}`;
     return (
       <Pressable
-        key={cust._id || cust.caseDbId || index}
+        key={uniqueKey}
         style={styles.cardContainer}
         onPress={() => router.push(`/customer/${cust._id}` as any)}
       >
@@ -683,11 +686,11 @@ export default function DashboardScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.portfolioSelectorBar}
         >
-          {availablePortfolios.map((p) => {
+          {availablePortfolios.map((p, idx) => {
             const isActive = portfolioFilter === p;
             return (
               <Pressable
-                key={p}
+                key={`portfolio-chip-${p}-${idx}`}
                 style={[styles.portfolioChip, isActive && styles.portfolioChipActive]}
                 onPress={() => setPortfolioFilter(p)}
               >
@@ -1554,11 +1557,11 @@ export default function DashboardScreen() {
             </View>
 
             <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
-              {availablePortfolios.map((p) => {
+              {availablePortfolios.map((p, idx) => {
                 const isSelected = portfolioFilter === p;
                 return (
                   <Pressable
-                    key={p}
+                    key={`modal-portfolio-${p}-${idx}`}
                     style={[
                       styles.modalOptionRow,
                       isSelected && styles.modalOptionRowSelected,
@@ -1606,11 +1609,11 @@ export default function DashboardScreen() {
             </View>
 
             <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
-              {availableBatches.map((b) => {
+              {availableBatches.map((b, idx) => {
                 const isSelected = batchFilter === b;
                 return (
                   <Pressable
-                    key={b}
+                    key={`modal-batch-${b}-${idx}`}
                     style={[
                       styles.modalOptionRow,
                       isSelected && styles.modalOptionRowSelected,
@@ -1738,7 +1741,7 @@ export default function DashboardScreen() {
                     : "Near Kozhikode";
 
                 return (
-                  <View key={cust._id || idx} style={styles.mapCustomerRow}>
+                  <View key={`map-cust-${cust.caseDbId || cust.loanAccountNo || cust._id || 'c'}-${idx}`} style={styles.mapCustomerRow}>
                     <View style={styles.mapPinBadge}>
                       <Ionicons name="location" size={18} color="#00A86B" />
                     </View>

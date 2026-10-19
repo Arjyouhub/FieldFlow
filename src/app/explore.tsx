@@ -143,9 +143,9 @@ export default function ExploreActivityScreen() {
               <Text style={styles.emptyText}>No customer actions logged in this session yet.</Text>
             </View>
           ) : (
-            visitedCases.map((cust) => (
+            visitedCases.map((cust, idx) => (
               <Pressable
-                key={cust._id}
+                key={`exp-cust-${cust._id || 'c'}-${cust.loanAccountNo || idx}-${idx}`}
                 style={styles.activityItem}
                 onPress={() => router.push({ pathname: "/customer/[id]", params: { id: cust._id } })}
               >

@@ -260,14 +260,14 @@ export default function App() {
     const finalUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      const timeoutId = setTimeout(() => controller.abort(), 45000);
       res = await fetch(finalUrl, { ...options, headers, signal: controller.signal });
       clearTimeout(timeoutId);
     } catch (netErr) {
       if (netErr.name === 'AbortError') {
-        throw new Error('Connection timed out. Please check that FieldFlow backend is running on port 5000.');
+        throw new Error('Server request timed out. If Render cloud instance is waking up, please allow 30 seconds and refresh.');
       }
-      throw new Error(`Cannot connect to FieldFlow backend server (${finalUrl}). Please verify backend is running on port 5000.`);
+      throw new Error(`Cannot connect to FieldFlow backend (${finalUrl}). Please verify backend is running.`);
     }
 
     const text = await res.text();
@@ -278,10 +278,19 @@ export default function App() {
       } catch {
         throw new Error(
           res.status === 504 || res.status === 502
-            ? 'Backend server is not running on port 5000. Please start backend server (cd backend && npm run dev).'
+            ? 'Backend server is starting up or unreachable. Please retry in a few moments.'
             : `Server returned HTTP ${res.status}: ${text.slice(0, 100)}`
         );
       }
+    }
+
+    // Auto-logout when token is invalid or expired
+    if (res.status === 401) {
+      localStorage.removeItem('fieldflow_admin_token');
+      localStorage.removeItem('fieldflow_admin_user');
+      setToken('');
+      setAdminUser(null);
+      throw new Error('Your session has expired or is invalid. Please sign in again.');
     }
 
     if (!res.ok) {

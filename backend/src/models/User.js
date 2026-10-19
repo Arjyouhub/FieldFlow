@@ -77,6 +77,10 @@ const userSchema = new mongoose.Schema(
       code: { type: String, default: null },
       expiresAt: { type: Date, default: null },
       attempts: { type: Number, default: 0 },
+      lastSentAt: { type: Date, default: null },
+      resendCount: { type: Number, default: 0 },
+      activationToken: { type: String, default: null },
+      activationTokenExpiresAt: { type: Date, default: null },
     },
     failedLoginAttempts: {
       type: Number,

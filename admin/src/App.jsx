@@ -248,6 +248,19 @@ export default function App() {
   // Base URL configuration for production vs local dev
   const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
+  // Track broken / unreachable photo URLs to fallback cleanly to styled initials
+  const [brokenImages, setBrokenImages] = useState({});
+
+  // Helper to ensure photo paths (/uploads/...) resolve against backend
+  const getPhotoUrl = (photoPath) => {
+    if (!photoPath || typeof photoPath !== 'string') return '';
+    if (photoPath.startsWith('data:image') || photoPath.startsWith('http://') || photoPath.startsWith('https://')) {
+      return photoPath;
+    }
+    const base = API_BASE_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : 'https://fieldflow-bmg2.onrender.com');
+    return `${base}${photoPath.startsWith('/') ? '' : '/'}${photoPath}`;
+  };
+
   // Helper fetch with auth & safe JSON parsing
   const apiFetch = async (url, options = {}) => {
     const activeToken = token || localStorage.getItem('fieldflow_admin_token') || '';
@@ -3250,42 +3263,63 @@ export default function App() {
                         >
                           {/* Top Row: Officer Avatar, Name, Status Badge */}
                           <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
-                            <div
-                              className="officer-selfie-container"
-                              onClick={() => stf.profilePhoto || stf.selfiePhoto ? setSelectedPhoto(stf.profilePhoto || stf.selfiePhoto) : null}
-                              title={stf.profilePhoto || stf.selfiePhoto ? 'Click to inspect verification selfie' : ''}
-                            >
-                              {stf.profilePhoto || stf.selfiePhoto ? (
-                                <img
-                                  src={stf.profilePhoto || stf.selfiePhoto}
-                                  alt={stf.name}
-                                  className="officer-selfie-img"
-                                />
-                              ) : (
+                            {(() => {
+                              const rawPhoto = stf.profilePhoto || stf.selfiePhoto;
+                              const fullPhotoUrl = getPhotoUrl(rawPhoto);
+                              const isBroken = brokenImages[stf._id] || !rawPhoto;
+
+                              return (
                                 <div
+                                  className="officer-selfie-container"
+                                  onClick={() => (!isBroken && fullPhotoUrl) ? setSelectedPhoto(fullPhotoUrl) : null}
+                                  title={!isBroken && fullPhotoUrl ? 'Click to inspect verification selfie' : ''}
                                   style={{
-                                    width: '100%',
-                                    height: '100%',
+                                    cursor: (!isBroken && fullPhotoUrl) ? 'pointer' : 'default',
                                     borderRadius: '50%',
-                                    background: 'var(--bg-card-subtle)',
-                                    border: '2px solid var(--border)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    color: 'var(--text-muted)',
-                                    fontSize: '22px',
-                                    fontWeight: 700,
+                                    overflow: 'hidden',
+                                    width: '68px',
+                                    height: '68px',
+                                    flexShrink: 0,
                                   }}
                                 >
-                                  {(stf.name || 'O').charAt(0).toUpperCase()}
+                                  {!isBroken && fullPhotoUrl ? (
+                                    <img
+                                      src={fullPhotoUrl}
+                                      alt=""
+                                      className="officer-selfie-img"
+                                      onError={() => {
+                                        setBrokenImages((prev) => ({ ...prev, [stf._id]: true }));
+                                      }}
+                                    />
+                                  ) : (
+                                    <div
+                                      style={{
+                                        width: '100%',
+                                        height: '100%',
+                                        borderRadius: '50%',
+                                        background: 'linear-gradient(135deg, #10B981 0%, #047857 100%)',
+                                        border: '2.5px solid #10B981',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: '#FFFFFF',
+                                        boxShadow: '0 2px 6px rgba(16,185,129,0.25)',
+                                      }}
+                                    >
+                                      <span style={{ fontSize: '24px', fontWeight: 800, lineHeight: 1 }}>
+                                        {(stf.name || 'O').trim().charAt(0).toUpperCase()}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {!isBroken && fullPhotoUrl && (
+                                    <span className="selfie-zoom-badge">
+                                      <Eye size={12} />
+                                    </span>
+                                  )}
                                 </div>
-                              )}
-                              {(stf.profilePhoto || stf.selfiePhoto) && (
-                                <span className="selfie-zoom-badge">
-                                  <Eye size={12} />
-                                </span>
-                              )}
-                            </div>
+                              );
+                            })()}
 
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
@@ -3347,11 +3381,11 @@ export default function App() {
                               Operating Territory / Hub:
                             </label>
                             {isPending ? (
-                              <div style={{ display: 'flex', gap: '6px' }}>
+                              <div style={{ display: 'flex', width: '100%' }}>
                                 <input
                                   type="text"
                                   className="input-field"
-                                  style={{ height: '34px', fontSize: '12.5px', padding: '6px 10px' }}
+                                  style={{ height: '36px', fontSize: '13px', padding: '6px 12px', width: '100%' }}
                                   value={currentArea}
                                   placeholder="e.g. Kozhikode Central, Palakkad"
                                   onChange={(e) => {
@@ -3361,28 +3395,6 @@ export default function App() {
                                     });
                                   }}
                                 />
-                                <select
-                                  style={{ height: '34px', fontSize: '12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-card)', padding: '0 8px' }}
-                                  onChange={(e) => {
-                                    if (e.target.value) {
-                                      setStaffAreaOverrides({
-                                        ...staffAreaOverrides,
-                                        [stf._id]: e.target.value,
-                                      });
-                                    }
-                                  }}
-                                  defaultValue=""
-                                >
-                                  <option value="" disabled>Presets</option>
-                                  <option value="Kozhikode Central">Kozhikode Central</option>
-                                  <option value="Kozhikode North">Kozhikode North</option>
-                                  <option value="Kozhikode South">Kozhikode South</option>
-                                  <option value="Palakkad Urban">Palakkad Urban</option>
-                                  <option value="Malappuram West">Malappuram West</option>
-                                  <option value="Kochi Metro">Kochi Metro</option>
-                                  <option value="Thrissur Central">Thrissur Central</option>
-                                  <option value="Kannur District">Kannur District</option>
-                                </select>
                               </div>
                             ) : (
                               <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

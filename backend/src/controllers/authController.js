@@ -429,3 +429,340 @@ export async function registerStaff(req, res) {
   }
 }
 
+/**
+ * Request Account Activation OTP for existing Field Staff records
+ */
+export async function requestActivationOtp(req, res) {
+  try {
+    const { phone } = req.body;
+    if (!phone || !phone.trim()) {
+      return res.status(400).json({
+        success: false,
+        code: 'PHONE_REQUIRED',
+        message: 'Registered mobile number is required.',
+      });
+    }
+
+    const cleanPhone = phone.trim().replace(/[^\d+]/g, '');
+    const user = await User.findOne({
+      $or: [{ phone: cleanPhone }, { phone: cleanPhone.replace(/^\+91/, '') }],
+    });
+
+    // 1. Link activation strictly to an existing record
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        code: 'STAFF_NOT_FOUND',
+        message: 'No staff record found for this mobile number. Please contact your FieldFlow administrator to register your account.',
+      });
+    }
+
+    // 2. Prevent privilege escalation (only staff allowed)
+    if (user.role !== 'staff') {
+      return res.status(403).json({
+        success: false,
+        code: 'PRIVILEGE_RESTRICTED',
+        message: 'Account activation via mobile app is only permitted for Field Staff. Administrative accounts must be configured by Super Admin.',
+      });
+    }
+
+    // 3. Status checks
+    if (user.status === 'suspended' || user.status === 'inactive') {
+      return res.status(403).json({
+        success: false,
+        code: 'ACCOUNT_DISABLED',
+        message: 'This staff account has been deactivated or suspended. Please contact your administrator.',
+      });
+    }
+
+    if (user.status === 'pending_approval') {
+      return res.status(403).json({
+        success: false,
+        code: 'PENDING_APPROVAL',
+        message: 'Your staff account is currently awaiting administrator review and approval. You can activate your account once approved.',
+      });
+    }
+
+    // 4. Rate Limiting & Resend Limits
+    const now = Date.now();
+    const lastSent = user.otp?.lastSentAt ? new Date(user.otp.lastSentAt).getTime() : 0;
+    const cooldownMs = 30 * 1000; // 30 seconds cooldown between resends
+
+    if (lastSent && (now - lastSent) < cooldownMs) {
+      const waitSec = Math.ceil((cooldownMs - (now - lastSent)) / 1000);
+      return res.status(429).json({
+        success: false,
+        code: 'COOLDOWN_ACTIVE',
+        message: `Please wait ${waitSec} seconds before requesting a new verification code.`,
+        retryAfter: waitSec,
+      });
+    }
+
+    // Limit to 5 requests per hour
+    const oneHourAgo = now - (60 * 60 * 1000);
+    let resendCount = user.otp?.resendCount || 0;
+    if (lastSent && lastSent < oneHourAgo) {
+      resendCount = 0; // reset hourly bucket
+    }
+    if (resendCount >= 5) {
+      return res.status(429).json({
+        success: false,
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: 'Maximum verification code requests exceeded for this hour. Please try again later or contact support.',
+      });
+    }
+
+    // 5. Generate secure 6-digit OTP
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(now + 10 * 60 * 1000); // 10 minutes expiry
+
+    user.otp = {
+      code,
+      expiresAt,
+      attempts: 0,
+      lastSentAt: new Date(now),
+      resendCount: resendCount + 1,
+      activationToken: null,
+      activationTokenExpiresAt: null,
+    };
+    await user.save();
+
+    // 6. Check SMS Provider Integration
+    const hasSmsIntegration = Boolean(
+      (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) ||
+      process.env.SMS_API_KEY ||
+      process.env.FAST2SMS_KEY
+    );
+
+    if (!hasSmsIntegration) {
+      if (process.env.NODE_ENV === 'production' && !process.env.ALLOW_DEV_OTP) {
+        return res.status(503).json({
+          success: false,
+          code: 'SMS_GATEWAY_UNAVAILABLE',
+          message: 'SMS provider integration is not configured on this server. Please contact your system administrator to enable SMS service.',
+          missingIntegration: 'Telephony / SMS Gateway (Twilio / MSG91 / Fast2SMS)',
+        });
+      }
+    }
+
+    console.log(`[FieldFlow Activation] OTP for ${cleanPhone} (${user.name}): ${code}`);
+
+    return res.json({
+      success: true,
+      message: hasSmsIntegration
+        ? `Verification code sent to +91 ${cleanPhone.slice(-10)}`
+        : `Verification code generated. (SMS gateway unconfigured in development)`,
+      staff: {
+        name: user.name,
+        phone: cleanPhone,
+        employeeId: user.employeeId || `STF-${cleanPhone.slice(-4)}`,
+        assignedArea: user.assignedArea || 'Field Operations',
+      },
+      devOtp: !hasSmsIntegration || process.env.NODE_ENV !== 'production' ? code : undefined,
+      expiresInSeconds: 600,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+/**
+ * Validate Activation OTP on Backend (Expiry, Attempt Limits)
+ */
+export async function verifyActivationOtp(req, res) {
+  try {
+    const { phone, otp } = req.body;
+    if (!phone || !otp) {
+      return res.status(400).json({
+        success: false,
+        code: 'MISSING_FIELDS',
+        message: 'Phone number and 6-digit OTP code are required.',
+      });
+    }
+
+    const cleanPhone = phone.trim().replace(/[^\d+]/g, '');
+    const user = await User.findOne({
+      $or: [{ phone: cleanPhone }, { phone: cleanPhone.replace(/^\+91/, '') }],
+    });
+
+    if (!user || !user.otp?.code) {
+      return res.status(400).json({
+        success: false,
+        code: 'NO_PENDING_OTP',
+        message: 'No pending verification code found. Please request a new code.',
+      });
+    }
+
+    // 1. Expiry Check
+    if (new Date() > new Date(user.otp.expiresAt)) {
+      return res.status(400).json({
+        success: false,
+        code: 'OTP_EXPIRED',
+        message: 'The verification code has expired. Please request a new one.',
+      });
+    }
+
+    // 2. Attempt Limits (Max 5 attempts)
+    const currentAttempts = (user.otp.attempts || 0) + 1;
+    if (currentAttempts > 5) {
+      user.otp.code = null;
+      user.otp.expiresAt = null;
+      await user.save();
+      return res.status(400).json({
+        success: false,
+        code: 'OTP_LOCKED',
+        message: 'Too many incorrect attempts. This verification code has been locked. Please request a new code.',
+      });
+    }
+
+    // 3. Code Match
+    if (user.otp.code !== otp.trim()) {
+      user.otp.attempts = currentAttempts;
+      await user.save();
+      const remaining = 5 - currentAttempts;
+      return res.status(400).json({
+        success: false,
+        code: 'INVALID_OTP',
+        message: `Incorrect verification code. ${remaining > 0 ? `${remaining} attempts remaining.` : 'Code locked.'}`,
+        remainingAttempts: Math.max(0, remaining),
+      });
+    }
+
+    // 4. Verification Successful -> Issue 15-minute Activation Token
+    const activationToken = jwt.sign(
+      { id: user._id, phone: user.phone, action: 'ACTIVATE_ACCOUNT' },
+      process.env.JWT_SECRET || 'fieldflow_secure_jwt_secret_dev_key_2026',
+      { expiresIn: '15m' }
+    );
+
+    user.otp.activationToken = activationToken;
+    user.otp.activationTokenExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+    user.otp.code = null; // Clear OTP once successfully verified
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: 'Mobile number verified successfully! You may now set your secure password.',
+      activationToken,
+      staff: {
+        name: user.name,
+        employeeId: user.employeeId,
+        phone: user.phone,
+        assignedArea: user.assignedArea,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+/**
+ * Complete Staff Account Activation & Set Password
+ */
+export async function completeActivation(req, res) {
+  try {
+    const { phone, activationToken, newPassword } = req.body;
+
+    if (!phone || !activationToken || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        code: 'MISSING_FIELDS',
+        message: 'Phone number, verification token, and new password are required.',
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        code: 'PASSWORD_TOO_SHORT',
+        message: 'Password must be at least 6 characters long.',
+      });
+    }
+
+    // Verify token
+    let decoded;
+    try {
+      decoded = jwt.verify(
+        activationToken,
+        process.env.JWT_SECRET || 'fieldflow_secure_jwt_secret_dev_key_2026'
+      );
+    } catch {
+      return res.status(401).json({
+        success: false,
+        code: 'TOKEN_EXPIRED',
+        message: 'Activation session has expired. Please verify your mobile number again.',
+      });
+    }
+
+    const cleanPhone = phone.trim().replace(/[^\d+]/g, '');
+    const user = await User.findById(decoded.id);
+
+    if (!user || user.role !== 'staff') {
+      return res.status(404).json({
+        success: false,
+        code: 'STAFF_NOT_FOUND',
+        message: 'Staff account not found or unauthorized.',
+      });
+    }
+
+    if (user.status === 'pending_approval') {
+      return res.status(403).json({
+        success: false,
+        code: 'PENDING_APPROVAL',
+        message: 'Account requires administrator approval before activation can be completed.',
+      });
+    }
+
+    // Update password & activate account
+    user.password = newPassword;
+    user.status = 'active';
+    user.otp = {
+      code: null,
+      expiresAt: null,
+      attempts: 0,
+      lastSentAt: null,
+      resendCount: 0,
+      activationToken: null,
+      activationTokenExpiresAt: null,
+    };
+    user.failedLoginAttempts = 0;
+    user.lastLoginAt = new Date();
+    await user.save();
+
+    // Generate authenticated login session token
+    const token = generateToken(user._id);
+
+    await AuditLog.create({
+      actorId: user._id,
+      actorName: user.name,
+      actorRole: 'staff',
+      action: 'STAFF_ACCOUNT_ACTIVATED',
+      entityType: 'User',
+      entityId: user._id.toString(),
+      details: {
+        phone: user.phone,
+        activatedAt: new Date(),
+      },
+    }).catch(() => {});
+
+    return res.json({
+      success: true,
+      message: 'Account successfully activated! Welcome to FieldFlow.',
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        employeeId: user.employeeId,
+        phone: user.phone,
+        email: user.email,
+        role: user.role,
+        assignedArea: user.assignedArea,
+        team: user.team,
+        profilePhoto: user.profilePhoto,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+

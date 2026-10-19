@@ -32,6 +32,11 @@ const BRAND_EMERALD = "#10B981";
 const BRAND_MINT_BG = "#E8F6ED";
 const BRAND_MINT_BORDER = "#B4E3C9";
 
+// Local image assets matching the design reference
+const FieldWorkerHero = require("../../assets/images/field-worker-hero-blended.png");
+const GoogleLogo = require("../../assets/images/google.png");
+const BottomLeaves = require("../../assets/images/login-bottom-leaves.png");
+
 // -------------------------------------------------------------
 // DUAL-LEAF FIELDFLOW LOGO (Matches Reference Geometry)
 // -------------------------------------------------------------
@@ -739,211 +744,254 @@ export default function LoginScreen() {
   }
 
   // =============================================================
-  // SCREEN 2: LOGIN SCREEN VIEW (Reference Screen 2)
+  // =============================================================
+  // SCREEN 2: LOGIN SCREEN VIEW (Matches Reference Design)
   // =============================================================
   return (
-    <View style={styles.screenContainer}>
-      {/* Ambient background glows */}
-      <View style={styles.ambientGlowTop} pointerEvents="none" />
-      <View style={styles.ambientGlowBottom} pointerEvents="none" />
-
-      <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+    <View style={styles.exactScreenContainer}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={styles.exactScrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          bounces={false}
         >
-          <ScrollView
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            {/* Ultra-Modern Header Bar */}
-            <View style={styles.modernTopRow}>
-              <View style={styles.securityStatusPill}>
-                <View style={styles.pulseLiveDot} />
-                <Text style={styles.securityStatusText}>Field Operations Portal</Text>
-              </View>
-              <View style={styles.encryptedBadge}>
-                <Ionicons name="shield-checkmark" size={13} color="#059669" />
-                <Text style={styles.encryptedText}>Encrypted</Text>
-              </View>
-            </View>
+          {/* ========================================================= */}
+          {/* TOP SECTION: DARK GREEN + FIELD WORKER HERO + BRANDING */}
+          {/* ========================================================= */}
+          <View style={[styles.exactHeaderSection, { paddingTop: Math.max(insets.top, 24) }]}>
+            {/* Field Worker Photo on Right (Clean green polo, no logos) */}
+            <Image
+              source={FieldWorkerHero}
+              style={styles.exactWorkerImage}
+              resizeMode="cover"
+            />
 
-            {/* Modern App Brand Header */}
-            <View style={styles.brandHeroSection}>
-              <View style={styles.logoTileWrapper}>
-                <View style={styles.logoTile}>
-                  <DualLeafLogo size={42} />
+            {/* Left Content Column */}
+            <View style={styles.exactHeaderLeftCol}>
+              {/* Logo + App Title Row */}
+              <View style={styles.exactLogoRow}>
+                <DualLeafLogo size={36} light />
+                <View style={{ marginLeft: 8 }}>
+                  <Text style={styles.exactBrandTitle}>FieldFlow</Text>
+                  <Text style={styles.exactBrandSubtitle}>Field Staff App</Text>
                 </View>
               </View>
-              <Text style={styles.brandHeroTitle}>FieldFlow</Text>
-              <Text style={styles.brandHeroSubtitle}>Debt Collection & Field Recovery</Text>
-            </View>
 
-            {/* Error Message Banner */}
+              {/* Tagline */}
+              <View style={styles.exactTaglineBox}>
+                <Text style={styles.exactTaglineMain}>Smarter Collection</Text>
+                <Text style={styles.exactTaglineMain}>
+                  Stronger <Text style={styles.exactTaglineMint}>Tomorrow</Text>
+                </Text>
+              </View>
+
+              {/* 3 Circular Feature Badges */}
+              <View style={styles.exactFeaturesRow}>
+                {/* Feature 1: Visit Track */}
+                <View style={styles.exactFeatureItem}>
+                  <View style={styles.exactFeatureCircle}>
+                    <Ionicons name="location" size={17} color="#FFFFFF" />
+                  </View>
+                  <Text style={styles.exactFeatureLabel}>Visit{"\n"}Track</Text>
+                </View>
+
+                {/* Feature 2: Manage Cases */}
+                <View style={styles.exactFeatureItem}>
+                  <View style={styles.exactFeatureCircle}>
+                    <Ionicons name="people" size={17} color="#FFFFFF" />
+                  </View>
+                  <Text style={styles.exactFeatureLabel}>Manage{"\n"}Cases</Text>
+                </View>
+
+                {/* Feature 3: Better Results */}
+                <View style={styles.exactFeatureItem}>
+                  <View style={styles.exactFeatureCircle}>
+                    <Ionicons name="stats-chart" size={16} color="#FFFFFF" />
+                  </View>
+                  <Text style={styles.exactFeatureLabel}>Better{"\n"}Results</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* ========================================================= */}
+          {/* BOTTOM WHITE SHEET: LOGIN FORM & ACTION BUTTONS */}
+          {/* ========================================================= */}
+          <View style={styles.exactWhiteCard}>
+            <Text style={styles.exactWelcomeTitle}>Welcome Back</Text>
+            <Text style={styles.exactWelcomeSub}>Login to continue to FieldFlow</Text>
+
+            {/* Error Message Box */}
             {errorText ? (
-              <View style={styles.errorBox}>
+              <View style={styles.exactErrorBox}>
                 <Ionicons name="alert-circle" size={18} color="#DC2626" style={{ marginRight: 8 }} />
-                <Text style={styles.errorBoxText}>{errorText}</Text>
+                <Text style={styles.exactErrorText}>{errorText}</Text>
               </View>
             ) : null}
 
-            {/* Modern Elevated Login Card */}
-            <View style={styles.modernCard}>
-              <View style={styles.cardHeaderBox}>
-                <Text style={styles.cardHeaderTitle}>Sign In</Text>
-                <Text style={styles.cardHeaderSub}>Enter your officer mobile & password</Text>
+            {/* Input 1: Mobile Number */}
+            <View
+              style={[
+                styles.exactInputContainer,
+                focusedField === "phone" && styles.exactInputContainerFocused,
+              ]}
+            >
+              <View style={styles.exactInputIconCol}>
+                <Ionicons
+                  name="phone-portrait-outline"
+                  size={20}
+                  color={focusedField === "phone" ? BRAND_DARK_GREEN : "#64748B"}
+                />
               </View>
-
-              {/* Field 1: Mobile Number */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Mobile Number</Text>
-                <View
-                  style={[
-                    styles.modernInputWrapper,
-                    focusedField === "phone" && styles.inputWrapperFocused,
-                  ]}
-                >
-                  <View style={styles.inputIconBox}>
-                    <Ionicons
-                      name="call-outline"
-                      size={18}
-                      color={focusedField === "phone" ? BRAND_DARK_GREEN : "#64748B"}
-                    />
-                  </View>
-                  <TextInput
-                    style={styles.modernTextInput}
-                    placeholder="Enter mobile number"
-                    placeholderTextColor="#94A3B8"
-                    value={phone}
-                    onFocus={() => setFocusedField("phone")}
-                    onBlur={() => setFocusedField(null)}
-                    onChangeText={(val) => {
-                      setPhone(val);
-                      if (errorText) setErrorText("");
-                    }}
-                    keyboardType="phone-pad"
-                    maxLength={10}
-                  />
-                </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.exactFloatingLabel}>Mobile Number</Text>
+                <TextInput
+                  style={styles.exactTextInput}
+                  placeholder="+91 98765 43210"
+                  placeholderTextColor="#94A3B8"
+                  value={phone}
+                  onFocus={() => setFocusedField("phone")}
+                  onBlur={() => setFocusedField(null)}
+                  onChangeText={(val) => {
+                    setPhone(val);
+                    if (errorText) setErrorText("");
+                  }}
+                  keyboardType="phone-pad"
+                  maxLength={10}
+                />
               </View>
+            </View>
 
-              {/* Field 2: Password */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Password</Text>
-                <View
-                  style={[
-                    styles.modernInputWrapper,
-                    focusedField === "password" && styles.inputWrapperFocused,
-                  ]}
-                >
-                  <View style={styles.inputIconBox}>
-                    <Ionicons
-                      name="lock-closed-outline"
-                      size={18}
-                      color={focusedField === "password" ? BRAND_DARK_GREEN : "#64748B"}
-                    />
-                  </View>
-                  <TextInput
-                    style={styles.modernTextInput}
-                    placeholder="Enter password"
-                    placeholderTextColor="#94A3B8"
-                    secureTextEntry={!showPassword}
-                    value={password}
-                    onFocus={() => setFocusedField("password")}
-                    onBlur={() => setFocusedField(null)}
-                    onChangeText={(val) => {
-                      setPassword(val);
-                      if (errorText) setErrorText("");
-                    }}
-                  />
-                  <Pressable
-                    onPress={() => setShowPassword(!showPassword)}
-                    style={styles.eyeToggleBtn}
-                    hitSlop={10}
-                  >
-                    <Ionicons
-                      name={showPassword ? "eye-outline" : "eye-off-outline"}
-                      size={20}
-                      color="#64748B"
-                    />
-                  </Pressable>
-                </View>
+            {/* Input 2: Password */}
+            <View
+              style={[
+                styles.exactInputContainer,
+                focusedField === "password" && styles.exactInputContainerFocused,
+                { marginTop: 14 },
+              ]}
+            >
+              <View style={styles.exactInputIconCol}>
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={20}
+                  color={focusedField === "password" ? BRAND_DARK_GREEN : "#64748B"}
+                />
               </View>
-
-              {/* Options Row: Remember Me & Forgot Password */}
-              <View style={styles.optionsRow}>
-                <Pressable
-                  style={styles.rememberMeRow}
-                  onPress={() => setRememberMe(!rememberMe)}
-                  hitSlop={8}
-                >
-                  <View style={[styles.checkbox, rememberMe && styles.checkboxActive]}>
-                    {rememberMe && <Ionicons name="checkmark" size={13} color="#FFFFFF" />}
-                  </View>
-                  <Text style={styles.rememberMeText}>Remember me</Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={() => handleRequestOtp(phone, "forgot_password")}
-                  hitSlop={8}
-                >
-                  <Text style={styles.forgotPasswordLink}>Forgot Password?</Text>
-                </Pressable>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.exactFloatingLabel}>Password</Text>
+                <TextInput
+                  style={styles.exactTextInput}
+                  placeholder="••••••••"
+                  placeholderTextColor="#94A3B8"
+                  secureTextEntry={!showPassword}
+                  value={password}
+                  onFocus={() => setFocusedField("password")}
+                  onBlur={() => setFocusedField(null)}
+                  onChangeText={(val) => {
+                    setPassword(val);
+                    if (errorText) setErrorText("");
+                  }}
+                />
               </View>
-
-              {/* Primary Login Button */}
               <Pressable
-                style={({ pressed }) => [
-                  styles.primaryButton,
-                  pressed && { opacity: 0.92, transform: [{ scale: 0.99 }] },
-                  loading && styles.buttonDisabled,
-                ]}
-                onPress={handleLogin}
-                disabled={loading}
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.exactEyeBtn}
+                hitSlop={10}
               >
-                {loading ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                ) : (
-                  <View style={styles.btnRowContent}>
-                    <Text style={styles.primaryButtonText}>Sign In</Text>
-                    <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
-                  </View>
-                )}
-              </Pressable>
-
-              {/* "OR" Divider */}
-              <View style={styles.dividerRow}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>OR</Text>
-                <View style={styles.dividerLine} />
-              </View>
-
-              {/* Outlined Button: "Sign In with OTP" */}
-              <Pressable
-                style={({ pressed }) => [
-                  styles.outlineOtpBtn,
-                  pressed && { backgroundColor: "#F0FDF4" },
-                ]}
-                onPress={() => handleRequestOtp(phone, "login")}
-                disabled={otpLoading}
-              >
-                {otpLoading ? (
-                  <ActivityIndicator color={BRAND_DARK_GREEN} size="small" />
-                ) : (
-                  <View style={styles.btnRowContent}>
-                    <Ionicons name="chatbubble-ellipses-outline" size={18} color={BRAND_DARK_GREEN} style={{ marginRight: 8 }} />
-                    <Text style={styles.outlineOtpBtnText}>Sign In with OTP</Text>
-                  </View>
-                )}
+                <Ionicons
+                  name={showPassword ? "eye-outline" : "eye-off-outline"}
+                  size={20}
+                  color="#64748B"
+                />
               </Pressable>
             </View>
 
-            {/* Quick Demo Fill Pill */}
+            {/* Forgot Password Link (Right Aligned) */}
+            <View style={styles.exactForgotRow}>
+              <Pressable
+                onPress={() => handleRequestOtp(phone, "forgot_password")}
+                hitSlop={8}
+              >
+                <Text style={styles.exactForgotLink}>Forgot Password?</Text>
+              </Pressable>
+            </View>
+
+            {/* Primary Action Button: "Login ->" */}
             <Pressable
               style={({ pressed }) => [
-                styles.demoFillPill,
-                pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
+                styles.exactLoginBtn,
+                pressed && { opacity: 0.92, transform: [{ scale: 0.99 }] },
+                loading && styles.buttonDisabled,
+              ]}
+              onPress={handleLogin}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <View style={styles.exactBtnContentRow}>
+                  <Text style={styles.exactLoginBtnText}>Login</Text>
+                  <Ionicons name="arrow-forward" size={19} color="#FFFFFF" style={{ marginLeft: 8 }} />
+                </View>
+              )}
+            </Pressable>
+
+            {/* "OR" Divider */}
+            <View style={styles.exactDividerRow}>
+              <View style={styles.exactDividerLine} />
+              <Text style={styles.exactDividerText}>OR</Text>
+              <View style={styles.exactDividerLine} />
+            </View>
+
+            {/* "Continue with Google" Button */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.exactGoogleBtn,
+                pressed && { backgroundColor: "#F8FAFC" },
+              ]}
+              onPress={() => {
+                Alert.alert(
+                  "Google Sign-In",
+                  "Google Workspace authentication is enabled for registered officers. Use your officer credentials to sign in directly.",
+                  [{ text: "OK" }]
+                );
+              }}
+            >
+              <Image source={GoogleLogo} style={styles.exactGoogleIcon} resizeMode="contain" />
+              <Text style={styles.exactGoogleBtnText}>Continue with Google</Text>
+            </Pressable>
+
+            {/* "Activate Account" Button (Exact reference match) */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.exactActivateBtn,
+                pressed && { backgroundColor: "#DCFCE7", transform: [{ scale: 0.99 }] },
+              ]}
+              onPress={() => router.push("/activate")}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <Ionicons name="person-add" size={20} color={BRAND_DARK_GREEN} />
+                <Text style={styles.exactActivateBtnText}>Activate Account</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={BRAND_DARK_GREEN} />
+            </Pressable>
+
+            {/* Helper Text */}
+            <Pressable onPress={() => router.push("/activate")} hitSlop={6}>
+              <Text style={styles.exactActivateHelperText}>
+                New to FieldFlow? Activate your account here
+              </Text>
+            </Pressable>
+
+            {/* Demo Officer Pill */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.exactDemoPill,
+                pressed && { opacity: 0.85 },
               ]}
               onPress={() => {
                 setPhone("9876543211");
@@ -951,28 +999,36 @@ export default function LoginScreen() {
                 setErrorText("");
               }}
             >
-              <View style={styles.demoFillIconBadge}>
-                <Ionicons name="flash" size={12} color="#059669" />
-              </View>
-              <Text style={styles.demoFillPillText}>Auto-Fill Demo Officer (Rahul Kumar)</Text>
+              <Ionicons name="flash" size={12} color="#059669" />
+              <Text style={styles.exactDemoPillText}>Demo Officer: Rahul Kumar (+91 9876543211)</Text>
             </Pressable>
 
-            {/* Bottom Footer: Activate Account */}
-            <View style={styles.footerRow}>
-              <Text style={styles.footerText}>New to FieldFlow? </Text>
+            {/* Footer Contact Admin */}
+            <View style={styles.exactFooterRow}>
+              <Text style={styles.exactFooterText}>Need help? </Text>
               <Pressable
                 onPress={() => {
-                  setShowRegisterModal(true);
-                  if (!regLocation) handleCaptureLocation();
+                  Alert.alert(
+                    "Contact FieldFlow Admin",
+                    "For account assistance, territory changes, or supervisor approvals:\n\nEmail: admin@fieldflow.local\nSupport: +91 9876543210"
+                  );
                 }}
                 hitSlop={8}
               >
-                <Text style={styles.footerHighlightLink}>Activate Account</Text>
+                <Text style={styles.exactFooterLink}>Contact Admin</Text>
               </Pressable>
             </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
+
+            {/* Soft decorative leaves at bottom corners */}
+            <Image
+              source={BottomLeaves}
+              style={styles.exactBottomLeaves}
+              resizeMode="contain"
+              pointerEvents="none"
+            />
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* ============================================================= */}
       {/* STAFF SELF-REGISTRATION MODAL */}
@@ -2068,5 +2124,307 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 6,
     lineHeight: 18,
+  },
+
+  // =========================================================
+  // EXACT REFERENCE STYLES (Screen 2)
+  // =========================================================
+  exactScreenContainer: {
+    flex: 1,
+    backgroundColor: "#073B22",
+  },
+  exactScrollContent: {
+    flexGrow: 1,
+    justifyContent: "space-between",
+  },
+  exactHeaderSection: {
+    backgroundColor: "#073B22",
+    minHeight: verticalScale(250),
+    position: "relative",
+    paddingHorizontal: scale(20),
+    paddingBottom: verticalScale(20),
+    overflow: "hidden",
+  },
+  exactWorkerImage: {
+    position: "absolute",
+    right: -10,
+    top: 20,
+    width: scale(190),
+    height: verticalScale(240),
+    opacity: 0.95,
+  },
+  exactHeaderLeftCol: {
+    width: "65%",
+    zIndex: 2,
+  },
+  exactLogoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: verticalScale(14),
+  },
+  exactBrandTitle: {
+    fontSize: fontScale(22),
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: -0.4,
+  },
+  exactBrandSubtitle: {
+    fontSize: fontScale(12),
+    fontWeight: "600",
+    color: "#A7F3D0",
+    marginTop: -2,
+  },
+  exactTaglineBox: {
+    marginBottom: verticalScale(16),
+  },
+  exactTaglineMain: {
+    fontSize: fontScale(17),
+    fontWeight: "800",
+    color: "#FFFFFF",
+    lineHeight: 23,
+    letterSpacing: -0.3,
+  },
+  exactTaglineMint: {
+    color: "#34D399",
+  },
+  exactFeaturesRow: {
+    flexDirection: "row",
+    gap: scale(10),
+  },
+  exactFeatureItem: {
+    alignItems: "center",
+  },
+  exactFeatureCircle: {
+    width: scale(38),
+    height: scale(38),
+    borderRadius: scale(19),
+    backgroundColor: "rgba(255, 255, 255, 0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.25)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  exactFeatureLabel: {
+    fontSize: fontScale(10),
+    fontWeight: "700",
+    color: "#FFFFFF",
+    textAlign: "center",
+    lineHeight: 13,
+  },
+  exactWhiteCard: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingHorizontal: scale(22),
+    paddingTop: verticalScale(26),
+    paddingBottom: verticalScale(28),
+    position: "relative",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  exactWelcomeTitle: {
+    fontSize: fontScale(24),
+    fontWeight: "800",
+    color: "#0F172A",
+    letterSpacing: -0.5,
+  },
+  exactWelcomeSub: {
+    fontSize: fontScale(13),
+    color: "#64748B",
+    marginTop: 4,
+    marginBottom: verticalScale(18),
+  },
+  exactErrorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: verticalScale(14),
+  },
+  exactErrorText: {
+    fontSize: fontScale(12),
+    color: "#DC2626",
+    flex: 1,
+  },
+  exactInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+    borderRadius: 16,
+    paddingHorizontal: scale(14),
+    paddingVertical: verticalScale(8),
+    minHeight: verticalScale(60),
+  },
+  exactInputContainerFocused: {
+    borderColor: BRAND_DARK_GREEN,
+    backgroundColor: "#FFFFFF",
+    shadowColor: BRAND_DARK_GREEN,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  exactInputIconCol: {
+    width: scale(32),
+    justifyContent: "center",
+    alignItems: "flex-start",
+  },
+  exactFloatingLabel: {
+    fontSize: fontScale(11),
+    fontWeight: "600",
+    color: "#64748B",
+    marginBottom: 2,
+  },
+  exactTextInput: {
+    fontSize: fontScale(15),
+    fontWeight: "700",
+    color: "#0F172A",
+    padding: 0,
+  },
+  exactEyeBtn: {
+    padding: 6,
+  },
+  exactForgotRow: {
+    alignItems: "flex-end",
+    marginTop: verticalScale(10),
+    marginBottom: verticalScale(18),
+  },
+  exactForgotLink: {
+    fontSize: fontScale(12.5),
+    fontWeight: "700",
+    color: BRAND_DARK_GREEN,
+  },
+  exactLoginBtn: {
+    backgroundColor: "#0A6038",
+    borderRadius: 16,
+    height: verticalScale(52),
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#0A6038",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  exactBtnContentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  exactLoginBtnText: {
+    fontSize: fontScale(16),
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  exactDividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: verticalScale(16),
+  },
+  exactDividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#E2E8F0",
+  },
+  exactDividerText: {
+    marginHorizontal: 12,
+    fontSize: fontScale(12),
+    fontWeight: "700",
+    color: "#94A3B8",
+  },
+  exactGoogleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    height: verticalScale(50),
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+    marginBottom: verticalScale(12),
+  },
+  exactGoogleIcon: {
+    width: 20,
+    height: 20,
+  },
+  exactGoogleBtnText: {
+    fontSize: fontScale(14.5),
+    fontWeight: "700",
+    color: "#0F172A",
+    marginLeft: 10,
+  },
+  exactActivateBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#E8F7ED",
+    borderRadius: 16,
+    height: verticalScale(52),
+    borderWidth: 1,
+    borderColor: "#B4E3C9",
+    paddingHorizontal: scale(16),
+  },
+  exactActivateBtnText: {
+    fontSize: fontScale(14.5),
+    fontWeight: "700",
+    color: BRAND_DARK_GREEN,
+    marginLeft: 10,
+  },
+  exactActivateHelperText: {
+    fontSize: fontScale(12),
+    color: "#64748B",
+    textAlign: "center",
+    marginTop: verticalScale(8),
+    marginBottom: verticalScale(12),
+  },
+  exactDemoPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9",
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    alignSelf: "center",
+    marginBottom: verticalScale(14),
+    gap: 6,
+  },
+  exactDemoPillText: {
+    fontSize: fontScale(11),
+    fontWeight: "600",
+    color: "#475569",
+  },
+  exactFooterRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: verticalScale(10),
+  },
+  exactFooterText: {
+    fontSize: fontScale(12.5),
+    color: "#64748B",
+  },
+  exactFooterLink: {
+    fontSize: fontScale(12.5),
+    fontWeight: "700",
+    color: BRAND_DARK_GREEN,
+  },
+  exactBottomLeaves: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: verticalScale(65),
+    opacity: 0.35,
+    zIndex: -1,
   },
 });

@@ -124,7 +124,6 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState("");
-  const [focusedField, setFocusedField] = useState<"phone" | "password" | null>(null);
 
   // OTP State (Screen 3: 6 individual boxes)
   const [otpPhone, setOtpPhone] = useState("");
@@ -840,17 +839,12 @@ export default function LoginScreen() {
             ) : null}
 
             {/* Input 1: Mobile Number */}
-            <View
-              style={[
-                styles.exactInputContainer,
-                focusedField === "phone" && styles.exactInputContainerFocused,
-              ]}
-            >
+            <View style={styles.exactInputContainer}>
               <View style={styles.exactInputIconCol}>
                 <Ionicons
                   name="phone-portrait-outline"
                   size={20}
-                  color={focusedField === "phone" ? BRAND_DARK_GREEN : "#64748B"}
+                  color="#64748B"
                 />
               </View>
               <View style={{ flex: 1 }}>
@@ -860,8 +854,6 @@ export default function LoginScreen() {
                   placeholder="+91 98765 43210"
                   placeholderTextColor="#94A3B8"
                   value={phone}
-                  onFocus={() => setFocusedField("phone")}
-                  onBlur={() => setFocusedField(null)}
                   onChangeText={(val) => {
                     setPhone(val);
                     if (errorText) setErrorText("");
@@ -879,18 +871,12 @@ export default function LoginScreen() {
             </View>
 
             {/* Input 2: Password */}
-            <View
-              style={[
-                styles.exactInputContainer,
-                focusedField === "password" && styles.exactInputContainerFocused,
-                { marginTop: 14 },
-              ]}
-            >
+            <View style={[styles.exactInputContainer, { marginTop: 14 }]}>
               <View style={styles.exactInputIconCol}>
                 <Ionicons
                   name="lock-closed-outline"
                   size={20}
-                  color={focusedField === "password" ? BRAND_DARK_GREEN : "#64748B"}
+                  color="#64748B"
                 />
               </View>
               <View style={{ flex: 1 }}>
@@ -901,8 +887,6 @@ export default function LoginScreen() {
                   placeholderTextColor="#94A3B8"
                   secureTextEntry={!showPassword}
                   value={password}
-                  onFocus={() => setFocusedField("password")}
-                  onBlur={() => setFocusedField(null)}
                   onChangeText={(val) => {
                     setPassword(val);
                     if (errorText) setErrorText("");

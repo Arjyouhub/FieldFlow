@@ -1210,11 +1210,11 @@ export default function LoginScreen() {
               <Text style={styles.exactGoogleBtnText}>Continue with Google</Text>
             </Pressable>
 
-            {/* "Create Account" Modern Button */}
+            {/* "Create Account" Button */}
             <Pressable
               style={({ pressed }) => [
-                styles.modernCreateAccountCard,
-                pressed && styles.modernCreateAccountCardPressed,
+                styles.exactCreateAccountBtn,
+                pressed && { backgroundColor: "#DCFCE7", transform: [{ scale: 0.99 }] },
               ]}
               onPress={() => {
                 setCurrentView("register");
@@ -1222,20 +1222,8 @@ export default function LoginScreen() {
                 setRegSuccessMsg("");
               }}
             >
-              <View style={styles.modernCreateAccountLeft}>
-                <View style={styles.modernCreateAccountIconBox}>
-                  <Ionicons name="person-add" size={20} color={BRAND_DARK_GREEN} />
-                </View>
-                <View style={{ marginLeft: 12, flex: 1 }}>
-                  <Text style={styles.modernCreateAccountTitle}>Create Account</Text>
-                  <Text style={styles.modernCreateAccountSub}>
-                    New staff registration & verification
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.modernCreateAccountArrowBox}>
-                <Ionicons name="arrow-forward" size={16} color={BRAND_DARK_GREEN} />
-              </View>
+              <Ionicons name="person-add-outline" size={18} color={BRAND_DARK_GREEN} />
+              <Text style={styles.exactCreateAccountBtnText}>Create Account</Text>
             </Pressable>
 
             {/* Footer Contact Admin */}
@@ -2466,67 +2454,23 @@ const styles = StyleSheet.create({
     opacity: 0.35,
     zIndex: -1,
   },
-  // Modern Create Account Button Card (Login Screen)
-  modernCreateAccountCard: {
+  // Compact Create Account Button (Login Screen)
+  exactCreateAccountBtn: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "center",
     backgroundColor: "#F0FDF4",
     borderRadius: 16,
-    paddingVertical: verticalScale(13),
-    paddingHorizontal: scale(16),
+    height: verticalScale(50),
     borderWidth: 1.5,
     borderColor: "#86EFAC",
-    marginTop: verticalScale(4),
+    gap: 8,
     marginBottom: verticalScale(14),
-    shadowColor: "#0D5D37",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
   },
-  modernCreateAccountCardPressed: {
-    backgroundColor: "#DCFCE7",
-    borderColor: "#4ADE80",
-    transform: [{ scale: 0.985 }],
-  },
-  modernCreateAccountLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  modernCreateAccountIconBox: {
-    width: scale(40),
-    height: scale(40),
-    borderRadius: 12,
-    backgroundColor: "#DCFCE7",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#BBF7D0",
-  },
-  modernCreateAccountTitle: {
+  exactCreateAccountBtnText: {
     fontSize: fontScale(15),
-    fontWeight: "800",
-    color: "#0F172A",
-    letterSpacing: -0.2,
-  },
-  modernCreateAccountSub: {
-    fontSize: fontScale(11.5),
-    color: "#059669",
-    fontWeight: "600",
-    marginTop: 2,
-  },
-  modernCreateAccountArrowBox: {
-    width: scale(30),
-    height: scale(30),
-    borderRadius: 15,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#BBF7D0",
-    marginLeft: 8,
+    fontWeight: "700",
+    color: BRAND_DARK_GREEN,
   },
   // Full-Screen Create Staff Account Page
   registerFullScreenContainer: {

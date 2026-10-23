@@ -868,6 +868,12 @@ export default function LoginScreen() {
                   }}
                   keyboardType="phone-pad"
                   maxLength={10}
+                  autoComplete="off"
+                  textContentType="none"
+                  importantForAutofill="no"
+                  autoCorrect={false}
+                  spellCheck={false}
+                  autoCapitalize="none"
                 />
               </View>
             </View>
@@ -901,6 +907,12 @@ export default function LoginScreen() {
                     setPassword(val);
                     if (errorText) setErrorText("");
                   }}
+                  autoComplete="off"
+                  textContentType="none"
+                  importantForAutofill="no"
+                  autoCorrect={false}
+                  spellCheck={false}
+                  autoCapitalize="none"
                 />
               </View>
               <Pressable

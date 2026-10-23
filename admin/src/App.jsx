@@ -1749,6 +1749,9 @@ export default function App() {
                   onChange={(e) => setLoginPhone(e.target.value)}
                   placeholder="e.g. 9876543210"
                   required
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck="false"
                 />
               </div>
             </div>
@@ -1772,6 +1775,9 @@ export default function App() {
                   onChange={(e) => setLoginPassword(e.target.value)}
                   placeholder="Enter administrator password"
                   required
+                  autoComplete="new-password"
+                  autoCorrect="off"
+                  spellCheck="false"
                 />
                 <button
                   type="button"

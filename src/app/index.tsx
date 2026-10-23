@@ -119,8 +119,8 @@ export default function LoginScreen() {
   const [rememberMe, setRememberMe] = useState(true);
 
   // Login form state
-  const [phone, setPhone] = useState("9876543211");
-  const [password, setPassword] = useState("password123");
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState("");
@@ -751,7 +751,7 @@ export default function LoginScreen() {
   // SCREEN 2: LOGIN SCREEN VIEW (Matches Reference Design)
   // =============================================================
   return (
-    <View style={styles.exactScreenContainer}>
+    <SafeAreaView style={styles.exactScreenContainer} edges={["top", "bottom"]}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -765,7 +765,7 @@ export default function LoginScreen() {
           {/* ========================================================= */}
           {/* TOP SECTION: DARK GREEN + FIELD WORKER HERO + BRANDING */}
           {/* ========================================================= */}
-          <View style={[styles.exactHeaderSection, { paddingTop: Math.max(insets.top, 24) }]}>
+          <View style={[styles.exactHeaderSection, { paddingTop: 12 }]}>
             {/* Field Worker Photo on Right (Clean green polo, no logos) */}
             <Image
               source={FieldWorkerHero}
@@ -993,22 +993,6 @@ export default function LoginScreen() {
               </Text>
             </Pressable>
 
-            {/* Demo Officer Pill */}
-            <Pressable
-              style={({ pressed }) => [
-                styles.exactDemoPill,
-                pressed && { opacity: 0.85 },
-              ]}
-              onPress={() => {
-                setPhone("9876543211");
-                setPassword("password123");
-                setErrorText("");
-              }}
-            >
-              <Ionicons name="flash" size={12} color="#059669" />
-              <Text style={styles.exactDemoPillText}>Demo Officer: Rahul Kumar (+91 9876543211)</Text>
-            </Pressable>
-
             {/* Footer Contact Admin */}
             <View style={styles.exactFooterRow}>
               <Text style={styles.exactFooterText}>Need help? </Text>
@@ -1032,12 +1016,13 @@ export default function LoginScreen() {
             </View>
 
             {/* Soft decorative leaves at bottom corners */}
-            <Image
-              source={BottomLeaves}
-              style={styles.exactBottomLeaves}
-              resizeMode="contain"
-              pointerEvents="none"
-            />
+            <View pointerEvents="none" style={styles.exactBottomLeaves}>
+              <Image
+                source={BottomLeaves}
+                style={{ width: "100%", height: "100%" }}
+                resizeMode="contain"
+              />
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -1245,7 +1230,7 @@ export default function LoginScreen() {
           </KeyboardAvoidingView>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -1557,7 +1542,7 @@ const styles = StyleSheet.create({
     borderRadius: Radii.full,
     marginTop: 20,
     gap: 8,
-    ...Shadows.xs,
+    ...Shadows.sm,
   },
   demoFillIconBadge: {
     width: 22,

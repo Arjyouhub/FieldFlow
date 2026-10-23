@@ -753,22 +753,27 @@ export default function LoginScreen() {
     return (
       <View style={styles.registerFullScreenContainer}>
         <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
-          {/* Top Modern Header with Back Arrow */}
-          <View style={styles.registerTopHeader}>
+          {/* Top Modern App Bar */}
+          <View style={styles.modernRegTopBar}>
             <Pressable
               onPress={() => {
                 setCurrentView("login");
                 setRegError("");
               }}
-              style={styles.registerBackBtn}
+              style={styles.modernRegBackBtn}
               hitSlop={12}
             >
-              <Ionicons name="arrow-back" size={22} color="#0F172A" />
+              <Ionicons name="arrow-back" size={20} color="#0F172A" />
             </Pressable>
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.registerTopTitle}>Create Staff Account</Text>
-              <Text style={styles.registerTopSubtitle}>
-                Field staff registration & credentials
+            <View style={{ flex: 1, marginLeft: 14 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Text style={styles.modernRegTitle}>Create Account</Text>
+                <View style={styles.modernRegStaffBadge}>
+                  <Text style={styles.modernRegStaffBadgeText}>Staff</Text>
+                </View>
+              </View>
+              <Text style={styles.modernRegSubtitle}>
+                Enter details & credentials for admin approval
               </Text>
             </View>
           </View>
@@ -778,151 +783,223 @@ export default function LoginScreen() {
             behavior={Platform.OS === "ios" ? "padding" : undefined}
           >
             <ScrollView
-              contentContainerStyle={styles.registerScrollContent}
+              contentContainerStyle={styles.modernRegScrollContent}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
               {regError ? (
-                <View style={styles.errorBox}>
-                  <Ionicons name="alert-circle" size={18} color="#DC2626" style={{ marginRight: 6 }} />
-                  <Text style={styles.errorBoxText}>{regError}</Text>
+                <View style={styles.modernRegErrorBox}>
+                  <Ionicons name="alert-circle" size={18} color="#DC2626" style={{ marginRight: 8 }} />
+                  <Text style={styles.modernRegErrorText}>{regError}</Text>
                 </View>
               ) : null}
 
               {regSuccessMsg ? (
-                <View style={styles.regSuccessCard}>
-                  <View style={styles.regSuccessIconCircle}>
-                    <Ionicons name="shield-checkmark" size={36} color="#059669" />
+                <View style={styles.modernRegSuccessCard}>
+                  <View style={styles.modernRegSuccessIconCircle}>
+                    <Ionicons name="shield-checkmark" size={38} color="#059669" />
                   </View>
-                  <Text style={styles.regSuccessTitle}>Application Under Admin Review</Text>
-                  <Text style={styles.regSuccessText}>{regSuccessMsg}</Text>
+                  <Text style={styles.modernRegSuccessTitle}>Application Submitted</Text>
+                  <View style={styles.modernRegPendingPill}>
+                    <Ionicons name="time-outline" size={14} color="#D97706" />
+                    <Text style={styles.modernRegPendingPillText}>Awaiting Admin Approval</Text>
+                  </View>
+                  <Text style={styles.modernRegSuccessText}>{regSuccessMsg}</Text>
                   <Pressable
-                    style={[styles.primaryButton, { alignSelf: "center", marginTop: 16, paddingHorizontal: 28 }]}
+                    style={styles.modernRegSuccessBtn}
                     onPress={() => {
                       setCurrentView("login");
                       setRegSuccessMsg("");
                     }}
                   >
-                    <Text style={styles.primaryButtonText}>Proceed to Sign In</Text>
+                    <Text style={styles.modernRegSuccessBtnText}>Proceed to Sign In</Text>
+                    <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
                   </Pressable>
                 </View>
               ) : (
                 <>
-                  {/* 1. SELFIE CAPTURE */}
-                  <View style={styles.regSectionBox}>
-                    <Text style={styles.regSectionTitle}>1. Staff Verification Selfie *</Text>
-                    <Text style={styles.regSectionSub}>
-                      Take a clear front-facing portrait photo for identity verification.
-                    </Text>
+                  {/* Step Progress Indicator Bar */}
+                  <View style={styles.modernStepPillsRow}>
+                    <View style={[styles.modernStepPill, regSelfieUri ? styles.modernStepPillActive : null]}>
+                      <Ionicons name={regSelfieUri ? "checkmark-circle" : "camera-outline"} size={14} color={regSelfieUri ? "#059669" : "#64748B"} />
+                      <Text style={[styles.modernStepPillText, regSelfieUri ? styles.modernStepPillTextActive : null]}>Photo</Text>
+                    </View>
+                    <View style={styles.modernStepPillDivider} />
+                    <View style={[styles.modernStepPill, regLocation ? styles.modernStepPillActive : null]}>
+                      <Ionicons name={regLocation ? "checkmark-circle" : "location-outline"} size={14} color={regLocation ? "#059669" : "#64748B"} />
+                      <Text style={[styles.modernStepPillText, regLocation ? styles.modernStepPillTextActive : null]}>Territory</Text>
+                    </View>
+                    <View style={styles.modernStepPillDivider} />
+                    <View style={[styles.modernStepPill, regPhone && regPassword ? styles.modernStepPillActive : null]}>
+                      <Ionicons name={regPhone && regPassword ? "checkmark-circle" : "lock-closed-outline"} size={14} color={regPhone && regPassword ? "#059669" : "#64748B"} />
+                      <Text style={[styles.modernStepPillText, regPhone && regPassword ? styles.modernStepPillTextActive : null]}>Login</Text>
+                    </View>
+                  </View>
+
+                  {/* 1. STAFF VERIFICATION PHOTO */}
+                  <View style={styles.modernRegCard}>
+                    <View style={styles.modernCardHeaderRow}>
+                      <View style={[styles.modernCardIconBox, { backgroundColor: "#DCFCE7" }]}>
+                        <Ionicons name="camera" size={18} color="#059669" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.modernCardTitle}>Staff Verification Photo</Text>
+                        <Text style={styles.modernCardSub}>Front-facing portrait for identity check</Text>
+                      </View>
+                    </View>
 
                     {regSelfieUri ? (
-                      <View style={styles.selfiePreviewContainer}>
-                        <Image source={{ uri: regSelfieUri }} style={styles.selfieImage} />
-                        <View style={styles.selfieBadge}>
-                          <Text style={styles.selfieBadgeText}>✓ Selfie Captured</Text>
+                      <View style={styles.modernSelfieContainer}>
+                        <View style={styles.modernSelfieRing}>
+                          <Image source={{ uri: regSelfieUri }} style={styles.modernSelfieImg} />
+                          <View style={styles.modernSelfieBadge}>
+                            <Ionicons name="checkmark-circle" size={14} color="#FFFFFF" />
+                            <Text style={styles.modernSelfieBadgeText}>Verified</Text>
+                          </View>
                         </View>
-                        <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
-                          <Pressable style={styles.retakeBtn} onPress={handleCaptureSelfie}>
-                            <Text style={styles.retakeBtnText}>📷 Retake Selfie</Text>
+                        <View style={styles.modernSelfieBtnRow}>
+                          <Pressable style={styles.modernSelfieActionBtn} onPress={handleCaptureSelfie}>
+                            <Ionicons name="camera-reverse-outline" size={16} color={BRAND_DARK_GREEN} />
+                            <Text style={styles.modernSelfieActionBtnText}>Retake</Text>
                           </Pressable>
-                          <Pressable style={styles.galleryBtn} onPress={handlePickFromGallery}>
-                            <Text style={styles.galleryBtnText}>Choose from Gallery</Text>
+                          <Pressable style={styles.modernSelfieActionBtn} onPress={handlePickFromGallery}>
+                            <Ionicons name="images-outline" size={16} color={BRAND_DARK_GREEN} />
+                            <Text style={styles.modernSelfieActionBtnText}>Gallery</Text>
                           </Pressable>
                         </View>
                       </View>
                     ) : (
-                      <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
-                        <Pressable style={[styles.captureSelfieBtn, { flex: 1 }]} onPress={handleCaptureSelfie}>
-                          <Ionicons name="camera-outline" size={22} color={BRAND_DARK_GREEN} />
-                          <Text style={styles.captureSelfieBtnTitle}>Take Front Selfie</Text>
-                          <Text style={styles.captureSelfieBtnSub}>Opens Camera</Text>
+                      <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
+                        <Pressable style={styles.modernTakeSelfieBtn} onPress={handleCaptureSelfie}>
+                          <View style={styles.modernCameraCircle}>
+                            <Ionicons name="camera" size={20} color="#FFFFFF" />
+                          </View>
+                          <Text style={styles.modernTakeSelfieTitle}>Take Front Selfie</Text>
+                          <Text style={styles.modernTakeSelfieSub}>Opens Device Camera</Text>
                         </Pressable>
-                        <Pressable style={styles.gallerySmallBtn} onPress={handlePickFromGallery}>
+                        <Pressable style={styles.modernGalleryBtn} onPress={handlePickFromGallery}>
                           <Ionicons name="images-outline" size={20} color={BRAND_DARK_GREEN} />
-                          <Text style={styles.galleryBtnText}>Gallery</Text>
+                          <Text style={styles.modernGalleryText}>Choose from Gallery</Text>
                         </Pressable>
                       </View>
                     )}
                   </View>
 
-                  {/* 2. GPS LOCATION CAPTURE */}
-                  <View style={styles.regSectionBox}>
-                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                      <Text style={styles.regSectionTitle}>2. Location & Territory *</Text>
-                      <Pressable onPress={handleCaptureLocation} hitSlop={6}>
-                        <Text style={{ fontSize: fontScale(12.5), fontWeight: "700", color: BRAND_DARK_GREEN }}>
-                          {capturingLocation ? "Locating..." : "↻ Refresh GPS"}
-                        </Text>
-                      </Pressable>
+                  {/* 2. OPERATIONAL TERRITORY & LOCATION */}
+                  <View style={styles.modernRegCard}>
+                    <View style={styles.modernCardHeaderRow}>
+                      <View style={[styles.modernCardIconBox, { backgroundColor: "#E0F2FE" }]}>
+                        <Ionicons name="location" size={18} color="#0284C7" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.modernCardTitle}>Operating Territory & GPS</Text>
+                        <Text style={styles.modernCardSub}>Tag sign-up coordinates & recovery hub</Text>
+                      </View>
                     </View>
 
+                    {/* GPS Coordinates Box */}
                     {regLocation ? (
-                      <View style={styles.locationPillContainer}>
-                        <Text style={{ fontSize: 18 }}>📍</Text>
-                        <View style={{ flex: 1, marginLeft: 8 }}>
-                          <Text style={styles.locationPillText}>
+                      <View style={styles.modernGpsBox}>
+                        <View style={styles.modernGpsDot} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.modernGpsCoords}>
                             GPS: {regLocation.lat}, {regLocation.lng}
                           </Text>
-                          <Text style={styles.locationAddressText}>
+                          <Text style={styles.modernGpsAddress}>
                             {regLocation.address || "Kozhikode, Kerala"}
                           </Text>
                         </View>
+                        <Pressable onPress={handleCaptureLocation} hitSlop={6} style={styles.modernGpsRefreshBtn}>
+                          <Ionicons name="refresh" size={14} color={BRAND_DARK_GREEN} />
+                          <Text style={styles.modernGpsRefreshText}>
+                            {capturingLocation ? "..." : "Refresh"}
+                          </Text>
+                        </Pressable>
                       </View>
                     ) : (
-                      <Pressable style={styles.captureLocationBtn} onPress={handleCaptureLocation}>
-                        <Text style={{ color: BRAND_DARK_GREEN, fontWeight: "700", fontSize: fontScale(13) }}>
-                          {capturingLocation ? "Capturing coordinates..." : "📍 Tag My Current Location"}
+                      <Pressable style={styles.modernGpsTagBtn} onPress={handleCaptureLocation}>
+                        <Ionicons name="navigate-circle-outline" size={20} color={BRAND_DARK_GREEN} />
+                        <Text style={styles.modernGpsTagText}>
+                          {capturingLocation ? "Locating device coordinates..." : "Tap to Tag My Current Location"}
                         </Text>
                       </Pressable>
                     )}
 
-                    <Text style={[styles.fieldLabel, { marginTop: 14 }]}>Assigned Operational Area / Territory *</Text>
-                    <TextInput
-                      style={styles.modalInput}
-                      placeholder="e.g. Kozhikode Central, Vadakara, Koyilandy"
-                      placeholderTextColor={theme.textMuted}
-                      value={regArea}
-                      onChangeText={setRegArea}
-                    />
+                    {/* Operating Area Input with Icon Prefix */}
+                    <Text style={styles.modernInputLabel}>Assigned Operational Area / Territory *</Text>
+                    <View style={styles.regModernInputWrapper}>
+                      <Ionicons name="map-outline" size={18} color="#64748B" style={{ marginRight: 10 }} />
+                      <TextInput
+                        style={styles.modernInputFlex}
+                        placeholder="e.g. Kozhikode Central, Vadakara, Koyilandy"
+                        placeholderTextColor={theme.textMuted}
+                        value={regArea}
+                        onChangeText={setRegArea}
+                      />
+                    </View>
                   </View>
 
-                  {/* 3. AGENT DETAILS */}
-                  <View style={styles.regSectionBox}>
-                    <Text style={styles.regSectionTitle}>3. Personal & Login Details *</Text>
+                  {/* 3. PERSONAL & LOGIN CREDENTIALS */}
+                  <View style={styles.modernRegCard}>
+                    <View style={styles.modernCardHeaderRow}>
+                      <View style={[styles.modernCardIconBox, { backgroundColor: "#FEF3C7" }]}>
+                        <Ionicons name="shield-checkmark" size={18} color="#D97706" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.modernCardTitle}>Personal & Login Credentials</Text>
+                        <Text style={styles.modernCardSub}>Mobile number will be your sign-in username</Text>
+                      </View>
+                    </View>
 
-                    <Text style={styles.fieldLabel}>Full Legal Name *</Text>
-                    <TextInput
-                      style={styles.modalInput}
-                      placeholder="e.g. Akhil V"
-                      placeholderTextColor={theme.textMuted}
-                      value={regName}
-                      onChangeText={setRegName}
-                    />
-
-                    <Text style={styles.fieldLabel}>Mobile Number (Username) *</Text>
-                    <TextInput
-                      style={styles.modalInput}
-                      placeholder="10-digit mobile number"
-                      placeholderTextColor={theme.textMuted}
-                      value={regPhone}
-                      onChangeText={setRegPhone}
-                      keyboardType="phone-pad"
-                      maxLength={10}
-                    />
-
-                    <Text style={styles.fieldLabel}>Employee / Agent ID (Optional)</Text>
-                    <TextInput
-                      style={styles.modalInput}
-                      placeholder="e.g. STF-201"
-                      placeholderTextColor={theme.textMuted}
-                      value={regEmployeeId}
-                      onChangeText={setRegEmployeeId}
-                    />
-
-                    <Text style={styles.fieldLabel}>Password *</Text>
-                    <View style={styles.passwordInputWrapper}>
+                    {/* Full Name */}
+                    <Text style={styles.modernInputLabel}>Full Legal Name *</Text>
+                    <View style={styles.regModernInputWrapper}>
+                      <Ionicons name="person-outline" size={18} color="#64748B" style={{ marginRight: 10 }} />
                       <TextInput
-                        style={styles.passwordInputFlex}
+                        style={styles.modernInputFlex}
+                        placeholder="e.g. Akhil V"
+                        placeholderTextColor={theme.textMuted}
+                        value={regName}
+                        onChangeText={setRegName}
+                      />
+                    </View>
+
+                    {/* Mobile Number with +91 Badge */}
+                    <Text style={styles.modernInputLabel}>Mobile Number (Login Username) *</Text>
+                    <View style={styles.regModernInputWrapper}>
+                      <View style={styles.modernPhonePrefixBadge}>
+                        <Text style={styles.modernPhonePrefixText}>+91</Text>
+                      </View>
+                      <TextInput
+                        style={styles.modernInputFlex}
+                        placeholder="10-digit mobile number"
+                        placeholderTextColor={theme.textMuted}
+                        value={regPhone}
+                        onChangeText={setRegPhone}
+                        keyboardType="phone-pad"
+                        maxLength={10}
+                      />
+                    </View>
+
+                    {/* Employee / Agent ID */}
+                    <Text style={styles.modernInputLabel}>Employee / Staff ID (Optional)</Text>
+                    <View style={styles.regModernInputWrapper}>
+                      <Ionicons name="id-card-outline" size={18} color="#64748B" style={{ marginRight: 10 }} />
+                      <TextInput
+                        style={styles.modernInputFlex}
+                        placeholder="e.g. STF-201"
+                        placeholderTextColor={theme.textMuted}
+                        value={regEmployeeId}
+                        onChangeText={setRegEmployeeId}
+                      />
+                    </View>
+
+                    {/* Password */}
+                    <Text style={styles.modernInputLabel}>Login Password *</Text>
+                    <View style={styles.regModernInputWrapper}>
+                      <Ionicons name="lock-closed-outline" size={18} color="#64748B" style={{ marginRight: 10 }} />
+                      <TextInput
+                        style={styles.modernInputFlex}
                         placeholder="Minimum 6 characters"
                         placeholderTextColor={theme.textMuted}
                         value={regPassword}
@@ -931,7 +1008,7 @@ export default function LoginScreen() {
                       />
                       <Pressable
                         onPress={() => setShowRegPassword(!showRegPassword)}
-                        style={styles.eyeToggleBtn}
+                        style={styles.modernEyeBtn}
                         hitSlop={8}
                       >
                         <Ionicons
@@ -942,10 +1019,12 @@ export default function LoginScreen() {
                       </Pressable>
                     </View>
 
-                    <Text style={styles.fieldLabel}>Confirm Password *</Text>
-                    <View style={styles.passwordInputWrapper}>
+                    {/* Confirm Password */}
+                    <Text style={styles.modernInputLabel}>Confirm Password *</Text>
+                    <View style={styles.regModernInputWrapper}>
+                      <Ionicons name="shield-checkmark-outline" size={18} color="#64748B" style={{ marginRight: 10 }} />
                       <TextInput
-                        style={styles.passwordInputFlex}
+                        style={styles.modernInputFlex}
                         placeholder="Re-enter password"
                         placeholderTextColor={theme.textMuted}
                         value={regConfirmPassword}
@@ -954,7 +1033,7 @@ export default function LoginScreen() {
                       />
                       <Pressable
                         onPress={() => setShowRegConfirmPassword(!showRegConfirmPassword)}
-                        style={styles.eyeToggleBtn}
+                        style={styles.modernEyeBtn}
                         hitSlop={8}
                       >
                         <Ionicons
@@ -967,16 +1046,23 @@ export default function LoginScreen() {
                   </View>
 
                   {/* SUBMIT BUTTON */}
-                  <View style={{ marginTop: 14, marginBottom: 20 }}>
+                  <View style={{ marginTop: 10, marginBottom: 28 }}>
                     <Pressable
-                      style={[styles.primaryButton, submittingReg && styles.buttonDisabled]}
+                      style={({ pressed }) => [
+                        styles.modernSubmitBtn,
+                        pressed && styles.modernSubmitBtnPressed,
+                        submittingReg && styles.buttonDisabled,
+                      ]}
                       onPress={handleSubmitRegistration}
                       disabled={submittingReg}
                     >
                       {submittingReg ? (
                         <ActivityIndicator color="#FFFFFF" size="small" />
                       ) : (
-                        <Text style={styles.primaryButtonText}>Submit Registration for Approval</Text>
+                        <>
+                          <Text style={styles.modernSubmitBtnText}>Submit Registration for Approval</Text>
+                          <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
+                        </>
                       )}
                     </Pressable>
                   </View>
@@ -2477,65 +2563,457 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F8FAFC",
   },
-  registerTopHeader: {
+  modernRegTopBar: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: scale(18),
-    paddingVertical: verticalScale(14),
+    paddingHorizontal: scale(16),
+    paddingVertical: verticalScale(12),
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#F1F5F9",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  registerBackBtn: {
-    width: scale(40),
-    height: scale(40),
-    borderRadius: 12,
-    backgroundColor: "#F1F5F9",
+  modernRegBackBtn: {
+    width: scale(38),
+    height: scale(38),
+    borderRadius: 19,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
     alignItems: "center",
     justifyContent: "center",
   },
-  registerTopTitle: {
+  modernRegTitle: {
     fontSize: fontScale(18),
     fontWeight: "800",
     color: "#0F172A",
+    letterSpacing: -0.3,
   },
-  registerTopSubtitle: {
-    fontSize: fontScale(12.5),
+  modernRegStaffBadge: {
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
+  modernRegStaffBadgeText: {
+    fontSize: fontScale(10.5),
+    fontWeight: "800",
+    color: "#059669",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  modernRegSubtitle: {
+    fontSize: fontScale(12),
     color: "#64748B",
     marginTop: 1,
   },
-  registerScrollContent: {
-    paddingHorizontal: scale(18),
-    paddingTop: verticalScale(16),
-    paddingBottom: verticalScale(40),
+  modernRegScrollContent: {
+    paddingHorizontal: scale(16),
+    paddingTop: verticalScale(14),
+    paddingBottom: verticalScale(36),
   },
-  passwordInputWrapper: {
+  modernRegErrorBox: {
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: verticalScale(14),
+  },
+  modernRegErrorText: {
+    fontSize: fontScale(12.5),
+    color: "#DC2626",
+    flex: 1,
+    fontWeight: "500",
+  },
+  modernRegSuccessCard: {
     backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: scale(24),
+    alignItems: "center",
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    height: verticalScale(46),
+    marginTop: verticalScale(20),
+    shadowColor: "#059669",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
   },
-  passwordInputFlex: {
-    flex: 1,
-    fontSize: fontScale(14),
-    color: "#0F172A",
-    paddingVertical: 0,
-  },
-
-  regSuccessIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+  modernRegSuccessIconCircle: {
+    width: scale(72),
+    height: scale(72),
+    borderRadius: scale(36),
     backgroundColor: "#ECFDF5",
     alignItems: "center",
     justifyContent: "center",
-    alignSelf: "center",
-    marginBottom: 12,
+    marginBottom: verticalScale(14),
     borderWidth: 2,
     borderColor: "#A7F3D0",
+  },
+  modernRegSuccessTitle: {
+    fontSize: fontScale(20),
+    fontWeight: "800",
+    color: "#0F172A",
+    textAlign: "center",
+  },
+  modernRegPendingPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  modernRegPendingPillText: {
+    fontSize: fontScale(12),
+    fontWeight: "700",
+    color: "#D97706",
+  },
+  modernRegSuccessText: {
+    fontSize: fontScale(13.5),
+    color: "#475569",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: verticalScale(16),
+  },
+  modernRegSuccessBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#0A6038",
+    borderRadius: 16,
+    height: verticalScale(50),
+    paddingHorizontal: scale(28),
+    gap: 8,
+    shadowColor: "#0A6038",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  modernRegSuccessBtnText: {
+    fontSize: fontScale(15),
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  modernStepPillsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginBottom: verticalScale(14),
+  },
+  modernStepPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  modernStepPillActive: {
+    backgroundColor: "#F0FDF4",
+  },
+  modernStepPillDivider: {
+    width: 14,
+    height: 1,
+    backgroundColor: "#E2E8F0",
+  },
+  modernStepPillText: {
+    fontSize: fontScale(12),
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  modernStepPillTextActive: {
+    color: "#059669",
+    fontWeight: "700",
+  },
+  modernRegCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: scale(16),
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginBottom: verticalScale(14),
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  modernCardHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: verticalScale(10),
+  },
+  modernCardIconBox: {
+    width: scale(38),
+    height: scale(38),
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modernCardTitle: {
+    fontSize: fontScale(15),
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  modernCardSub: {
+    fontSize: fontScale(11.5),
+    color: "#64748B",
+    marginTop: 1,
+  },
+  modernSelfieContainer: {
+    alignItems: "center",
+    paddingVertical: verticalScale(8),
+  },
+  modernSelfieRing: {
+    position: "relative",
+    padding: 3,
+    borderRadius: scale(55),
+    borderWidth: 2.5,
+    borderColor: "#10B981",
+  },
+  modernSelfieImg: {
+    width: scale(96),
+    height: scale(96),
+    borderRadius: scale(48),
+  },
+  modernSelfieBadge: {
+    position: "absolute",
+    bottom: -4,
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#059669",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  modernSelfieBadgeText: {
+    fontSize: fontScale(10.5),
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  modernSelfieBtnRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: verticalScale(14),
+  },
+  modernSelfieActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 12,
+  },
+  modernSelfieActionBtnText: {
+    fontSize: fontScale(12.5),
+    fontWeight: "700",
+    color: BRAND_DARK_GREEN,
+  },
+  modernTakeSelfieBtn: {
+    flex: 1.2,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: "#10B981",
+    borderRadius: 16,
+    paddingVertical: verticalScale(14),
+    paddingHorizontal: scale(10),
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modernCameraCircle: {
+    width: scale(36),
+    height: scale(36),
+    borderRadius: scale(18),
+    backgroundColor: "#059669",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 6,
+  },
+  modernTakeSelfieTitle: {
+    fontSize: fontScale(13),
+    fontWeight: "700",
+    color: "#065F46",
+  },
+  modernTakeSelfieSub: {
+    fontSize: fontScale(10.5),
+    color: "#059669",
+    marginTop: 2,
+  },
+  modernGalleryBtn: {
+    flex: 1,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 16,
+    paddingVertical: verticalScale(14),
+    paddingHorizontal: scale(10),
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modernGalleryText: {
+    fontSize: fontScale(12),
+    fontWeight: "600",
+    color: BRAND_DARK_GREEN,
+    textAlign: "center",
+    marginTop: 6,
+  },
+  modernGpsBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    borderRadius: 14,
+    padding: scale(12),
+    gap: 10,
+    marginTop: 6,
+  },
+  modernGpsDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#10B981",
+  },
+  modernGpsCoords: {
+    fontSize: fontScale(12),
+    fontWeight: "700",
+    color: "#065F46",
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+  },
+  modernGpsAddress: {
+    fontSize: fontScale(12),
+    color: "#475569",
+    marginTop: 2,
+  },
+  modernGpsRefreshBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  modernGpsRefreshText: {
+    fontSize: fontScale(11),
+    fontWeight: "700",
+    color: BRAND_DARK_GREEN,
+  },
+  modernGpsTagBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: "#94A3B8",
+    borderRadius: 14,
+    paddingVertical: verticalScale(12),
+    paddingHorizontal: scale(14),
+    gap: 8,
+    marginTop: 6,
+  },
+  modernGpsTagText: {
+    fontSize: fontScale(12.5),
+    fontWeight: "700",
+    color: BRAND_DARK_GREEN,
+  },
+  modernInputLabel: {
+    fontSize: fontScale(12),
+    fontWeight: "700",
+    color: "#475569",
+    marginTop: verticalScale(12),
+    marginBottom: verticalScale(4),
+  },
+  regModernInputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+    borderRadius: 14,
+    paddingHorizontal: scale(12),
+    height: verticalScale(48),
+  },
+  modernInputFlex: {
+    flex: 1,
+    fontSize: fontScale(14),
+    fontWeight: "600",
+    color: "#0F172A",
+    paddingVertical: 0,
+  },
+  modernPhonePrefixBadge: {
+    backgroundColor: "#E2E8F0",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  modernPhonePrefixText: {
+    fontSize: fontScale(12.5),
+    fontWeight: "700",
+    color: "#334155",
+  },
+  modernEyeBtn: {
+    padding: 6,
+  },
+  modernSubmitBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#0A6038",
+    borderRadius: 16,
+    height: verticalScale(52),
+    shadowColor: "#0A6038",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  modernSubmitBtnPressed: {
+    backgroundColor: "#084e2e",
+    transform: [{ scale: 0.99 }],
+  },
+  modernSubmitBtnText: {
+    fontSize: fontScale(15.5),
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: -0.2,
   },
 });

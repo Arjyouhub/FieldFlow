@@ -252,8 +252,8 @@ export default function App() {
   });
 
   // Auth Form
-  const [loginPhone, setLoginPhone] = useState('9876543210');
-  const [loginPassword, setLoginPassword] = useState('password123');
+  const [loginPhone, setLoginPhone] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   // Base URL configuration for production vs local dev
@@ -1743,11 +1743,13 @@ export default function App() {
                 </span>
                 <input
                   type="text"
+                  id="adminLoginPhone"
+                  name="adminLoginPhone"
                   className="input-field"
                   style={{ width: '100%', height: '46px', paddingLeft: '38px', borderRadius: '10px', fontSize: '14px', border: '1.5px solid #e2e8f0', background: '#f8fafc' }}
                   value={loginPhone}
                   onChange={(e) => setLoginPhone(e.target.value)}
-                  placeholder="e.g. 9876543210"
+                  placeholder="Enter administrator mobile number"
                   required
                   autoComplete="off"
                   autoCorrect="off"
@@ -1769,6 +1771,8 @@ export default function App() {
                 </span>
                 <input
                   type={showLoginPassword ? 'text' : 'password'}
+                  id="adminLoginPassword"
+                  name="adminLoginPassword"
                   className="input-field"
                   style={{ width: '100%', height: '46px', paddingLeft: '38px', paddingRight: '40px', borderRadius: '10px', fontSize: '14px', border: '1.5px solid #e2e8f0', background: '#f8fafc' }}
                   value={loginPassword}
@@ -1819,34 +1823,6 @@ export default function App() {
               )}
             </button>
           </form>
-
-          {/* Quick Demo Fill Shortcut */}
-          <button
-            type="button"
-            onClick={() => {
-              setLoginPhone('9876543210');
-              setLoginPassword('password123');
-            }}
-            style={{
-              marginTop: '20px',
-              width: '100%',
-              padding: '10px 14px',
-              background: '#f8fafc',
-              border: '1px solid #e2e8f0',
-              borderRadius: '10px',
-              fontSize: '12px',
-              color: '#64748b',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              transition: 'background 0.15s ease'
-            }}
-          >
-            <ShieldCheck size={14} color="#0d9488" />
-            <span>Fill Demo Admin (<strong>9876543210</strong> / <strong>password123</strong>)</span>
-          </button>
         </div>
       </div>
     );

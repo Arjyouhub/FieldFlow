@@ -31,7 +31,7 @@ export default function AccountActivationScreen() {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
   // Form State
-  const [phone, setPhone] = useState("9876543211");
+  const [phone, setPhone] = useState("");
   const [staffInfo, setStaffInfo] = useState<{
     name?: string;
     employeeId?: string;
@@ -372,33 +372,6 @@ export default function AccountActivationScreen() {
                       if (errorMessage) setErrorMessage("");
                     }}
                   />
-                </View>
-              </View>
-
-              {/* Quick Fill for Demo Officers */}
-              <View style={styles.demoFillContainer}>
-                <Text style={styles.demoFillLabel}>Existing Staff Records:</Text>
-                <View style={styles.demoPillRow}>
-                  <Pressable
-                    style={styles.demoPill}
-                    onPress={() => {
-                      setPhone("9876543211");
-                      if (errorMessage) setErrorMessage("");
-                    }}
-                  >
-                    <Ionicons name="flash" size={12} color="#059669" />
-                    <Text style={styles.demoPillText}>Rahul Kumar (9876543211)</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.demoPill}
-                    onPress={() => {
-                      setPhone("9876543213");
-                      if (errorMessage) setErrorMessage("");
-                    }}
-                  >
-                    <Ionicons name="flash" size={12} color="#059669" />
-                    <Text style={styles.demoPillText}>Priya Sharma (9876543213)</Text>
-                  </Pressable>
                 </View>
               </View>
 

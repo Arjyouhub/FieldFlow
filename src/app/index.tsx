@@ -127,7 +127,7 @@ export default function LoginScreen() {
   const [focusedField, setFocusedField] = useState<"phone" | "password" | null>(null);
 
   // OTP State (Screen 3: 6 individual boxes)
-  const [otpPhone, setOtpPhone] = useState("9876543211");
+  const [otpPhone, setOtpPhone] = useState("");
   const [otpMode, setOtpMode] = useState<"login" | "forgot_password">("login");
   const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [newPassword, setNewPassword] = useState("");

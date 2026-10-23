@@ -967,25 +967,36 @@ export default function LoginScreen() {
               <Text style={styles.exactGoogleBtnText}>Continue with Google</Text>
             </Pressable>
 
-            {/* "Activate Account" Button (Exact reference match) */}
+            {/* "Create Account" Button */}
             <Pressable
               style={({ pressed }) => [
                 styles.exactActivateBtn,
                 pressed && { backgroundColor: "#DCFCE7", transform: [{ scale: 0.99 }] },
               ]}
-              onPress={() => router.push("/activate")}
+              onPress={() => {
+                setShowRegisterModal(true);
+                setRegError("");
+                setRegSuccessMsg("");
+              }}
             >
               <View style={{ flexDirection: "row", alignItems: "center" }}>
                 <Ionicons name="person-add" size={20} color={BRAND_DARK_GREEN} />
-                <Text style={styles.exactActivateBtnText}>Activate Account</Text>
+                <Text style={styles.exactActivateBtnText}>Create Account</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={BRAND_DARK_GREEN} />
             </Pressable>
 
             {/* Helper Text */}
-            <Pressable onPress={() => router.push("/activate")} hitSlop={6}>
+            <Pressable
+              onPress={() => {
+                setShowRegisterModal(true);
+                setRegError("");
+                setRegSuccessMsg("");
+              }}
+              hitSlop={6}
+            >
               <Text style={styles.exactActivateHelperText}>
-                New to FieldFlow? Activate your account here
+                New to FieldFlow? Create your staff account here
               </Text>
             </Pressable>
 

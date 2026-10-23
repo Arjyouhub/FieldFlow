@@ -66,6 +66,7 @@ import NonWorkableView from './components/NonWorkableView';
 import AuditLogsView from './components/AuditLogsView';
 import SuspiciousVisitsView from './components/SuspiciousVisitsView';
 import WhatsAppShareModal from './components/WhatsAppShareModal';
+import { StaffDetailsModal, EditStaffModal } from './components/StaffModals';
 import {
   generateCollectionModelImage,
   generateCollectionLedgerImage,
@@ -150,6 +151,11 @@ export default function App() {
     recipientName: '',
     phone: '',
   });
+
+  // Staff Approvals & Details / Edit Modal states
+  const [selectedStaffDetails, setSelectedStaffDetails] = useState(null);
+  const [editingStaff, setEditingStaff] = useState(null);
+  const [isUpdatingStaff, setIsUpdatingStaff] = useState(false);
 
   // File Upload & Batch Import states
   const [importModalTab, setImportModalTab] = useState('file'); // 'file' | 'single'
@@ -1571,6 +1577,24 @@ export default function App() {
       apiFetch('/api/admin/staff').then((d) => setStaffList(d.staff || [])).catch(() => {});
     } catch (err) {
       setErrorMsg(err.message);
+    }
+  };
+
+  const handleUpdateStaffDetails = async (staffId, payload) => {
+    setIsUpdatingStaff(true);
+    try {
+      const data = await apiFetch(`/api/admin/staff/${staffId}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+      setSuccessMsg(data.message || 'Staff details updated successfully.');
+      setEditingStaff(null);
+      loadData();
+      apiFetch('/api/admin/staff').then((d) => setStaffList(d.staff || [])).catch(() => {});
+    } catch (err) {
+      setErrorMsg(err.message);
+    } finally {
+      setIsUpdatingStaff(false);
     }
   };
 
@@ -3441,7 +3465,26 @@ export default function App() {
                           )}
 
                           {/* Action Buttons */}
-                          <div style={{ marginTop: 'auto', paddingTop: '8px' }}>
+                          <div style={{ marginTop: 'auto', paddingTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <button
+                                className="btn btn-sm btn-secondary"
+                                style={{ flex: 1, justifyContent: 'center', fontSize: '12px' }}
+                                onClick={() => setSelectedStaffDetails(stf)}
+                                title="Inspect verification selfie, location and officer details"
+                              >
+                                <Eye size={13} /> Check Details
+                              </button>
+                              <button
+                                className="btn btn-sm btn-secondary"
+                                style={{ flex: 1, justifyContent: 'center', fontSize: '12px' }}
+                                onClick={() => setEditingStaff(stf)}
+                                title="Edit staff profile and operational territory"
+                              >
+                                <Edit3 size={13} /> Edit
+                              </button>
+                            </div>
+
                             {isPending ? (
                               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                 <button
@@ -3467,18 +3510,6 @@ export default function App() {
                                   onClick={() => handleUpdateStaffStatus(stf._id, 'inactive')}
                                 >
                                   <UserX size={13} /> Deactivate Officer
-                                </button>
-                                <button
-                                  className="btn btn-sm btn-secondary"
-                                  style={{ justifyContent: 'center', fontSize: '12px' }}
-                                  onClick={() => {
-                                    const newArea = window.prompt(`Update operational territory for ${stf.name}:`, stf.assignedArea || 'Kozhikode Central');
-                                    if (newArea && newArea !== stf.assignedArea) {
-                                      handleReviewStaff(stf._id, 'APPROVE', newArea);
-                                    }
-                                  }}
-                                >
-                                  Edit Territory
                                 </button>
                               </div>
                             ) : (
@@ -3586,40 +3617,58 @@ export default function App() {
                                   </span>
                                 </td>
                                 <td style={{ textAlign: 'right' }}>
-                                  {isPending ? (
-                                    <div style={{ display: 'inline-flex', gap: '6px' }}>
+                                  <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
+                                    <button
+                                      className="btn btn-sm btn-secondary"
+                                      onClick={() => setSelectedStaffDetails(stf)}
+                                      title="Check Details & Verification"
+                                      style={{ gap: '4px' }}
+                                    >
+                                      <Eye size={12} /> Check Details
+                                    </button>
+                                    <button
+                                      className="btn btn-sm btn-secondary"
+                                      onClick={() => setEditingStaff(stf)}
+                                      title="Edit Officer Details"
+                                      style={{ gap: '4px' }}
+                                    >
+                                      <Edit3 size={12} /> Edit
+                                    </button>
+                                    {isPending ? (
+                                      <>
+                                        <button
+                                          className="btn btn-sm btn-primary"
+                                          onClick={() => handleReviewStaff(stf._id, 'APPROVE', currentArea)}
+                                          title="Approve staff officer"
+                                        >
+                                          <Check size={12} /> Approve
+                                        </button>
+                                        <button
+                                          className="btn btn-sm btn-secondary"
+                                          style={{ color: 'var(--danger-text)' }}
+                                          onClick={() => setStaffRejectionModal({ staffId: stf._id, name: stf.name, phone: stf.phone })}
+                                          title="Decline registration"
+                                        >
+                                          <X size={12} /> Decline
+                                        </button>
+                                      </>
+                                    ) : isActive ? (
+                                      <button
+                                        className="btn btn-sm btn-secondary"
+                                        style={{ color: 'var(--danger-text)', fontSize: '11.5px' }}
+                                        onClick={() => handleUpdateStaffStatus(stf._id, 'inactive')}
+                                      >
+                                        Deactivate
+                                      </button>
+                                    ) : (
                                       <button
                                         className="btn btn-sm btn-primary"
                                         onClick={() => handleReviewStaff(stf._id, 'APPROVE', currentArea)}
-                                        title="Approve staff officer"
                                       >
-                                        <Check size={12} /> Approve
+                                        Re-activate
                                       </button>
-                                      <button
-                                        className="btn btn-sm btn-secondary"
-                                        style={{ color: 'var(--danger-text)' }}
-                                        onClick={() => setStaffRejectionModal({ staffId: stf._id, name: stf.name, phone: stf.phone })}
-                                        title="Decline registration"
-                                      >
-                                        <X size={12} /> Decline
-                                      </button>
-                                    </div>
-                                  ) : isActive ? (
-                                    <button
-                                      className="btn btn-sm btn-secondary"
-                                      style={{ color: 'var(--danger-text)', fontSize: '11.5px' }}
-                                      onClick={() => handleUpdateStaffStatus(stf._id, 'inactive')}
-                                    >
-                                      Deactivate
-                                    </button>
-                                  ) : (
-                                    <button
-                                      className="btn btn-sm btn-primary"
-                                      onClick={() => handleReviewStaff(stf._id, 'APPROVE', currentArea)}
-                                    >
-                                      Re-activate
-                                    </button>
-                                  )}
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
                             );
@@ -3789,26 +3838,46 @@ export default function App() {
                           </div>
 
                           {/* Action Buttons */}
-                          <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                            <button
-                              className="btn btn-sm btn-primary"
-                              style={{ flex: 1, justifyContent: 'center' }}
-                              onClick={() => handleReviewStaff(stf._id, 'APPROVE', stf.assignedArea)}
-                            >
-                              <CheckCircle size={14} /> Approve Staff Account
-                            </button>
-                            <button
-                              className="btn btn-sm btn-secondary"
-                              style={{ color: 'var(--danger-text)', borderColor: 'var(--danger-border)', justifyContent: 'center' }}
-                              onClick={() => {
-                                const reason = window.prompt(`Decline registration for ${stf.name}:`, 'Selfie or territory details not verified');
-                                if (reason !== null) {
-                                  handleReviewStaff(stf._id, 'REJECT', '', reason);
-                                }
-                              }}
-                            >
-                              <XCircle size={14} /> Decline
-                            </button>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <button
+                                className="btn btn-sm btn-secondary"
+                                style={{ flex: 1, justifyContent: 'center', fontSize: '12px' }}
+                                onClick={() => setSelectedStaffDetails(stf)}
+                                title="Check registration selfie & details"
+                              >
+                                <Eye size={13} /> Check Details
+                              </button>
+                              <button
+                                className="btn btn-sm btn-secondary"
+                                style={{ flex: 1, justifyContent: 'center', fontSize: '12px' }}
+                                onClick={() => setEditingStaff(stf)}
+                                title="Edit staff details"
+                              >
+                                <Edit3 size={13} /> Edit
+                              </button>
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <button
+                                className="btn btn-sm btn-primary"
+                                style={{ flex: 1, justifyContent: 'center' }}
+                                onClick={() => handleReviewStaff(stf._id, 'APPROVE', stf.assignedArea)}
+                              >
+                                <CheckCircle size={14} /> Approve Staff Account
+                              </button>
+                              <button
+                                className="btn btn-sm btn-secondary"
+                                style={{ color: 'var(--danger-text)', borderColor: 'var(--danger-border)', justifyContent: 'center' }}
+                                onClick={() => {
+                                  const reason = window.prompt(`Decline registration for ${stf.name}:`, 'Selfie or territory details not verified');
+                                  if (reason !== null) {
+                                    handleReviewStaff(stf._id, 'REJECT', '', reason);
+                                  }
+                                }}
+                              >
+                                <XCircle size={14} /> Decline
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -3880,42 +3949,62 @@ export default function App() {
                               </span>
                             </div>
 
-                            <div className="case-card-actions" style={{ marginTop: '10px' }}>
-                              {stf.status === 'pending_approval' ? (
+                            <div className="case-card-actions" style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              <div style={{ display: 'flex', gap: '8px' }}>
                                 <button
-                                  className="btn btn-primary btn-sm"
+                                  className="btn btn-secondary btn-sm"
                                   style={{ flex: 1, justifyContent: 'center' }}
-                                  onClick={() => handleReviewStaff(stf._id, 'APPROVE', stf.assignedArea)}
+                                  onClick={() => setSelectedStaffDetails(stf)}
+                                  title="Check details"
                                 >
-                                  <Check size={13} /> Approve Staff
+                                  <Eye size={13} /> Check Details
                                 </button>
-                              ) : (
-                                <>
+                                <button
+                                  className="btn btn-secondary btn-sm"
+                                  style={{ flex: 1, justifyContent: 'center' }}
+                                  onClick={() => setEditingStaff(stf)}
+                                  title="Edit officer"
+                                >
+                                  <Edit3 size={13} /> Edit
+                                </button>
+                              </div>
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                {stf.status === 'pending_approval' ? (
                                   <button
                                     className="btn btn-primary btn-sm"
                                     style={{ flex: 1, justifyContent: 'center' }}
-                                    onClick={() => setAddDataStaffTarget(stf)}
-                                    title="Add cases data for this field officer"
+                                    onClick={() => handleReviewStaff(stf._id, 'APPROVE', stf.assignedArea)}
                                   >
-                                    <Plus size={13} /> Add Data
+                                    <Check size={13} /> Approve Staff
                                   </button>
-                                  <button
-                                    className={`btn btn-sm ${stf.status === 'active' ? 'btn-secondary' : 'btn-primary'}`}
-                                    style={{ flex: 1, justifyContent: 'center' }}
-                                    onClick={() =>
-                                      setStatusConfirmStaff({
-                                        staffId: stf._id,
-                                        name: stf.name,
-                                        employeeId: stf.employeeId,
-                                        currentStatus: stf.status,
-                                        targetStatus: stf.status === 'active' ? 'inactive' : 'active',
-                                      })
-                                    }
-                                  >
-                                    {stf.status === 'active' ? 'Deactivate' : 'Activate'}
-                                  </button>
-                                </>
-                              )}
+                                ) : (
+                                  <>
+                                    <button
+                                      className="btn btn-primary btn-sm"
+                                      style={{ flex: 1, justifyContent: 'center' }}
+                                      onClick={() => setAddDataStaffTarget(stf)}
+                                      title="Add cases data for this field officer"
+                                    >
+                                      <Plus size={13} /> Add Data
+                                    </button>
+                                    <button
+                                      className={`btn btn-sm ${stf.status === 'active' ? 'btn-secondary' : 'btn-primary'}`}
+                                      style={{ flex: 1, justifyContent: 'center' }}
+                                      onClick={() =>
+                                        setStatusConfirmStaff({
+                                          staffId: stf._id,
+                                          name: stf.name,
+                                          employeeId: stf.employeeId,
+                                          currentStatus: stf.status,
+                                          targetStatus: stf.status === 'active' ? 'inactive' : 'active',
+                                        })
+                                      }
+                                    >
+                                      {stf.status === 'active' ? 'Deactivate' : 'Activate'}
+                                    </button>
+                                  </>
+                                )}
+                              </div>
                             </div>
                           </div>
                         ))
@@ -3996,54 +4085,72 @@ export default function App() {
                                 )}
                               </td>
                               <td>
-                                {stf.status === 'pending_approval' ? (
-                                  <div style={{ display: 'flex', gap: '6px' }}>
-                                    <button
-                                      className="btn btn-sm btn-primary"
-                                      onClick={() => handleReviewStaff(stf._id, 'APPROVE', stf.assignedArea)}
-                                      title="Approve staff officer"
-                                    >
-                                      <Check size={12} /> Approve
-                                    </button>
-                                    <button
-                                      className="btn btn-sm btn-secondary"
-                                      style={{ color: 'var(--danger-text)', borderColor: 'var(--danger-border)' }}
-                                      onClick={() => {
-                                        const reason = window.prompt(`Decline registration for ${stf.name}:`, 'Details not verified');
-                                        if (reason !== null) {
-                                          handleReviewStaff(stf._id, 'REJECT', '', reason);
+                                <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
+                                  <button
+                                    className="btn btn-sm btn-secondary"
+                                    onClick={() => setSelectedStaffDetails(stf)}
+                                    title="Check Officer Details & Verification"
+                                    style={{ gap: '4px' }}
+                                  >
+                                    <Eye size={12} /> Check Details
+                                  </button>
+                                  <button
+                                    className="btn btn-sm btn-secondary"
+                                    onClick={() => setEditingStaff(stf)}
+                                    title="Edit Officer Profile"
+                                    style={{ gap: '4px' }}
+                                  >
+                                    <Edit3 size={12} /> Edit
+                                  </button>
+                                  {stf.status === 'pending_approval' ? (
+                                    <>
+                                      <button
+                                        className="btn btn-sm btn-primary"
+                                        onClick={() => handleReviewStaff(stf._id, 'APPROVE', stf.assignedArea)}
+                                        title="Approve staff officer"
+                                      >
+                                        <Check size={12} /> Approve
+                                      </button>
+                                      <button
+                                        className="btn btn-sm btn-secondary"
+                                        style={{ color: 'var(--danger-text)', borderColor: 'var(--danger-border)' }}
+                                        onClick={() => {
+                                          const reason = window.prompt(`Decline registration for ${stf.name}:`, 'Details not verified');
+                                          if (reason !== null) {
+                                            handleReviewStaff(stf._id, 'REJECT', '', reason);
+                                          }
+                                        }}
+                                        title="Decline registration"
+                                      >
+                                        <X size={12} /> Decline
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <button
+                                        className="btn btn-sm btn-primary"
+                                        onClick={() => setAddDataStaffTarget(stf)}
+                                        title="Add cases data (Upload file or single case) for this field officer"
+                                      >
+                                        <Plus size={12} /> Add Data
+                                      </button>
+                                      <button
+                                        className={`btn btn-sm ${stf.status === 'active' ? 'btn-secondary' : 'btn-primary'}`}
+                                        onClick={() =>
+                                          setStatusConfirmStaff({
+                                            staffId: stf._id,
+                                            name: stf.name,
+                                            employeeId: stf.employeeId,
+                                            currentStatus: stf.status,
+                                            targetStatus: stf.status === 'active' ? 'inactive' : 'active',
+                                          })
                                         }
-                                      }}
-                                      title="Decline registration"
-                                    >
-                                      <X size={12} /> Decline
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div style={{ display: 'flex', gap: '6px' }}>
-                                    <button
-                                      className="btn btn-sm btn-primary"
-                                      onClick={() => setAddDataStaffTarget(stf)}
-                                      title="Add cases data (Upload file or single case) for this field officer"
-                                    >
-                                      <Plus size={12} /> Add Data
-                                    </button>
-                                    <button
-                                      className={`btn btn-sm ${stf.status === 'active' ? 'btn-secondary' : 'btn-primary'}`}
-                                      onClick={() =>
-                                        setStatusConfirmStaff({
-                                          staffId: stf._id,
-                                          name: stf.name,
-                                          employeeId: stf.employeeId,
-                                          currentStatus: stf.status,
-                                          targetStatus: stf.status === 'active' ? 'inactive' : 'active',
-                                        })
-                                      }
-                                    >
-                                      {stf.status === 'active' ? 'Deactivate' : 'Activate'}
-                                    </button>
-                                  </div>
-                                )}
+                                      >
+                                        {stf.status === 'active' ? 'Deactivate' : 'Activate'}
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           ))}
@@ -6794,6 +6901,29 @@ export default function App() {
         title={whatsAppModal.title}
         recipientName={whatsAppModal.recipientName}
         phone={whatsAppModal.phone}
+      />
+
+      {/* STAFF DETAILS VERIFICATION MODAL */}
+      <StaffDetailsModal
+        isOpen={!!selectedStaffDetails}
+        onClose={() => setSelectedStaffDetails(null)}
+        staff={selectedStaffDetails}
+        onApprove={(id, area) => handleReviewStaff(id, 'APPROVE', area)}
+        onDecline={(id, reason) => handleReviewStaff(id, 'REJECT', '', reason)}
+        onOpenEdit={(staff) => {
+          setSelectedStaffDetails(null);
+          setEditingStaff(staff);
+        }}
+        getPhotoUrl={getPhotoUrl}
+      />
+
+      {/* EDIT STAFF DETAILS MODAL */}
+      <EditStaffModal
+        isOpen={!!editingStaff}
+        onClose={() => setEditingStaff(null)}
+        staff={editingStaff}
+        onSave={handleUpdateStaffDetails}
+        isSaving={isUpdatingStaff}
       />
     </div>
   );

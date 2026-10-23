@@ -242,6 +242,66 @@ export async function updateStaffStatus(req, res) {
   }
 }
 
+export async function updateStaff(req, res) {
+  try {
+    const { id } = req.params;
+    const { name, phone, assignedArea, employeeId, team, role, status, password } = req.body;
+
+    const staff = await User.findById(id);
+    if (!staff) {
+      return res.status(404).json({ success: false, message: 'Staff user not found.' });
+    }
+
+    if (name && name.trim()) staff.name = name.trim();
+    if (assignedArea !== undefined) staff.assignedArea = assignedArea.trim();
+    if (employeeId !== undefined) staff.employeeId = employeeId.trim();
+    if (team !== undefined) staff.team = team.trim();
+    if (role && ['staff', 'admin', 'developer'].includes(role)) staff.role = role;
+    if (status && ['active', 'inactive', 'suspended', 'pending_approval'].includes(status)) {
+      staff.status = status;
+      if (status === 'active' && !staff.approvedAt) {
+        staff.approvedAt = new Date();
+        staff.approvedBy = req.user._id;
+      }
+    }
+
+    if (phone && phone.trim()) {
+      const cleanPhone = phone.trim().replace(/[^\d+]/g, '');
+      if (cleanPhone !== staff.phone) {
+        const phoneExists = await User.findOne({ phone: cleanPhone, _id: { $ne: staff._id } });
+        if (phoneExists) {
+          return res.status(409).json({ success: false, message: 'This mobile number is already in use by another user.' });
+        }
+        staff.phone = cleanPhone;
+      }
+    }
+
+    if (password && password.trim().length >= 6) {
+      staff.password = password.trim(); // Will be hashed automatically by pre-save hook
+    }
+
+    await staff.save();
+
+    await AuditLog.create({
+      actorId: req.user._id,
+      actorName: req.user.name,
+      actorRole: req.user.role,
+      action: 'UPDATE_STAFF_DETAILS',
+      entityType: 'User',
+      entityId: staff._id.toString(),
+      details: { name: staff.name, phone: staff.phone, assignedArea: staff.assignedArea, status: staff.status },
+    }).catch(() => {});
+
+    return res.json({
+      success: true,
+      message: `Staff details for ${staff.name} updated successfully.`,
+      staff,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
 export async function reviewStaffRegistration(req, res) {
   try {
     const { id } = req.params;

@@ -3,6 +3,7 @@ import {
   getDashboardStats,
   listStaff,
   createStaff,
+  updateStaff,
   updateStaffStatus,
   reviewStaffRegistration,
   reassignCases,
@@ -37,6 +38,7 @@ router.use(authorize('admin', 'super_admin'));
 router.get('/dashboard-stats', getDashboardStats);
 router.get('/staff', listStaff);
 router.post('/staff', createStaff);
+router.put('/staff/:id', updateStaff);
 router.put('/staff/:id/status', updateStaffStatus);
 router.put('/staff/:id/review', reviewStaffRegistration);
 router.post('/staff/reassign', reassignCases);

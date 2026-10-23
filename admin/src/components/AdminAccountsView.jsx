@@ -269,7 +269,7 @@ export default function AdminAccountsView({ apiFetch, currentAdminId, adminUser 
           <table>
             <thead>
               <tr>
-                <th>Admin Officer</th>
+                <th>Admin</th>
                 <th>Login Mobile</th>
                 <th>Access Role</th>
                 <th>Status</th>

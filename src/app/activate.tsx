@@ -419,7 +419,7 @@ export default function AccountActivationScreen() {
                 {staffInfo?.name && (
                   <View style={styles.staffBadge}>
                     <Text style={styles.staffBadgeText}>
-                      Officer: <Text style={{ fontWeight: "700" }}>{staffInfo.name}</Text> ({staffInfo.employeeId || "Staff"})
+                      Staff: <Text style={{ fontWeight: "700" }}>{staffInfo.name}</Text> ({staffInfo.employeeId || "Staff"})
                     </Text>
                   </View>
                 )}
@@ -505,7 +505,7 @@ export default function AccountActivationScreen() {
                 </View>
                 <Text style={styles.cardTitle}>Create Your Password</Text>
                 <Text style={styles.cardSubtitle}>
-                  Set a secure password for your FieldFlow officer account.
+                  Set a secure password for your FieldFlow staff account.
                 </Text>
               </View>
 
@@ -517,7 +517,7 @@ export default function AccountActivationScreen() {
                   </Text>
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={styles.verifiedStaffName}>{staffInfo?.name || "Field Officer"}</Text>
+                  <Text style={styles.verifiedStaffName}>{staffInfo?.name || "Field Staff"}</Text>
                   <Text style={styles.verifiedStaffMeta}>
                     ID: {staffInfo?.employeeId || "STF-Active"} • {staffInfo?.assignedArea || "Field Operations"}
                   </Text>
@@ -619,7 +619,7 @@ export default function AccountActivationScreen() {
               <Text style={styles.successBody}>
                 Welcome to FieldFlow,{" "}
                 <Text style={{ fontWeight: "700", color: "#0F172A" }}>
-                  {successData?.user?.name || "Officer"}
+                  {successData?.user?.name || "Staff"}
                 </Text>
                 . Your password has been configured and your profile is fully verified for field collections.
               </Text>

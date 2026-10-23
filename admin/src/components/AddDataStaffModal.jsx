@@ -332,7 +332,7 @@ export default function AddDataStaffModal({
                 </span>
               </div>
               <div style={{ fontSize: '12.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                Assigned Officer: <strong style={{ color: 'var(--text-main)' }}>{staff.name}</strong> ({staff.employeeId || 'STF-101'}) • Area: {staff.assignedArea || 'Kozhikode Central'}
+                Assigned Staff: <strong style={{ color: 'var(--text-main)' }}>{staff.name}</strong> ({staff.employeeId || 'STF-101'}) • Area: {staff.assignedArea || 'Kozhikode Central'}
               </div>
             </div>
           </div>

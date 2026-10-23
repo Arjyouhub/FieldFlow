@@ -768,7 +768,7 @@ export default function LoginScreen() {
             <View style={{ flex: 1, marginLeft: 12 }}>
               <Text style={styles.registerTopTitle}>Create Staff Account</Text>
               <Text style={styles.registerTopSubtitle}>
-                Field officer registration & credentials
+                Field staff registration & credentials
               </Text>
             </View>
           </View>
@@ -810,7 +810,7 @@ export default function LoginScreen() {
                 <>
                   {/* 1. SELFIE CAPTURE */}
                   <View style={styles.regSectionBox}>
-                    <Text style={styles.regSectionTitle}>1. Officer Verification Selfie *</Text>
+                    <Text style={styles.regSectionTitle}>1. Staff Verification Selfie *</Text>
                     <Text style={styles.regSectionSub}>
                       Take a clear front-facing portrait photo for identity verification.
                     </Text>
@@ -1201,7 +1201,7 @@ export default function LoginScreen() {
               onPress={() => {
                 Alert.alert(
                   "Google Sign-In",
-                  "Google Workspace authentication is enabled for registered officers. Use your officer credentials to sign in directly.",
+                  "Google Workspace authentication is enabled for registered staff. Use your staff credentials to sign in directly.",
                   [{ text: "OK" }]
                 );
               }}
@@ -1229,7 +1229,7 @@ export default function LoginScreen() {
                 <View style={{ marginLeft: 12, flex: 1 }}>
                   <Text style={styles.modernCreateAccountTitle}>Create Account</Text>
                   <Text style={styles.modernCreateAccountSub}>
-                    New officer registration & verification
+                    New staff registration & verification
                   </Text>
                 </View>
               </View>

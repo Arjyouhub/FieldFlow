@@ -171,7 +171,7 @@ export default function WhatsAppShareModal({
                   marginTop: '2px',
                 }}
               >
-                {recipientName ? `Officer: ${recipientName}` : 'Daily Visit Update'}
+                {recipientName ? `Staff: ${recipientName}` : 'Daily Visit Update'}
                 {targetPhone && ` • +${targetPhone}`}
               </p>
             </div>

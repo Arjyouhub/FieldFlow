@@ -1333,7 +1333,7 @@ export default function DashboardScreen() {
           {
             icon: "help-circle-outline" as const,
             title: "Help & Support",
-            subtitle: "Field officer assistance",
+            subtitle: "Field staff assistance",
             onPress: () => Linking.openURL("mailto:support@fieldflow.local"),
           },
           {

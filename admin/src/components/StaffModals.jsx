@@ -446,7 +446,7 @@ export function EditStaffModal({ isOpen, onClose, staff, onSave, isSaving }) {
             {/* Field: Full Name */}
             <div>
               <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', marginBottom: '5px' }}>
-                Full Officer Name *
+                Full Staff Name *
               </label>
               <input
                 type="text"

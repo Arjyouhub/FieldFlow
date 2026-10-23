@@ -246,7 +246,7 @@ export default function SuspiciousVisitsView({
                       {ev.customerId?.name || 'Customer'} (A/C: {ev.customerId?.loanAccountNo})
                     </h4>
                     <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                      Officer: <strong>{ev.staffId?.name}</strong> (+91 {ev.staffId?.phone}) • Territory: {ev.staffId?.assignedArea || 'Field'}
+                      Staff: <strong>{ev.staffId?.name}</strong> (+91 {ev.staffId?.phone}) • Territory: {ev.staffId?.assignedArea || 'Field'}
                     </p>
                   </div>
 
@@ -305,7 +305,7 @@ export default function SuspiciousVisitsView({
                   <strong>Trigger Reason:</strong> {ev.reason || 'Staff submitted visit beyond 100 metres from nearest verified customer location.'}
                   {ev.visitId?.notes && (
                     <div style={{ marginTop: '4px', fontStyle: 'italic', color: '#7f1d1d' }}>
-                      Staff Officer Notes: "{ev.visitId.notes}"
+                      Staff Notes: "{ev.visitId.notes}"
                     </div>
                   )}
                 </div>
@@ -338,7 +338,7 @@ export default function SuspiciousVisitsView({
                     onClick={() => {
                       setActiveReviewEvent(ev);
                       setReviewDecision('CONFIRM_MISMATCH');
-                      setReviewNotes('Location mismatch confirmed. Violation issued to staff officer.');
+                      setReviewNotes('Location mismatch confirmed. Violation issued to staff.');
                     }}
                     className="btn btn-danger btn-sm"
                   >

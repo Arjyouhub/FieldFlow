@@ -200,7 +200,7 @@ export default function PtpView({ apiFetch, portfolios = [], staffList = [] }) {
 
                 <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span style={{ fontWeight: '600' }}>Officer:</span>
+                    <span style={{ fontWeight: '600' }}>Staff:</span>
                     <span>{c.assignedStaff?.name || 'Unassigned'}</span>
                   </div>
                   {c.customerId?.address && (

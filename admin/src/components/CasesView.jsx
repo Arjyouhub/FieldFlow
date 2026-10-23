@@ -760,7 +760,7 @@ export default function CasesView({ apiFetch, staffList = [], portfolios = [], o
             <form onSubmit={handleSingleReassign} style={{ padding: '20px' }}>
               <div style={{ marginBottom: '14px' }}>
                 <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '600', marginBottom: '6px' }}>
-                  Target Field Staff Officer <span style={{ color: 'var(--danger)' }}>*</span>
+                  Target Field Staff <span style={{ color: 'var(--danger)' }}>*</span>
                 </label>
                 <select
                   className="input-field"

@@ -1551,7 +1551,7 @@ export default function App() {
         method: 'PUT',
         body: JSON.stringify({ status: newStatus }),
       });
-      setSuccessMsg(`Staff officer status successfully updated to ${newStatus}.`);
+      setSuccessMsg(`Staff status successfully updated to ${newStatus}.`);
       loadData();
       apiFetch('/api/admin/staff').then((d) => setStaffList(d.staff || [])).catch(() => {});
       setStatusConfirmStaff(null);
@@ -2512,7 +2512,7 @@ export default function App() {
 
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', fontSize: '12px', borderTop: '1px dashed var(--border)', paddingTop: '8px' }}>
                           <div style={{ color: 'var(--text-secondary)' }}>
-                            Officer: <strong>{c.assignedStaff?.name || 'Unassigned'}</strong>
+                            Staff: <strong>{c.assignedStaff?.name || 'Unassigned'}</strong>
                           </div>
                           <div>
                             {c.documents?.length > 0 ? (
@@ -2540,7 +2540,7 @@ export default function App() {
                             style={{ flex: 1, justifyContent: 'center' }}
                             onClick={() => setReassignModal(c)}
                           >
-                            Reassign Officer
+                            Reassign Staff
                           </button>
                         </div>
                       </div>
@@ -2914,7 +2914,7 @@ export default function App() {
                           )}
                         </h2>
                         <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                          Verify officer verification selfies, GPS sign-up coordinates, assign operating territories, and approve mobile app credentials.
+                          Verify staff verification selfies, GPS sign-up coordinates, assign operating territories, and approve mobile app credentials.
                         </p>
                       </div>
                     </div>
@@ -2933,7 +2933,7 @@ export default function App() {
                         className="btn btn-primary btn-sm"
                         style={{ gap: '6px' }}
                       >
-                        <Plus size={14} /> Add Officer Manually
+                        <Plus size={14} /> Add Staff Manually
                       </button>
                     </div>
                   </div>
@@ -3109,7 +3109,7 @@ export default function App() {
                       { key: 'pending', label: 'Awaiting Approval', count: pendingStaff.length, color: 'badge-warning' },
                       { key: 'approved', label: 'Approved & Active', count: approvedStaff.length, color: 'badge-success' },
                       { key: 'rejected', label: 'Declined / Inactive', count: inactiveStaff.length, color: 'badge-danger' },
-                      { key: 'all', label: 'All Officers', count: staffList.length, color: 'badge-info' },
+                      { key: 'all', label: 'All Staff', count: staffList.length, color: 'badge-info' },
                     ].map((pill) => (
                       <button
                         key={pill.key}
@@ -3244,7 +3244,7 @@ export default function App() {
                           setApprovalsSearch('');
                         }}
                       >
-                        View All Officers
+                        View All Staff
                       </button>
                     )}
                   </div>
@@ -3465,7 +3465,7 @@ export default function App() {
                                 className="btn btn-sm btn-secondary"
                                 style={{ flex: 1, justifyContent: 'center', fontSize: '12px' }}
                                 onClick={() => setSelectedStaffDetails(stf)}
-                                title="Inspect verification selfie, location and officer details"
+                                title="Inspect verification selfie, location and staff details"
                               >
                                 <Eye size={13} /> Check Details
                               </button>
@@ -3503,7 +3503,7 @@ export default function App() {
                                   style={{ flex: 1, justifyContent: 'center', fontSize: '12px', color: 'var(--danger-text)' }}
                                   onClick={() => handleUpdateStaffStatus(stf._id, 'inactive')}
                                 >
-                                  <UserX size={13} /> Deactivate Officer
+                                  <UserX size={13} /> Deactivate Staff
                                 </button>
                               </div>
                             ) : (
@@ -3529,7 +3529,7 @@ export default function App() {
                       <table>
                         <thead>
                           <tr>
-                            <th>Officer</th>
+                            <th>Staff</th>
                             <th>Contact</th>
                             <th>Territory</th>
                             <th>Registration GPS</th>
@@ -3623,7 +3623,7 @@ export default function App() {
                                     <button
                                       className="btn btn-sm btn-secondary"
                                       onClick={() => setEditingStaff(stf)}
-                                      title="Edit Officer Details"
+                                      title="Edit Staff Details"
                                       style={{ gap: '4px' }}
                                     >
                                       <Edit3 size={12} /> Edit
@@ -3633,7 +3633,7 @@ export default function App() {
                                         <button
                                           className="btn btn-sm btn-primary"
                                           onClick={() => handleReviewStaff(stf._id, 'APPROVE', currentArea)}
-                                          title="Approve staff officer"
+                                          title="Approve staff"
                                         >
                                           <Check size={12} /> Approve
                                         </button>
@@ -3699,7 +3699,7 @@ export default function App() {
                             <span className="badge badge-warning">{pendingStaff.length} Awaiting Approval</span>
                           </h3>
                           <p className="card-subtitle">
-                            Verify officer selfie photo, territory, and GPS tag before authorizing mobile app access
+                            Verify staff selfie photo, territory, and GPS tag before authorizing mobile app access
                           </p>
                         </div>
                       </div>
@@ -3884,12 +3884,12 @@ export default function App() {
                   <div className="card-header-row">
                     <div>
                       <h3 className="card-title">Field Staff Directory ({staffList.length})</h3>
-                      <p className="card-subtitle">Manage field collection officers, territories, and status</p>
+                      <p className="card-subtitle">Manage field collection staff, territories, and status</p>
                     </div>
 
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                       <button className="btn btn-primary" onClick={() => setShowCreateStaffModal(true)}>
-                        <Plus size={16} /> Register Staff Officer
+                        <Plus size={16} /> Register Staff
                       </button>
                     </div>
                   </div>
@@ -3899,7 +3899,7 @@ export default function App() {
                     <div className={staffViewMode === 'auto' ? 'responsive-auto-cards' : ''} style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       {staffList.length === 0 ? (
                         <div style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
-                          No staff officers registered.
+                          No staff registered.
                         </div>
                       ) : (
                         staffList.map((stf) => (
@@ -3957,7 +3957,7 @@ export default function App() {
                                   className="btn btn-secondary btn-sm"
                                   style={{ flex: 1, justifyContent: 'center' }}
                                   onClick={() => setEditingStaff(stf)}
-                                  title="Edit officer"
+                                  title="Edit staff"
                                 >
                                   <Edit3 size={13} /> Edit
                                 </button>
@@ -3977,7 +3977,7 @@ export default function App() {
                                       className="btn btn-primary btn-sm"
                                       style={{ flex: 1, justifyContent: 'center' }}
                                       onClick={() => setAddDataStaffTarget(stf)}
-                                      title="Add cases data for this field officer"
+                                      title="Add cases data for this field staff"
                                     >
                                       <Plus size={13} /> Add Data
                                     </button>
@@ -4012,7 +4012,7 @@ export default function App() {
                       <table>
                         <thead>
                           <tr>
-                            <th>Staff Officer</th>
+                            <th>Staff</th>
                             <th>Employee ID</th>
                             <th>Phone</th>
                             <th>Territory / Area</th>
@@ -4083,7 +4083,7 @@ export default function App() {
                                   <button
                                     className="btn btn-sm btn-secondary"
                                     onClick={() => setSelectedStaffDetails(stf)}
-                                    title="Check Officer Details & Verification"
+                                    title="Check Staff Details & Verification"
                                     style={{ gap: '4px' }}
                                   >
                                     <Eye size={12} /> Check Details
@@ -4091,7 +4091,7 @@ export default function App() {
                                   <button
                                     className="btn btn-sm btn-secondary"
                                     onClick={() => setEditingStaff(stf)}
-                                    title="Edit Officer Profile"
+                                    title="Edit Staff Profile"
                                     style={{ gap: '4px' }}
                                   >
                                     <Edit3 size={12} /> Edit
@@ -4101,7 +4101,7 @@ export default function App() {
                                       <button
                                         className="btn btn-sm btn-primary"
                                         onClick={() => handleReviewStaff(stf._id, 'APPROVE', stf.assignedArea)}
-                                        title="Approve staff officer"
+                                        title="Approve staff"
                                       >
                                         <Check size={12} /> Approve
                                       </button>
@@ -4124,7 +4124,7 @@ export default function App() {
                                       <button
                                         className="btn btn-sm btn-primary"
                                         onClick={() => setAddDataStaffTarget(stf)}
-                                        title="Add cases data (Upload file or single case) for this field officer"
+                                        title="Add cases data (Upload file or single case) for this field staff"
                                       >
                                         <Plus size={12} /> Add Data
                                       </button>
@@ -4207,7 +4207,7 @@ export default function App() {
                         </div>
 
                         <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                          Field Officer: <strong>{col.staffId?.name || 'Staff Agent'}</strong>
+                          Field Staff: <strong>{col.staffId?.name || 'Staff Agent'}</strong>
                         </div>
 
                         {col.paymentStatus === 'PENDING_VERIFICATION' ? (
@@ -4505,7 +4505,7 @@ export default function App() {
 
                   {/* Field Staff Filter */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '200px' }}>
-                    <label style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Officer:</label>
+                    <label style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Staff:</label>
                     <select
                       className="input-field"
                       style={{ padding: '6px 10px', fontSize: '12px' }}
@@ -5446,7 +5446,7 @@ export default function App() {
         <div className="modal-overlay">
           <div className="modal-card">
             <div className="modal-header">
-              <h3 className="card-title">Register Field Staff Officer</h3>
+              <h3 className="card-title">Register Field Staff</h3>
               <button onClick={() => setShowCreateStaffModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
             </div>
             <form onSubmit={handleCreateStaff}>
@@ -6197,7 +6197,7 @@ export default function App() {
                 <div>
                   <h3 className="card-title">Record Data for Field Staff</h3>
                   <p className="card-subtitle" style={{ fontSize: '12px' }}>
-                    Log an on-field customer visit or payment collection for any officer
+                    Log an on-field customer visit or payment collection for any staff
                   </p>
                 </div>
               </div>
@@ -6396,7 +6396,7 @@ export default function App() {
 
                   <div>
                     <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>
-                      Officer Notes / Remarks
+                      Staff Notes / Remarks
                     </label>
                     <input
                       type="text"
@@ -6802,7 +6802,7 @@ export default function App() {
                     fontSize: '16px',
                   }}
                 >
-                  {statusConfirmStaff.targetStatus === 'inactive' ? 'Deactivate Staff Officer' : 'Activate Staff Officer'}
+                  {statusConfirmStaff.targetStatus === 'inactive' ? 'Deactivate Staff' : 'Activate Staff'}
                 </h3>
               </div>
               <button
@@ -6833,7 +6833,7 @@ export default function App() {
                     lineHeight: '1.45',
                   }}
                 >
-                  ⚠️ <strong>Notice:</strong> Once deactivated, this field officer will be immediately blocked from logging in or conducting customer field visits on the FieldFlow mobile application.
+                  ⚠️ <strong>Notice:</strong> Once deactivated, this field staff will be immediately blocked from logging in or conducting customer field visits on the FieldFlow mobile application.
                 </div>
               ) : (
                 <div
@@ -6848,7 +6848,7 @@ export default function App() {
                     lineHeight: '1.45',
                   }}
                 >
-                  ✓ <strong>Notice:</strong> Activating this officer will grant them full field access to log in, view assigned portfolios and recovery cases, and record field visits.
+                  ✓ <strong>Notice:</strong> Activating this staff will grant them full field access to log in, view assigned portfolios and recovery cases, and record field visits.
                 </div>
               )}
 

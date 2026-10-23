@@ -85,7 +85,7 @@ export default function ExploreActivityScreen() {
         {/* SUMMARY HERO */}
         <View style={styles.heroCard}>
           <Text style={styles.heroSub}>FIELD EFFICIENCY REPORT</Text>
-          <Text style={styles.heroTitle}>{user?.name || "Field Officer"}</Text>
+          <Text style={styles.heroTitle}>{user?.name || "Field Staff"}</Text>
           <Text style={styles.heroArea}>Territory: {user?.assignedArea || "Kozhikode Central"}</Text>
 
           <View style={styles.heroStatsRow}>

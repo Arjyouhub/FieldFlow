@@ -634,7 +634,7 @@ export async function generateCollectionLedgerImage({ period, totalAmount = 0, t
       const isAlt = i % 2 === 1;
 
       const cust = c.caseId?.customerId?.name || c.customerId?.name || 'Customer';
-      const officer = c.collectedBy?.name || 'Officer';
+      const officer = c.collectedBy?.name || 'Staff';
       const mode = (c.paymentMode || 'Cash').toUpperCase();
       const status = (c.status || 'Verified').toUpperCase();
 
@@ -680,7 +680,7 @@ export async function generateVisitSummaryImage({ period, totalVisits = 0, rows 
   const cols = [
     { name: '#', w: 60, align: 'center' },
     { name: 'CUSTOMER NAME', w: 360, align: 'left' },
-    { name: 'FIELD OFFICER', w: 260, align: 'left' },
+    { name: 'FIELD STAFF', w: 260, align: 'left' },
     { name: 'OUTCOME', w: 236, align: 'center' },
     { name: 'TIME', w: 120, align: 'center' },
   ];
@@ -735,7 +735,7 @@ export async function generateVisitSummaryImage({ period, totalVisits = 0, rows 
       const isAlt = i % 2 === 1;
 
       const cust = v.caseId?.customerId?.name || v.customerName || 'Customer';
-      const officer = v.staffId?.name || v.staffName || 'Officer';
+      const officer = v.staffId?.name || v.staffName || 'Staff';
       const outcome = (v.outcome || 'Visit Completed').toUpperCase();
       const timeStr = v.createdAt ? new Date(v.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Field Log';
 

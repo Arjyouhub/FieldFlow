@@ -1742,9 +1742,6 @@ export default function App() {
                 <span style={{ fontSize: '10.5px', fontWeight: '700', padding: '2px 7px', background: '#ecfeff', color: '#0891b2', borderRadius: '12px', border: '1px solid #cffafe', textTransform: 'uppercase' }}>Admin</span>
               </div>
               <p style={{ fontSize: '12.5px', color: '#64748b', margin: '2px 0 0 0' }}>Operations & Recovery Portal</p>
-              <div style={{ fontSize: '9.5px', fontWeight: '700', color: '#94a3b8', letterSpacing: '0.6px', textTransform: 'uppercase', marginTop: '3px' }}>
-                Powered by <strong style={{ color: '#00A86B' }}>GETLUX</strong>
-              </div>
             </div>
           </div>
 
@@ -1871,9 +1868,6 @@ export default function App() {
             <div>
               <div className="brand-title">FieldFlow</div>
               <div className="brand-sub">Operations</div>
-              <div style={{ fontSize: '9px', fontWeight: '700', color: 'var(--text-muted)', letterSpacing: '0.6px', textTransform: 'uppercase', marginTop: '1px' }}>
-                Powered by <strong style={{ color: 'var(--primary)', letterSpacing: '0.8px' }}>GETLUX</strong>
-              </div>
             </div>
           </div>
           <button

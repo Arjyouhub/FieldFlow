@@ -114,8 +114,8 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const theme = Colors.light;
 
-  // View state: 'splash' | 'login' | 'otp'
-  const [currentView, setCurrentView] = useState<"login" | "splash" | "otp">("login");
+  // View state: 'splash' | 'login' | 'otp' | 'register'
+  const [currentView, setCurrentView] = useState<"login" | "splash" | "otp" | "register">("login");
   const [rememberMe, setRememberMe] = useState(true);
 
   // Login form state
@@ -137,11 +137,12 @@ export default function LoginScreen() {
   const otpInputRefs = useRef<Array<TextInput | null>>([]);
 
   // Field Staff Registration State
-  const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [regName, setRegName] = useState("");
   const [regPhone, setRegPhone] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regConfirmPassword, setRegConfirmPassword] = useState("");
+  const [showRegPassword, setShowRegPassword] = useState(false);
+  const [showRegConfirmPassword, setShowRegConfirmPassword] = useState(false);
   const [regArea, setRegArea] = useState("Kozhikode Central");
   const [regEmployeeId, setRegEmployeeId] = useState("");
   const [regSelfieUri, setRegSelfieUri] = useState<string | null>(null);
@@ -746,6 +747,248 @@ export default function LoginScreen() {
   }
 
   // =============================================================
+  // SCREEN: FULL-PAGE CREATE STAFF ACCOUNT (Self-Registration)
+  // =============================================================
+  if (currentView === "register") {
+    return (
+      <View style={styles.registerFullScreenContainer}>
+        <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
+          {/* Top Modern Header with Back Arrow */}
+          <View style={styles.registerTopHeader}>
+            <Pressable
+              onPress={() => {
+                setCurrentView("login");
+                setRegError("");
+              }}
+              style={styles.registerBackBtn}
+              hitSlop={12}
+            >
+              <Ionicons name="arrow-back" size={22} color="#0F172A" />
+            </Pressable>
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={styles.registerTopTitle}>Create Staff Account</Text>
+              <Text style={styles.registerTopSubtitle}>
+                Field officer registration & credentials
+              </Text>
+            </View>
+          </View>
+
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+          >
+            <ScrollView
+              contentContainerStyle={styles.registerScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {regError ? (
+                <View style={styles.errorBox}>
+                  <Ionicons name="alert-circle" size={18} color="#DC2626" style={{ marginRight: 6 }} />
+                  <Text style={styles.errorBoxText}>{regError}</Text>
+                </View>
+              ) : null}
+
+              {regSuccessMsg ? (
+                <View style={styles.regSuccessCard}>
+                  <View style={styles.regSuccessIconCircle}>
+                    <Ionicons name="shield-checkmark" size={36} color="#059669" />
+                  </View>
+                  <Text style={styles.regSuccessTitle}>Application Under Admin Review</Text>
+                  <Text style={styles.regSuccessText}>{regSuccessMsg}</Text>
+                  <Pressable
+                    style={[styles.primaryButton, { alignSelf: "center", marginTop: 16, paddingHorizontal: 28 }]}
+                    onPress={() => {
+                      setCurrentView("login");
+                      setRegSuccessMsg("");
+                    }}
+                  >
+                    <Text style={styles.primaryButtonText}>Proceed to Sign In</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <>
+                  {/* 1. SELFIE CAPTURE */}
+                  <View style={styles.regSectionBox}>
+                    <Text style={styles.regSectionTitle}>1. Officer Verification Selfie *</Text>
+                    <Text style={styles.regSectionSub}>
+                      Take a clear front-facing portrait photo for identity verification.
+                    </Text>
+
+                    {regSelfieUri ? (
+                      <View style={styles.selfiePreviewContainer}>
+                        <Image source={{ uri: regSelfieUri }} style={styles.selfieImage} />
+                        <View style={styles.selfieBadge}>
+                          <Text style={styles.selfieBadgeText}>✓ Selfie Captured</Text>
+                        </View>
+                        <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
+                          <Pressable style={styles.retakeBtn} onPress={handleCaptureSelfie}>
+                            <Text style={styles.retakeBtnText}>📷 Retake Selfie</Text>
+                          </Pressable>
+                          <Pressable style={styles.galleryBtn} onPress={handlePickFromGallery}>
+                            <Text style={styles.galleryBtnText}>Choose from Gallery</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    ) : (
+                      <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
+                        <Pressable style={[styles.captureSelfieBtn, { flex: 1 }]} onPress={handleCaptureSelfie}>
+                          <Ionicons name="camera-outline" size={22} color={BRAND_DARK_GREEN} />
+                          <Text style={styles.captureSelfieBtnTitle}>Take Front Selfie</Text>
+                          <Text style={styles.captureSelfieBtnSub}>Opens Camera</Text>
+                        </Pressable>
+                        <Pressable style={styles.gallerySmallBtn} onPress={handlePickFromGallery}>
+                          <Ionicons name="images-outline" size={20} color={BRAND_DARK_GREEN} />
+                          <Text style={styles.galleryBtnText}>Gallery</Text>
+                        </Pressable>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* 2. GPS LOCATION CAPTURE */}
+                  <View style={styles.regSectionBox}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                      <Text style={styles.regSectionTitle}>2. Location & Territory *</Text>
+                      <Pressable onPress={handleCaptureLocation} hitSlop={6}>
+                        <Text style={{ fontSize: fontScale(12.5), fontWeight: "700", color: BRAND_DARK_GREEN }}>
+                          {capturingLocation ? "Locating..." : "↻ Refresh GPS"}
+                        </Text>
+                      </Pressable>
+                    </View>
+
+                    {regLocation ? (
+                      <View style={styles.locationPillContainer}>
+                        <Text style={{ fontSize: 18 }}>📍</Text>
+                        <View style={{ flex: 1, marginLeft: 8 }}>
+                          <Text style={styles.locationPillText}>
+                            GPS: {regLocation.lat}, {regLocation.lng}
+                          </Text>
+                          <Text style={styles.locationAddressText}>
+                            {regLocation.address || "Kozhikode, Kerala"}
+                          </Text>
+                        </View>
+                      </View>
+                    ) : (
+                      <Pressable style={styles.captureLocationBtn} onPress={handleCaptureLocation}>
+                        <Text style={{ color: BRAND_DARK_GREEN, fontWeight: "700", fontSize: fontScale(13) }}>
+                          {capturingLocation ? "Capturing coordinates..." : "📍 Tag My Current Location"}
+                        </Text>
+                      </Pressable>
+                    )}
+
+                    <Text style={[styles.fieldLabel, { marginTop: 14 }]}>Assigned Operational Area / Territory *</Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="e.g. Kozhikode Central, Vadakara, Koyilandy"
+                      placeholderTextColor={theme.textMuted}
+                      value={regArea}
+                      onChangeText={setRegArea}
+                    />
+                  </View>
+
+                  {/* 3. AGENT DETAILS */}
+                  <View style={styles.regSectionBox}>
+                    <Text style={styles.regSectionTitle}>3. Personal & Login Details *</Text>
+
+                    <Text style={styles.fieldLabel}>Full Legal Name *</Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="e.g. Akhil V"
+                      placeholderTextColor={theme.textMuted}
+                      value={regName}
+                      onChangeText={setRegName}
+                    />
+
+                    <Text style={styles.fieldLabel}>Mobile Number (Username) *</Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="10-digit mobile number"
+                      placeholderTextColor={theme.textMuted}
+                      value={regPhone}
+                      onChangeText={setRegPhone}
+                      keyboardType="phone-pad"
+                      maxLength={10}
+                    />
+
+                    <Text style={styles.fieldLabel}>Employee / Agent ID (Optional)</Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="e.g. STF-201"
+                      placeholderTextColor={theme.textMuted}
+                      value={regEmployeeId}
+                      onChangeText={setRegEmployeeId}
+                    />
+
+                    <Text style={styles.fieldLabel}>Password *</Text>
+                    <View style={styles.passwordInputWrapper}>
+                      <TextInput
+                        style={styles.passwordInputFlex}
+                        placeholder="Minimum 6 characters"
+                        placeholderTextColor={theme.textMuted}
+                        value={regPassword}
+                        onChangeText={setRegPassword}
+                        secureTextEntry={!showRegPassword}
+                      />
+                      <Pressable
+                        onPress={() => setShowRegPassword(!showRegPassword)}
+                        style={styles.eyeToggleBtn}
+                        hitSlop={8}
+                      >
+                        <Ionicons
+                          name={showRegPassword ? "eye-outline" : "eye-off-outline"}
+                          size={20}
+                          color="#64748B"
+                        />
+                      </Pressable>
+                    </View>
+
+                    <Text style={styles.fieldLabel}>Confirm Password *</Text>
+                    <View style={styles.passwordInputWrapper}>
+                      <TextInput
+                        style={styles.passwordInputFlex}
+                        placeholder="Re-enter password"
+                        placeholderTextColor={theme.textMuted}
+                        value={regConfirmPassword}
+                        onChangeText={setRegConfirmPassword}
+                        secureTextEntry={!showRegConfirmPassword}
+                      />
+                      <Pressable
+                        onPress={() => setShowRegConfirmPassword(!showRegConfirmPassword)}
+                        style={styles.eyeToggleBtn}
+                        hitSlop={8}
+                      >
+                        <Ionicons
+                          name={showRegConfirmPassword ? "eye-outline" : "eye-off-outline"}
+                          size={20}
+                          color="#64748B"
+                        />
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  {/* SUBMIT BUTTON */}
+                  <View style={{ marginTop: 14, marginBottom: 20 }}>
+                    <Pressable
+                      style={[styles.primaryButton, submittingReg && styles.buttonDisabled]}
+                      onPress={handleSubmitRegistration}
+                      disabled={submittingReg}
+                    >
+                      {submittingReg ? (
+                        <ActivityIndicator color="#FFFFFF" size="small" />
+                      ) : (
+                        <Text style={styles.primaryButtonText}>Submit Registration for Approval</Text>
+                      )}
+                    </Pressable>
+                  </View>
+                </>
+              )}
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
   // =============================================================
   // SCREEN 2: LOGIN SCREEN VIEW (Matches Reference Design)
   // =============================================================
@@ -967,37 +1210,32 @@ export default function LoginScreen() {
               <Text style={styles.exactGoogleBtnText}>Continue with Google</Text>
             </Pressable>
 
-            {/* "Create Account" Button */}
+            {/* "Create Account" Modern Button */}
             <Pressable
               style={({ pressed }) => [
-                styles.exactActivateBtn,
-                pressed && { backgroundColor: "#DCFCE7", transform: [{ scale: 0.99 }] },
+                styles.modernCreateAccountCard,
+                pressed && styles.modernCreateAccountCardPressed,
               ]}
               onPress={() => {
-                setShowRegisterModal(true);
+                setCurrentView("register");
                 setRegError("");
                 setRegSuccessMsg("");
               }}
             >
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <Ionicons name="person-add" size={20} color={BRAND_DARK_GREEN} />
-                <Text style={styles.exactActivateBtnText}>Create Account</Text>
+              <View style={styles.modernCreateAccountLeft}>
+                <View style={styles.modernCreateAccountIconBox}>
+                  <Ionicons name="person-add" size={20} color={BRAND_DARK_GREEN} />
+                </View>
+                <View style={{ marginLeft: 12, flex: 1 }}>
+                  <Text style={styles.modernCreateAccountTitle}>Create Account</Text>
+                  <Text style={styles.modernCreateAccountSub}>
+                    New officer registration & verification
+                  </Text>
+                </View>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={BRAND_DARK_GREEN} />
-            </Pressable>
-
-            {/* Helper Text */}
-            <Pressable
-              onPress={() => {
-                setShowRegisterModal(true);
-                setRegError("");
-                setRegSuccessMsg("");
-              }}
-              hitSlop={6}
-            >
-              <Text style={styles.exactActivateHelperText}>
-                New to FieldFlow? Create your staff account here
-              </Text>
+              <View style={styles.modernCreateAccountArrowBox}>
+                <Ionicons name="arrow-forward" size={16} color={BRAND_DARK_GREEN} />
+              </View>
             </Pressable>
 
             {/* Footer Contact Admin */}
@@ -1034,209 +1272,6 @@ export default function LoginScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ============================================================= */}
-      {/* STAFF SELF-REGISTRATION MODAL */}
-      {/* ============================================================= */}
-      <Modal visible={showRegisterModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
-            style={styles.modalKeyboardWrapper}
-          >
-            <View style={[styles.modalCard, { maxHeight: "90%" }]}>
-              <View style={styles.modalHeaderRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.modalTitle}>Field Staff Registration</Text>
-                  <Text style={styles.modalSubtitle}>
-                    Capture verification selfie, territory & login credentials
-                  </Text>
-                </View>
-                <Pressable
-                  onPress={() => setShowRegisterModal(false)}
-                  style={styles.modalCloseBtn}
-                >
-                  <Text style={styles.modalCloseBtnText}>✕</Text>
-                </Pressable>
-              </View>
-
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
-                {regError ? (
-                  <View style={styles.errorBox}>
-                    <Ionicons name="alert-circle" size={18} color="#DC2626" style={{ marginRight: 6 }} />
-                    <Text style={styles.errorBoxText}>{regError}</Text>
-                  </View>
-                ) : null}
-
-                {regSuccessMsg ? (
-                  <View style={styles.regSuccessCard}>
-                    <Text style={styles.regSuccessIcon}>⏳</Text>
-                    <Text style={styles.regSuccessTitle}>Application Under Admin Review</Text>
-                    <Text style={styles.regSuccessText}>{regSuccessMsg}</Text>
-                    <Pressable
-                      style={[styles.primaryButton, { alignSelf: "center", marginTop: 12, paddingHorizontal: 24 }]}
-                      onPress={() => {
-                        setShowRegisterModal(false);
-                        setRegSuccessMsg("");
-                      }}
-                    >
-                      <Text style={styles.primaryButtonText}>Proceed to Sign In</Text>
-                    </Pressable>
-                  </View>
-                ) : (
-                  <>
-                    {/* 1. SELFIE CAPTURE */}
-                    <View style={styles.regSectionBox}>
-                      <Text style={styles.regSectionTitle}>1. Officer Verification Selfie *</Text>
-                      <Text style={styles.regSectionSub}>
-                        Take a clear front-facing portrait photo for identification.
-                      </Text>
-
-                      {regSelfieUri ? (
-                        <View style={styles.selfiePreviewContainer}>
-                          <Image source={{ uri: regSelfieUri }} style={styles.selfieImage} />
-                          <View style={styles.selfieBadge}>
-                            <Text style={styles.selfieBadgeText}>✓ Selfie Captured</Text>
-                          </View>
-                          <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
-                            <Pressable style={styles.retakeBtn} onPress={handleCaptureSelfie}>
-                              <Text style={styles.retakeBtnText}>📷 Retake Selfie</Text>
-                            </Pressable>
-                            <Pressable style={styles.galleryBtn} onPress={handlePickFromGallery}>
-                              <Text style={styles.galleryBtnText}>Gallery</Text>
-                            </Pressable>
-                          </View>
-                        </View>
-                      ) : (
-                        <View style={{ flexDirection: "row", gap: 10, marginTop: 6 }}>
-                          <Pressable style={[styles.captureSelfieBtn, { flex: 1 }]} onPress={handleCaptureSelfie}>
-                            <Ionicons name="camera-outline" size={20} color={BRAND_DARK_GREEN} />
-                            <Text style={styles.captureSelfieBtnTitle}>Take Front Selfie</Text>
-                            <Text style={styles.captureSelfieBtnSub}>Opens Camera</Text>
-                          </Pressable>
-                          <Pressable style={styles.gallerySmallBtn} onPress={handlePickFromGallery}>
-                            <Ionicons name="images-outline" size={18} color={BRAND_DARK_GREEN} />
-                            <Text style={styles.galleryBtnText}>Gallery</Text>
-                          </Pressable>
-                        </View>
-                      )}
-                    </View>
-
-                    {/* 2. GPS LOCATION CAPTURE */}
-                    <View style={styles.regSectionBox}>
-                      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                        <Text style={styles.regSectionTitle}>2. Location & Territory *</Text>
-                        <Pressable onPress={handleCaptureLocation} hitSlop={6}>
-                          <Text style={{ fontSize: fontScale(12), fontWeight: "600", color: BRAND_DARK_GREEN }}>
-                            {capturingLocation ? "Locating..." : "↻ Refresh GPS"}
-                          </Text>
-                        </Pressable>
-                      </View>
-
-                      {regLocation ? (
-                        <View style={styles.locationPillContainer}>
-                          <Text style={{ fontSize: 16 }}>📍</Text>
-                          <View style={{ flex: 1, marginLeft: 8 }}>
-                            <Text style={styles.locationPillText}>
-                              GPS: {regLocation.lat}, {regLocation.lng}
-                            </Text>
-                            <Text style={styles.locationAddressText}>
-                              {regLocation.address || "Kozhikode, Kerala"}
-                            </Text>
-                          </View>
-                        </View>
-                      ) : (
-                        <Pressable style={styles.captureLocationBtn} onPress={handleCaptureLocation}>
-                          <Text style={{ color: BRAND_DARK_GREEN, fontWeight: "600", fontSize: fontScale(13) }}>
-                            {capturingLocation ? "Capturing coordinates..." : "📍 Tag My Current Location"}
-                          </Text>
-                        </Pressable>
-                      )}
-
-                      <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Assigned Operational Area / Territory *</Text>
-                      <TextInput
-                        style={styles.modalInput}
-                        placeholder="e.g. Kozhikode Central, Vadakara, Koyilandy"
-                        placeholderTextColor={theme.textMuted}
-                        value={regArea}
-                        onChangeText={setRegArea}
-                      />
-                    </View>
-
-                    {/* 3. AGENT DETAILS */}
-                    <View style={styles.regSectionBox}>
-                      <Text style={styles.regSectionTitle}>3. Personal & Login Details *</Text>
-
-                      <Text style={styles.fieldLabel}>Full Legal Name *</Text>
-                      <TextInput
-                        style={styles.modalInput}
-                        placeholder="e.g. Akhil V"
-                        placeholderTextColor={theme.textMuted}
-                        value={regName}
-                        onChangeText={setRegName}
-                      />
-
-                      <Text style={styles.fieldLabel}>Mobile Number *</Text>
-                      <TextInput
-                        style={styles.modalInput}
-                        placeholder="10-digit mobile number"
-                        placeholderTextColor={theme.textMuted}
-                        value={regPhone}
-                        onChangeText={setRegPhone}
-                        keyboardType="phone-pad"
-                        maxLength={10}
-                      />
-
-                      <Text style={styles.fieldLabel}>Employee / Agent ID (Optional)</Text>
-                      <TextInput
-                        style={styles.modalInput}
-                        placeholder="e.g. STF-201"
-                        placeholderTextColor={theme.textMuted}
-                        value={regEmployeeId}
-                        onChangeText={setRegEmployeeId}
-                      />
-
-                      <Text style={styles.fieldLabel}>Password *</Text>
-                      <TextInput
-                        style={styles.modalInput}
-                        placeholder="Minimum 6 characters"
-                        placeholderTextColor={theme.textMuted}
-                        value={regPassword}
-                        onChangeText={setRegPassword}
-                        secureTextEntry
-                      />
-
-                      <Text style={styles.fieldLabel}>Confirm Password *</Text>
-                      <TextInput
-                        style={styles.modalInput}
-                        placeholder="Re-enter password"
-                        placeholderTextColor={theme.textMuted}
-                        value={regConfirmPassword}
-                        onChangeText={setRegConfirmPassword}
-                        secureTextEntry
-                      />
-                    </View>
-
-                    {/* SUBMIT BUTTON */}
-                    <View style={{ marginTop: 12 }}>
-                      <Pressable
-                        style={[styles.primaryButton, submittingReg && styles.buttonDisabled]}
-                        onPress={handleSubmitRegistration}
-                        disabled={submittingReg}
-                      >
-                        {submittingReg ? (
-                          <ActivityIndicator color="#FFFFFF" size="small" />
-                        ) : (
-                          <Text style={styles.primaryButtonText}>Submit Registration for Approval</Text>
-                        )}
-                      </Pressable>
-                    </View>
-                  </>
-                )}
-              </ScrollView>
-            </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -2430,5 +2465,133 @@ const styles = StyleSheet.create({
     height: verticalScale(65),
     opacity: 0.35,
     zIndex: -1,
+  },
+  // Modern Create Account Button Card (Login Screen)
+  modernCreateAccountCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F0FDF4",
+    borderRadius: 16,
+    paddingVertical: verticalScale(13),
+    paddingHorizontal: scale(16),
+    borderWidth: 1.5,
+    borderColor: "#86EFAC",
+    marginTop: verticalScale(4),
+    marginBottom: verticalScale(14),
+    shadowColor: "#0D5D37",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  modernCreateAccountCardPressed: {
+    backgroundColor: "#DCFCE7",
+    borderColor: "#4ADE80",
+    transform: [{ scale: 0.985 }],
+  },
+  modernCreateAccountLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  modernCreateAccountIconBox: {
+    width: scale(40),
+    height: scale(40),
+    borderRadius: 12,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
+  modernCreateAccountTitle: {
+    fontSize: fontScale(15),
+    fontWeight: "800",
+    color: "#0F172A",
+    letterSpacing: -0.2,
+  },
+  modernCreateAccountSub: {
+    fontSize: fontScale(11.5),
+    color: "#059669",
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  modernCreateAccountArrowBox: {
+    width: scale(30),
+    height: scale(30),
+    borderRadius: 15,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    marginLeft: 8,
+  },
+  // Full-Screen Create Staff Account Page
+  registerFullScreenContainer: {
+    flex: 1,
+    backgroundColor: "#F8FAFC",
+  },
+  registerTopHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: scale(18),
+    paddingVertical: verticalScale(14),
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+  },
+  registerBackBtn: {
+    width: scale(40),
+    height: scale(40),
+    borderRadius: 12,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  registerTopTitle: {
+    fontSize: fontScale(18),
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  registerTopSubtitle: {
+    fontSize: fontScale(12.5),
+    color: "#64748B",
+    marginTop: 1,
+  },
+  registerScrollContent: {
+    paddingHorizontal: scale(18),
+    paddingTop: verticalScale(16),
+    paddingBottom: verticalScale(40),
+  },
+  passwordInputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: verticalScale(46),
+  },
+  passwordInputFlex: {
+    flex: 1,
+    fontSize: fontScale(14),
+    color: "#0F172A",
+    paddingVertical: 0,
+  },
+
+  regSuccessIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#ECFDF5",
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "center",
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: "#A7F3D0",
   },
 });

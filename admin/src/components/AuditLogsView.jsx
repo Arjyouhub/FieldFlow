@@ -103,7 +103,7 @@ export default function AuditLogsView({ apiFetch }) {
 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '8px 0', padding: '6px 0', borderBottom: '1px dashed var(--border)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>Actor:</span>
+                    <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>Name:</span>
                     <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-main)' }}>{l.actorName}</span>
                   </div>
                   <div style={{ display: 'flex', gap: '4px' }}>
@@ -128,7 +128,7 @@ export default function AuditLogsView({ apiFetch }) {
             <thead>
               <tr>
                 <th>Timestamp</th>
-                <th>Actor Name</th>
+                <th>Name</th>
                 <th>Role</th>
                 <th>Action</th>
                 <th>Entity Type</th>

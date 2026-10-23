@@ -4,6 +4,7 @@ import {
   getCaseById,
   reassignCases,
   importBulkCases,
+  createSingleCase,
 } from '../controllers/caseController.js';
 import { protect, authorize } from '../middleware/authMiddleware.js';
 
@@ -13,6 +14,7 @@ router.use(protect);
 
 router.get('/', listCases);
 router.get('/:id', getCaseById);
+router.post('/', authorize('admin', 'super_admin'), createSingleCase);
 router.post('/reassign', authorize('admin', 'super_admin'), reassignCases);
 router.post('/import-bulk', authorize('admin', 'super_admin'), importBulkCases);
 

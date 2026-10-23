@@ -59,6 +59,8 @@ import {
 import PortfoliosView from './components/PortfoliosView';
 import CasesView from './components/CasesView';
 import BulkImportModal from './components/BulkImportModal';
+import AddDataStaffModal from './components/AddDataStaffModal';
+import AdminAccountsView from './components/AdminAccountsView';
 import PtpView from './components/PtpView';
 import NonWorkableView from './components/NonWorkableView';
 import AuditLogsView from './components/AuditLogsView';
@@ -77,7 +79,11 @@ export default function App() {
   const [token, setToken] = useState(localStorage.getItem('fieldflow_admin_token') || '');
   const [adminUser, setAdminUser] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('fieldflow_admin_user') || 'null');
+      const u = JSON.parse(localStorage.getItem('fieldflow_admin_user') || 'null');
+      if (u && (u.name === 'System Super Admin' || !u.name)) {
+        u.name = 'System Admin';
+      }
+      return u;
     } catch {
       return null;
     }
@@ -98,6 +104,11 @@ export default function App() {
   const [selectedGlobalPortfolio, setSelectedGlobalPortfolio] = useState('ALL');
   const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [bulkImportInitialPortfolio, setBulkImportInitialPortfolio] = useState('');
+  const [bulkImportInitialStaffId, setBulkImportInitialStaffId] = useState('');
+  const [addDataStaffTarget, setAddDataStaffTarget] = useState(null);
+  const [statusConfirmStaff, setStatusConfirmStaff] = useState(null);
+  const [isTogglingStatus, setIsTogglingStatus] = useState(false);
+  const [settingsSubTab, setSettingsSubTab] = useState('admins'); // 'admins' | 'policies'
 
   // Dashboard Data
   const [stats, setStats] = useState(null);
@@ -141,7 +152,7 @@ export default function App() {
   });
 
   // File Upload & Batch Import states
-  const [importModalTab, setImportModalTab] = useState('file'); // 'file' | 'single' | 'json'
+  const [importModalTab, setImportModalTab] = useState('file'); // 'file' | 'single'
   const [importFile, setImportFile] = useState(null);
   const [parsingFile, setParsingFile] = useState(false);
   const [parsedCases, setParsedCases] = useState([]);
@@ -289,11 +300,14 @@ export default function App() {
       try {
         data = JSON.parse(text);
       } catch {
-        throw new Error(
-          res.status === 504 || res.status === 502
-            ? 'Backend server is starting up or unreachable. Please retry in a few moments.'
-            : `Server returned HTTP ${res.status}: ${text.slice(0, 100)}`
-        );
+        if (res.status === 404) {
+          throw new Error(`Endpoint not found (HTTP 404): The requested resource "${url}" is not available on the server. If this is a new feature, cloud deployment may still be synchronizing.`);
+        }
+        if (res.status === 504 || res.status === 502) {
+          throw new Error('Backend server is starting up or unreachable. Please retry in a few moments.');
+        }
+        const cleanedText = text.replace(/<[^>]*>?/gm, '').trim();
+        throw new Error(`Server returned HTTP ${res.status}${cleanedText ? `: ${cleanedText.slice(0, 100)}` : ''}`);
       }
     }
 
@@ -1525,14 +1539,20 @@ export default function App() {
 
   const handleToggleStaffStatus = async (staffId, currentStatus) => {
     const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+    setIsTogglingStatus(true);
     try {
       await apiFetch(`/api/admin/staff/${staffId}/status`, {
         method: 'PUT',
         body: JSON.stringify({ status: newStatus }),
       });
+      setSuccessMsg(`Staff officer status successfully updated to ${newStatus}.`);
       loadData();
+      apiFetch('/api/admin/staff').then((d) => setStaffList(d.staff || [])).catch(() => {});
+      setStatusConfirmStaff(null);
     } catch (err) {
       setErrorMsg(err.message);
+    } finally {
+      setIsTogglingStatus(false);
     }
   };
 
@@ -1698,6 +1718,9 @@ export default function App() {
                 <span style={{ fontSize: '10.5px', fontWeight: '700', padding: '2px 7px', background: '#ecfeff', color: '#0891b2', borderRadius: '12px', border: '1px solid #cffafe', textTransform: 'uppercase' }}>Admin</span>
               </div>
               <p style={{ fontSize: '12.5px', color: '#64748b', margin: '2px 0 0 0' }}>Operations & Recovery Portal</p>
+              <div style={{ fontSize: '9.5px', fontWeight: '700', color: '#94a3b8', letterSpacing: '0.6px', textTransform: 'uppercase', marginTop: '3px' }}>
+                Powered by <strong style={{ color: '#00A86B' }}>GETLUX</strong>
+              </div>
             </div>
           </div>
 
@@ -1842,6 +1865,9 @@ export default function App() {
             <div>
               <div className="brand-title">FieldFlow</div>
               <div className="brand-sub">Operations</div>
+              <div style={{ fontSize: '9px', fontWeight: '700', color: 'var(--text-muted)', letterSpacing: '0.6px', textTransform: 'uppercase', marginTop: '1px' }}>
+                Powered by <strong style={{ color: 'var(--primary)', letterSpacing: '0.8px' }}>GETLUX</strong>
+              </div>
             </div>
           </div>
           <button
@@ -1905,10 +1931,12 @@ export default function App() {
           <div className="user-card-inner">
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div className="user-avatar-circle">
-                {(adminUser.name || 'A').substring(0, 1).toUpperCase()}
+                {((adminUser.name === 'System Super Admin' ? 'System Admin' : adminUser.name) || 'S').substring(0, 1).toUpperCase()}
               </div>
               <div>
-                <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-main)' }}>{adminUser.name}</div>
+                <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-main)' }}>
+                  {adminUser.name === 'System Super Admin' ? 'System Admin' : (adminUser.name || 'System Admin')}
+                </div>
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Role: {adminUser.role.toUpperCase()}</div>
               </div>
             </div>
@@ -1975,21 +2003,6 @@ export default function App() {
               title="Bulk import cases via Excel or CSV spreadsheet"
             >
               <UploadCloud size={14} /> <span className="topbar-btn-text">Import</span>
-            </button>
-
-            <button
-              className="btn btn-primary btn-sm topbar-action-btn"
-              onClick={() => {
-                if (!staffList.length) {
-                  apiFetch('/api/admin/staff').then((d) => setStaffList(d.staff || [])).catch(() => {});
-                }
-                if (!customers.length) {
-                  apiFetch('/api/admin/customers').then((d) => setCustomers(d.customers || [])).catch(() => {});
-                }
-                setShowRecordStaffModal(true);
-              }}
-            >
-              <Plus size={14} /> <span className="topbar-btn-text">Record</span>
             </button>
             <span className="badge badge-success topbar-status-badge">
               <CheckCircle size={12} /> <span className="topbar-status-text">Online</span>
@@ -3899,20 +3912,23 @@ export default function App() {
                                   <button
                                     className="btn btn-primary btn-sm"
                                     style={{ flex: 1, justifyContent: 'center' }}
-                                    onClick={() => {
-                                      if (!customers.length) {
-                                        apiFetch('/api/admin/customers').then((d) => setCustomers(d.customers || [])).catch(() => {});
-                                      }
-                                      setRecordStaffForm((prev) => ({ ...prev, staffId: stf._id }));
-                                      setShowRecordStaffModal(true);
-                                    }}
+                                    onClick={() => setAddDataStaffTarget(stf)}
+                                    title="Add cases data for this field officer"
                                   >
-                                    <Plus size={13} /> Add Entry
+                                    <Plus size={13} /> Add Data
                                   </button>
                                   <button
                                     className={`btn btn-sm ${stf.status === 'active' ? 'btn-secondary' : 'btn-primary'}`}
                                     style={{ flex: 1, justifyContent: 'center' }}
-                                    onClick={() => handleToggleStaffStatus(stf._id, stf.status)}
+                                    onClick={() =>
+                                      setStatusConfirmStaff({
+                                        staffId: stf._id,
+                                        name: stf.name,
+                                        employeeId: stf.employeeId,
+                                        currentStatus: stf.status,
+                                        targetStatus: stf.status === 'active' ? 'inactive' : 'active',
+                                      })
+                                    }
                                   >
                                     {stf.status === 'active' ? 'Deactivate' : 'Activate'}
                                   </button>
@@ -4025,20 +4041,22 @@ export default function App() {
                                   <div style={{ display: 'flex', gap: '6px' }}>
                                     <button
                                       className="btn btn-sm btn-primary"
-                                      onClick={() => {
-                                        if (!customers.length) {
-                                          apiFetch('/api/admin/customers').then((d) => setCustomers(d.customers || [])).catch(() => {});
-                                        }
-                                        setRecordStaffForm((prev) => ({ ...prev, staffId: stf._id }));
-                                        setShowRecordStaffModal(true);
-                                      }}
-                                      title="Record Visit / Collection for this staff member"
+                                      onClick={() => setAddDataStaffTarget(stf)}
+                                      title="Add cases data (Upload file or single case) for this field officer"
                                     >
-                                      <Plus size={12} /> Add Entry
+                                      <Plus size={12} /> Add Data
                                     </button>
                                     <button
                                       className={`btn btn-sm ${stf.status === 'active' ? 'btn-secondary' : 'btn-primary'}`}
-                                      onClick={() => handleToggleStaffStatus(stf._id, stf.status)}
+                                      onClick={() =>
+                                        setStatusConfirmStaff({
+                                          staffId: stf._id,
+                                          name: stf.name,
+                                          employeeId: stf.employeeId,
+                                          currentStatus: stf.status,
+                                          targetStatus: stf.status === 'active' ? 'inactive' : 'active',
+                                        })
+                                      }
                                     >
                                       {stf.status === 'active' ? 'Deactivate' : 'Activate'}
                                     </button>
@@ -4067,21 +4085,6 @@ export default function App() {
                   <p className="card-subtitle">Validate UPI, cash, and bank collections submitted by field staff</p>
                 </div>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={() => {
-                      if (!staffList.length) {
-                        apiFetch('/api/admin/staff').then((d) => setStaffList(d.staff || [])).catch(() => {});
-                      }
-                      if (!customers.length) {
-                        apiFetch('/api/admin/customers').then((d) => setCustomers(d.customers || [])).catch(() => {});
-                      }
-                      setRecordStaffForm((prev) => ({ ...prev, outcome: 'Payment Collected' }));
-                      setShowRecordStaffModal(true);
-                    }}
-                  >
-                    <Plus size={14} /> Record Collection
-                  </button>
                   <button className="btn btn-secondary btn-sm" onClick={exportCollectionsCSV}>
                     <Download size={14} /> Export Collections CSV
                   </button>
@@ -4252,21 +4255,6 @@ export default function App() {
                 </div>
 
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  <button
-                    className="btn btn-primary"
-                    onClick={() => {
-                      if (!staffList.length) {
-                        apiFetch('/api/admin/staff').then((d) => setStaffList(d.staff || [])).catch(() => {});
-                      }
-                      if (!customers.length) {
-                        apiFetch('/api/admin/customers').then((d) => setCustomers(d.customers || [])).catch(() => {});
-                      }
-                      setShowRecordStaffModal(true);
-                    }}
-                  >
-                    <Plus size={15} /> Record Staff Entry
-                  </button>
-
                   <button
                     className="btn btn-secondary"
                     onClick={() => {
@@ -4526,7 +4514,7 @@ export default function App() {
 
               {/* Aggregated KPI Summary Ribbon */}
               {reportType === 'collections' && reportCollectionsSummary && (
-                <div className="kpi-grid" style={{ marginBottom: '20px' }}>
+                <div className="kpi-grid" style={{ marginBottom: '20px', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
                   <div className="kpi-card">
                     <span className="kpi-label">Total Collections</span>
                     <div className="kpi-value" style={{ color: 'var(--success-text)' }}>
@@ -4549,16 +4537,6 @@ export default function App() {
                       ₹{(reportCollectionsSummary.upiTotal + reportCollectionsSummary.bankTransferTotal)?.toLocaleString('en-IN')}
                     </div>
                     <span className="kpi-subtext">Verified electronic deposits</span>
-                  </div>
-
-                  <div className="kpi-card">
-                    <span className="kpi-label">Verified vs Pending</span>
-                    <div className="kpi-value" style={{ fontSize: '20px' }}>
-                      <span style={{ color: 'var(--success-text)' }}>₹{reportCollectionsSummary.approvedTotal?.toLocaleString('en-IN')}</span>
-                    </div>
-                    <span className="kpi-subtext">
-                      Pending review: ₹{reportCollectionsSummary.pendingTotal?.toLocaleString('en-IN')}
-                    </span>
                   </div>
                 </div>
               )}
@@ -5273,62 +5251,104 @@ export default function App() {
           )}
 
           {/* ================================================================ */}
-          {/* TAB 8: SETTINGS */}
+          {/* TAB 8: SETTINGS & ADMIN MANAGEMENT */}
           {/* ================================================================ */}
           {activeTab === 'settings' && (
-            <div className="card" style={{ maxWidth: '680px' }}>
-              <h3 className="card-title">Settings & Operational Policies</h3>
-              <p className="card-subtitle" style={{ marginBottom: '20px' }}>
-                Tune geospatial thresholds and operational limits for field agents.
-              </p>
-
-              <form onSubmit={handleSaveSettings}>
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>
-                    Geofence Radius Threshold (Metres)
-                  </label>
-                  <input
-                    type="number"
-                    className="input-field"
-                    value={settingsForm.geofenceRadiusMetres}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, geofenceRadiusMetres: Number(e.target.value) })}
-                    required
-                  />
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    Visits initiated beyond this radius from registered customer coordinates are flagged as suspicious.
-                  </div>
-                </div>
-
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>
-                    Maximum Cash Limit per Visit (₹)
-                  </label>
-                  <input
-                    type="number"
-                    className="input-field"
-                    value={settingsForm.maxCashCollectionLimit}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, maxCashCollectionLimit: Number(e.target.value) })}
-                    required
-                  />
-                </div>
-
-                <div style={{ marginBottom: '24px' }}>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>
-                    OTP Expiry Duration (Minutes)
-                  </label>
-                  <input
-                    type="number"
-                    className="input-field"
-                    value={settingsForm.otpExpiryMinutes}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, otpExpiryMinutes: Number(e.target.value) })}
-                    required
-                  />
-                </div>
-
-                <button type="submit" className="btn btn-primary">
-                  Save Policy Configuration
+            <div>
+              {/* Settings Sub-Tabs */}
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '8px',
+                  marginBottom: '20px',
+                  borderBottom: '1px solid var(--border)',
+                  paddingBottom: '10px',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setSettingsSubTab('admins')}
+                  className={`btn btn-sm ${settingsSubTab === 'admins' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ gap: '6px' }}
+                >
+                  <Users size={14} /> System Administrators
                 </button>
-              </form>
+                <button
+                  type="button"
+                  onClick={() => setSettingsSubTab('policies')}
+                  className={`btn btn-sm ${settingsSubTab === 'policies' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ gap: '6px' }}
+                >
+                  <Settings size={14} /> Operational Policies & Geofence
+                </button>
+              </div>
+
+              {/* Sub-Tab 1: Administrators Management */}
+              {settingsSubTab === 'admins' && (
+                <AdminAccountsView
+                  apiFetch={apiFetch}
+                  adminUser={adminUser}
+                  currentAdminId={adminUser?.id || adminUser?._id}
+                />
+              )}
+
+              {/* Sub-Tab 2: Operational Policies */}
+              {settingsSubTab === 'policies' && (
+                <div className="card" style={{ maxWidth: '680px', padding: '24px' }}>
+                  <h3 className="card-title">Settings & Operational Policies</h3>
+                  <p className="card-subtitle" style={{ marginBottom: '20px' }}>
+                    Tune geospatial thresholds and operational limits for field agents.
+                  </p>
+
+                  <form onSubmit={handleSaveSettings}>
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>
+                        Geofence Radius Threshold (Metres)
+                      </label>
+                      <input
+                        type="number"
+                        className="input-field"
+                        value={settingsForm.geofenceRadiusMetres}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, geofenceRadiusMetres: Number(e.target.value) })}
+                        required
+                      />
+                      <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        Visits initiated beyond this radius from registered customer coordinates are flagged as suspicious.
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>
+                        Maximum Cash Limit per Visit (₹)
+                      </label>
+                      <input
+                        type="number"
+                        className="input-field"
+                        value={settingsForm.maxCashCollectionLimit}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, maxCashCollectionLimit: Number(e.target.value) })}
+                        required
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: '24px' }}>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>
+                        OTP Expiry Duration (Minutes)
+                      </label>
+                      <input
+                        type="number"
+                        className="input-field"
+                        value={settingsForm.otpExpiryMinutes}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, otpExpiryMinutes: Number(e.target.value) })}
+                        required
+                      />
+                    </div>
+
+                    <button type="submit" className="btn btn-primary">
+                      Save Policy Configuration
+                    </button>
+                  </form>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -5374,7 +5394,7 @@ export default function App() {
         </div>
       )}
 
-      {/* UNIFIED CUSTOMER CASE MANAGER MODAL (FILE UPLOAD + SINGLE CASE ENTRY + RAW JSON) */}
+      {/* UNIFIED CUSTOMER CASE MANAGER MODAL (FILE UPLOAD + SINGLE CASE ENTRY) */}
       {(showImportModal || showCreateCustomerModal) && (
         <div className="modal-overlay">
           <div className="modal-card" style={{ maxWidth: '780px' }}>
@@ -5417,13 +5437,6 @@ export default function App() {
                   onClick={() => setImportModalTab('single')}
                 >
                   <Plus size={16} /> Add Single Case
-                </button>
-                <button
-                  type="button"
-                  className={`modal-tab-btn ${importModalTab === 'json' ? 'active' : ''}`}
-                  onClick={() => setImportModalTab('json')}
-                >
-                  <FileText size={16} /> Raw JSON
                 </button>
               </div>
             </div>
@@ -5894,40 +5907,6 @@ export default function App() {
                   </button>
                   <button type="submit" className="btn btn-primary">
                     <Plus size={15} /> Save Customer Case
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* TAB 3: RAW JSON */}
-            {importModalTab === 'json' && (
-              <form onSubmit={handleImportCases}>
-                <div className="modal-body">
-                  <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
-                    Paste valid JSON array of cases for batch insertion and automatic territory assignment:
-                  </p>
-                  <textarea
-                    className="input-field"
-                    style={{ height: '180px', fontFamily: 'var(--font-mono)', fontSize: '12px' }}
-                    placeholder={`[\n  {\n    "name": "Arun Pillai",\n    "phone": "9847112233",\n    "loanAccountNo": "LON-2026-904",\n    "address": "Kallai Road, Kozhikode",\n    "outstandingAmount": 32000,\n    "emiAmount": 4500\n  }\n]`}
-                    value={importJsonText}
-                    onChange={(e) => setImportJsonText(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="modal-footer">
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={() => {
-                      setShowImportModal(false);
-                      setShowCreateCustomerModal(false);
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button type="submit" className="btn btn-primary">
-                    Import JSON Batch
                   </button>
                 </div>
               </form>
@@ -6679,15 +6658,151 @@ export default function App() {
       {/* BULK EXCEL/CSV IMPORT MODAL */}
       <BulkImportModal
         isOpen={showBulkImportModal}
-        onClose={() => setShowBulkImportModal(false)}
+        onClose={() => {
+          setShowBulkImportModal(false);
+          setBulkImportInitialStaffId('');
+        }}
         apiFetch={apiFetch}
         portfolios={portfolios}
         staffList={staffList}
         initialPortfolioId={bulkImportInitialPortfolio}
+        initialStaffId={bulkImportInitialStaffId}
         onSuccess={() => {
           loadData();
         }}
       />
+
+      {/* ADD DATA FOR STAFF MODAL (SINGLE CASE & SPREADSHEET FILE) */}
+      <AddDataStaffModal
+        isOpen={Boolean(addDataStaffTarget)}
+        onClose={() => setAddDataStaffTarget(null)}
+        staff={addDataStaffTarget}
+        portfolios={portfolios}
+        apiFetch={apiFetch}
+        onSuccess={() => {
+          loadData();
+        }}
+        onOpenAdvancedImport={(staffId) => {
+          setBulkImportInitialStaffId(staffId);
+          setShowBulkImportModal(true);
+        }}
+      />
+
+      {/* ACTIVATE / DEACTIVATE CONFIRMATION MODAL */}
+      {statusConfirmStaff && (
+        <div
+          className="modal-backdrop"
+          style={{ zIndex: 10001 }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isTogglingStatus) setStatusConfirmStaff(null);
+          }}
+        >
+          <div className="modal-card" style={{ maxWidth: '440px', width: '92%' }}>
+            <div className="modal-header" style={{ borderBottom: '1px solid var(--border)' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  color: statusConfirmStaff.targetStatus === 'inactive' ? 'var(--danger-text)' : 'var(--primary)',
+                }}
+              >
+                {statusConfirmStaff.targetStatus === 'inactive' ? (
+                  <AlertTriangle size={19} />
+                ) : (
+                  <UserCheck size={19} />
+                )}
+                <h3
+                  className="modal-title"
+                  style={{
+                    color: statusConfirmStaff.targetStatus === 'inactive' ? 'var(--danger-text)' : 'var(--primary)',
+                    fontSize: '16px',
+                  }}
+                >
+                  {statusConfirmStaff.targetStatus === 'inactive' ? 'Deactivate Staff Officer' : 'Activate Staff Officer'}
+                </h3>
+              </div>
+              <button
+                onClick={() => !isTogglingStatus && setStatusConfirmStaff(null)}
+                className="modal-close-btn"
+                disabled={isTogglingStatus}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ padding: '20px' }}>
+              <p style={{ fontSize: '14px', color: 'var(--text-main)', marginBottom: '14px', lineHeight: '1.5' }}>
+                Are you sure you want to {statusConfirmStaff.targetStatus === 'inactive' ? 'deactivate' : 'activate'}{' '}
+                <strong>{statusConfirmStaff.name}</strong> ({statusConfirmStaff.employeeId || 'STF-101'})?
+              </p>
+
+              {statusConfirmStaff.targetStatus === 'inactive' ? (
+                <div
+                  style={{
+                    padding: '12px 14px',
+                    background: 'var(--danger-light)',
+                    border: '1px solid var(--danger-border)',
+                    borderRadius: '8px',
+                    color: 'var(--danger-text)',
+                    fontSize: '12.5px',
+                    marginBottom: '18px',
+                    lineHeight: '1.45',
+                  }}
+                >
+                  ⚠️ <strong>Notice:</strong> Once deactivated, this field officer will be immediately blocked from logging in or conducting customer field visits on the FieldFlow mobile application.
+                </div>
+              ) : (
+                <div
+                  style={{
+                    padding: '12px 14px',
+                    background: '#ECFDF5',
+                    border: '1px solid #10B981',
+                    borderRadius: '8px',
+                    color: '#065F46',
+                    fontSize: '12.5px',
+                    marginBottom: '18px',
+                    lineHeight: '1.45',
+                  }}
+                >
+                  ✓ <strong>Notice:</strong> Activating this officer will grant them full field access to log in, view assigned portfolios and recovery cases, and record field visits.
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setStatusConfirmStaff(null)}
+                  className="btn btn-secondary"
+                  disabled={isTogglingStatus}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleToggleStaffStatus(statusConfirmStaff.staffId, statusConfirmStaff.currentStatus)}
+                  className={`btn ${statusConfirmStaff.targetStatus === 'inactive' ? 'btn-danger' : 'btn-primary'}`}
+                  disabled={isTogglingStatus}
+                  style={{ gap: '6px' }}
+                >
+                  {isTogglingStatus ? (
+                    <RefreshCw size={13} className="animate-spin" />
+                  ) : statusConfirmStaff.targetStatus === 'inactive' ? (
+                    <XCircle size={14} />
+                  ) : (
+                    <CheckCircle size={14} />
+                  )}
+                  {isTogglingStatus
+                    ? 'Updating...'
+                    : statusConfirmStaff.targetStatus === 'inactive'
+                    ? 'Yes, Deactivate'
+                    : 'Yes, Activate'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* WHATSAPP PHOTO SHARE MODAL */}
       <WhatsAppShareModal

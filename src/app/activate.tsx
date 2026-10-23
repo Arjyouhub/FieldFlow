@@ -249,7 +249,7 @@ export default function AccountActivationScreen() {
             </Pressable>
             <View style={styles.topBarCenter}>
               <Text style={styles.topBarTitle}>FieldFlow Portal</Text>
-              <Text style={styles.topBarSub}>Staff Account Activation</Text>
+              <Text style={styles.topBarSub}>Staff Account Activation • by GETLUX</Text>
             </View>
             <View style={{ width: 40 }} />
           </View>

@@ -1239,3 +1239,142 @@ export async function saveBulkExternalVisitMetrics(req, res) {
   }
 }
 
+/**
+ * 10. Admin Management (Super Admin & Admin Accounts)
+ */
+export async function listAdmins(req, res) {
+  try {
+    // If any legacy admin has name 'System Super Admin', normalize to 'System Admin'
+    await User.updateMany({ name: 'System Super Admin' }, { $set: { name: 'System Admin' } });
+
+    const admins = await User.find({ role: { $in: ['admin', 'super_admin'] } })
+      .select('-password')
+      .sort({ createdAt: -1 });
+
+    return res.json({ success: true, count: admins.length, admins });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+export async function createAdmin(req, res) {
+  try {
+    const { name, phone, email, password, role = 'admin' } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, message: 'Admin name is required.' });
+    }
+    if (!phone || !phone.trim()) {
+      return res.status(400).json({ success: false, message: 'Admin phone number is required.' });
+    }
+    if (!password || password.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password is required and must be at least 6 characters.' });
+    }
+
+    const cleanPhone = phone.trim().replace(/[^\d+]/g, '');
+    const existing = await User.findOne({ phone: cleanPhone });
+    if (existing) {
+      return res.status(400).json({ success: false, message: 'A user with this mobile number already exists.' });
+    }
+
+    const newAdmin = await User.create({
+      name: name.trim(),
+      phone: cleanPhone,
+      email: email ? email.trim() : `${cleanPhone}@fieldflow.local`,
+      password,
+      role: role === 'super_admin' ? 'super_admin' : 'admin',
+      status: 'active',
+      approvalStatus: 'APPROVED',
+      team: 'Headquarters Operations',
+      assignedArea: 'Central Administration',
+    });
+
+    await AuditLog.create({
+      actorId: req.user._id,
+      actorName: req.user.name,
+      actorRole: req.user.role,
+      action: 'CREATE_ADMIN_USER',
+      entityType: 'User',
+      entityId: newAdmin._id,
+      details: { name: newAdmin.name, phone: newAdmin.phone, role: newAdmin.role },
+    }).catch(() => {});
+
+    return res.status(201).json({
+      success: true,
+      message: `Admin account "${newAdmin.name}" created successfully.`,
+      admin: {
+        _id: newAdmin._id,
+        name: newAdmin.name,
+        phone: newAdmin.phone,
+        email: newAdmin.email,
+        role: newAdmin.role,
+        status: newAdmin.status,
+        createdAt: newAdmin.createdAt,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+export async function updateAdminStatus(req, res) {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (String(id) === String(req.user._id)) {
+      return res.status(400).json({ success: false, message: 'You cannot change the status of your own currently logged-in account.' });
+    }
+
+    const targetAdmin = await User.findById(id);
+    if (!targetAdmin) {
+      return res.status(404).json({ success: false, message: 'Admin user not found.' });
+    }
+
+    targetAdmin.status = status;
+    await targetAdmin.save();
+
+    return res.json({
+      success: true,
+      message: `Admin "${targetAdmin.name}" status updated to ${status}.`,
+      admin: targetAdmin,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+export async function deleteAdmin(req, res) {
+  try {
+    const { id } = req.params;
+
+    if (String(id) === String(req.user._id)) {
+      return res.status(400).json({ success: false, message: 'You cannot delete your own currently logged-in admin account.' });
+    }
+
+    const targetAdmin = await User.findById(id);
+    if (!targetAdmin) {
+      return res.status(404).json({ success: false, message: 'Admin user not found.' });
+    }
+
+    await User.findByIdAndDelete(id);
+
+    await AuditLog.create({
+      actorId: req.user._id,
+      actorName: req.user.name,
+      actorRole: req.user.role,
+      action: 'DELETE_ADMIN_USER',
+      entityType: 'User',
+      entityId: id,
+      details: { name: targetAdmin.name, phone: targetAdmin.phone },
+    }).catch(() => {});
+
+    return res.json({
+      success: true,
+      message: `Admin account "${targetAdmin.name}" removed successfully.`,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+

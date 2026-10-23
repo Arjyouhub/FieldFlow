@@ -255,7 +255,7 @@ export async function importBulkCases(req, res) {
       const address = (row.address || 'Address on file').toString().trim();
       const city = (row.city || 'Kozhikode').toString().trim();
       const area = (row.area || '').toString().trim();
-      const rowStaff = row.staffId || row.assignedStaff || defaultStaffId || null;
+      const rowStaff = row.assignedStaffId || row.staffId || row.assignedStaff || defaultStaffId || null;
 
       // Validation
       if (!customerName) {
@@ -277,6 +277,12 @@ export async function importBulkCases(req, res) {
       // Check duplicate within this portfolio
       const existingCase = await Case.findOne({ portfolioId, loanAccountNo: accountNo });
       if (existingCase) {
+        if (rowStaff) {
+          existingCase.assignedStaff = rowStaff;
+          existingCase.status = 'assigned';
+          await existingCase.save();
+          await Customer.findByIdAndUpdate(existingCase.customerId, { assignedStaff: rowStaff });
+        }
         duplicateCount++;
         continue; // Safe retry without creating duplicates
       }
@@ -298,6 +304,9 @@ export async function importBulkCases(req, res) {
           assignedStaff: rowStaff || null,
           batchMonth: batchName,
         });
+      } else if (rowStaff) {
+        customer.assignedStaff = rowStaff;
+        await customer.save();
       }
 
       // Create unique internal case ID
@@ -350,6 +359,153 @@ export async function importBulkCases(req, res) {
         totalProcessed: rawCases.length,
       },
       errors,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+/**
+ * 5. Create a Single Case directly (with manual details and staff assignment)
+ */
+export async function createSingleCase(req, res) {
+  try {
+    const {
+      portfolioId,
+      batchMonth,
+      assignedStaff,
+      customerName,
+      phone,
+      alternatePhone,
+      loanAccountNo,
+      referenceNumber,
+      address,
+      area,
+      city,
+      outstandingAmount,
+      dueAmount,
+    } = req.body;
+
+    if (!customerName || !customerName.trim()) {
+      return res.status(400).json({ success: false, message: 'Customer name is required.' });
+    }
+    if (!phone || !phone.trim()) {
+      return res.status(400).json({ success: false, message: 'Phone number is required.' });
+    }
+
+    const cleanPhone = phone.trim().replace(/[^\d+]/g, '');
+
+    // Resolve Portfolio: if not provided or 'ALL', use first active portfolio or default
+    let targetPortfolioId = portfolioId;
+    if (!targetPortfolioId || targetPortfolioId === 'ALL') {
+      const defaultPort = (await Portfolio.findOne({ status: 'active' })) || (await Portfolio.findOne());
+      if (defaultPort) targetPortfolioId = defaultPort._id;
+    }
+
+    const portfolio = targetPortfolioId ? await Portfolio.findById(targetPortfolioId) : null;
+    const portCode = portfolio ? portfolio.code : 'GEN';
+
+    const batchName = (batchMonth || 'OCT-2026').trim().toUpperCase();
+
+    // Ensure MonthlyBatch exists
+    let batch = null;
+    if (portfolio) {
+      batch = await MonthlyBatch.findOne({ portfolioId: portfolio._id, name: batchName });
+      if (!batch) {
+        batch = await MonthlyBatch.create({
+          name: batchName,
+          code: `${portfolio.code}-${batchName}`,
+          portfolioId: portfolio._id,
+          month: batchName.split('-')[0] || 'OCT',
+          year: Number(batchName.split('-')[1]) || 2026,
+          importedBy: req.user._id,
+        });
+      }
+    }
+
+    const accountNo =
+      loanAccountNo && loanAccountNo.trim()
+        ? loanAccountNo.trim()
+        : `ACC-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
+
+    const outstanding = Number(outstandingAmount || 0) || 0;
+    const due = Number(dueAmount || outstanding) || 0;
+
+    // Find or create customer
+    let customer = await Customer.findOne({ phone: cleanPhone });
+    if (!customer) {
+      customer = await Customer.create({
+        name: customerName.trim(),
+        phone: cleanPhone,
+        alternatePhone: (alternatePhone || '').trim(),
+        address: (address || 'Address on file').trim(),
+        city: (city || 'Kozhikode').trim(),
+        area: (area || '').trim(),
+        loanAccountNo: accountNo,
+        outstandingAmount: outstanding,
+        emiAmount: due,
+        portfolioId: portfolio ? portfolio._id : null,
+        assignedStaff: assignedStaff || null,
+        batchMonth: batchName,
+      });
+    } else {
+      if (assignedStaff) customer.assignedStaff = assignedStaff;
+      if (address) customer.address = address.trim();
+      if (area) customer.area = area.trim();
+      customer.outstandingAmount = outstanding;
+      customer.emiAmount = due;
+      await customer.save();
+    }
+
+    // Check if case with accountNo already exists
+    let caseItem = null;
+    if (portfolio) {
+      caseItem = await Case.findOne({ portfolioId: portfolio._id, loanAccountNo: accountNo });
+    }
+    if (caseItem) {
+      caseItem.assignedStaff = assignedStaff || caseItem.assignedStaff;
+      caseItem.status = assignedStaff ? 'assigned' : caseItem.status;
+      caseItem.outstandingAmount = outstanding;
+      caseItem.dueAmount = due;
+      if (referenceNumber) caseItem.referenceNumber = referenceNumber.trim();
+      await caseItem.save();
+    } else {
+      const caseCode = `CAS-${portCode}-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
+      caseItem = await Case.create({
+        caseId: caseCode,
+        customerId: customer._id,
+        portfolioId: portfolio ? portfolio._id : null,
+        batchId: batch ? batch._id : null,
+        batchMonth: batchName,
+        loanAccountNo: accountNo,
+        referenceNumber: (referenceNumber || '').trim(),
+        outstandingAmount: outstanding,
+        dueAmount: due,
+        assignedStaff: assignedStaff || null,
+        status: assignedStaff ? 'assigned' : 'pending',
+      });
+    }
+
+    if (batch) {
+      batch.totalCases = (batch.totalCases || 0) + 1;
+      await batch.save();
+    }
+
+    await AuditLog.create({
+      actorId: req.user._id,
+      actorName: req.user.name,
+      actorRole: req.user.role,
+      action: 'CREATE_SINGLE_CASE',
+      entityType: 'Case',
+      entityId: caseItem._id,
+      details: { caseId: caseItem.caseId, customerName, phone: cleanPhone, assignedStaff },
+    }).catch(() => {});
+
+    return res.status(201).json({
+      success: true,
+      message: 'Case successfully created and allocated to staff officer.',
+      case: caseItem,
+      customer,
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

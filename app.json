@@ -43,8 +43,11 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "08d9d48c-78b7-4142-b571-6bdd008ae2bf"
+        "projectId": "4211f7d1-480e-4f5b-b088-f714e44bc10e"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     },
     "owner": "arju.exe"
   }

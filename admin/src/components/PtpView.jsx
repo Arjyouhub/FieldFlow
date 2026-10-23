@@ -86,7 +86,7 @@ export default function PtpView({ apiFetch, portfolios = [], staffList = [] }) {
 
         <div className="stat-card">
           <div className="stat-card-header">
-            <span className="stat-card-title">Broken PTP Violations</span>
+            <span className="stat-card-title">Broken PTP</span>
             <div className="stat-card-icon" style={{ background: 'var(--danger-light)', color: 'var(--danger-text)' }}>
               <AlertTriangle size={18} />
             </div>

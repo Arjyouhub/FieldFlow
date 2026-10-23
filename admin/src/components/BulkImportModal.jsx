@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import {
   UploadCloud,
@@ -22,6 +22,7 @@ export default function BulkImportModal({
   portfolios = [],
   staffList = [],
   initialPortfolioId = '',
+  initialStaffId = '',
   onSuccess,
 }) {
   if (!isOpen) return null;
@@ -33,7 +34,13 @@ export default function BulkImportModal({
   const [selectedBatchMonth, setSelectedBatchMonth] = useState('OCT-2026');
   const [newBatchName, setNewBatchName] = useState('');
   const [showNewBatchInput, setShowNewBatchInput] = useState(false);
-  const [defaultStaffId, setDefaultStaffId] = useState('');
+  const [defaultStaffId, setDefaultStaffId] = useState(initialStaffId || '');
+
+  useEffect(() => {
+    if (initialStaffId) {
+      setDefaultStaffId(initialStaffId);
+    }
+  }, [initialStaffId]);
 
   // Step 2: File & Parsing
   const [file, setFile] = useState(null);

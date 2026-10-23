@@ -526,6 +526,9 @@ export default function LoginScreen() {
             </View>
             <Text style={styles.splashBrandTitle}>FieldFlow</Text>
             <Text style={styles.splashTagline}>Collect  •  Track  •  Grow</Text>
+            <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", fontWeight: "700", letterSpacing: 0.8, textTransform: "uppercase", marginTop: 4 }}>
+              Powered by GETLUX
+            </Text>
 
             {/* 3 Translucent Feature Badges */}
             <View style={styles.splashBadgesRow}>
@@ -778,6 +781,9 @@ export default function LoginScreen() {
                 <View style={{ marginLeft: 8 }}>
                   <Text style={styles.exactBrandTitle}>FieldFlow</Text>
                   <Text style={styles.exactBrandSubtitle}>Field Staff App</Text>
+                  <Text style={{ fontSize: 9.5, color: "rgba(255,255,255,0.75)", fontWeight: "700", letterSpacing: 0.6, marginTop: 1, textTransform: "uppercase" }}>
+                    Powered by GETLUX
+                  </Text>
                 </View>
               </View>
 
@@ -1017,6 +1023,12 @@ export default function LoginScreen() {
               >
                 <Text style={styles.exactFooterLink}>Contact Admin</Text>
               </Pressable>
+            </View>
+
+            <View style={{ alignItems: "center", marginTop: 10, marginBottom: 4 }}>
+              <Text style={{ fontSize: 10.5, color: "#94A3B8", fontWeight: "600", letterSpacing: 0.8, textTransform: "uppercase" }}>
+                Powered by <Text style={{ color: "#00A86B", fontWeight: "800" }}>GETLUX</Text>
+              </Text>
             </View>
 
             {/* Soft decorative leaves at bottom corners */}

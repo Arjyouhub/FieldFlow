@@ -40,7 +40,7 @@ export async function runMasterSeed() {
   let admin = await User.findOne({ phone: '9876543210' });
   if (!admin) {
     admin = await User.create({
-      name: 'System Super Admin',
+      name: 'System Admin',
       employeeId: 'ADM-001',
       phone: '9876543210',
       email: 'admin@fieldflow.com',

@@ -21,6 +21,10 @@ import {
   getAuditLogs,
   saveExternalVisitMetric,
   saveBulkExternalVisitMetrics,
+  listAdmins,
+  createAdmin,
+  updateAdminStatus,
+  deleteAdmin,
 } from '../controllers/adminController.js';
 import { protect, authorize } from '../middleware/authMiddleware.js';
 
@@ -53,6 +57,12 @@ router.post('/reports/external-visits', saveExternalVisitMetric);
 router.post('/reports/external-visits/bulk', saveBulkExternalVisitMetrics);
 router.post('/visits/record', recordStaffVisit);
 router.get('/audit-logs', getAuditLogs);
+
+// Admin Management
+router.get('/admins', listAdmins);
+router.post('/admins', createAdmin);
+router.put('/admins/:id/status', updateAdminStatus);
+router.delete('/admins/:id', deleteAdmin);
 
 router.get('/settings', getSettings);
 router.put('/settings', updateSettings);

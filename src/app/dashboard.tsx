@@ -830,7 +830,12 @@ export default function DashboardScreen() {
           </View>
           <View style={{ marginLeft: 8 }}>
             <Text style={styles.headerBrandTitle}>FieldFlow</Text>
-            <Text style={styles.headerBrandSubtitle}>Field Staff App</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <Text style={styles.headerBrandSubtitle}>Field Staff App</Text>
+              <Text style={{ fontSize: 9.5, color: "rgba(255,255,255,0.7)", fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase" }}>
+                • by GETLUX
+              </Text>
+            </View>
           </View>
         </View>
 
@@ -1334,7 +1339,7 @@ export default function DashboardScreen() {
           {
             icon: "information-circle-outline" as const,
             title: "About FieldFlow",
-            subtitle: "Version 2.4.0 (Build 57)",
+            subtitle: "Version 2.4.0 • Powered by GETLUX",
           },
         ].map((item, idx) => (
           <Pressable
@@ -1360,6 +1365,12 @@ export default function DashboardScreen() {
       <Pressable style={styles.logoutButton} onPress={handleLogout}>
         <Text style={styles.logoutButtonText}>Logout</Text>
       </Pressable>
+
+      <View style={{ alignItems: "center", marginTop: 16, marginBottom: 28 }}>
+        <Text style={{ fontSize: 11, color: "#94A3B8", fontWeight: "600", letterSpacing: 0.8, textTransform: "uppercase" }}>
+          FieldFlow • Powered by <Text style={{ color: "#00A86B", fontWeight: "800" }}>GETLUX</Text>
+        </Text>
+      </View>
     </ScrollView>
   );
 

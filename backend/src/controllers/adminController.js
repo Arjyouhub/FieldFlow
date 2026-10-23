@@ -685,7 +685,7 @@ export async function updateSettings(req, res) {
 export async function addCustomerDocument(req, res) {
   try {
     const { id } = req.params;
-    const { name, url, fileType, size } = req.body;
+    const { name, url, fileType, size, category, notes } = req.body;
     if (!name || !url) {
       return res.status(400).json({ success: false, message: 'Document name and url are required.' });
     }
@@ -694,9 +694,35 @@ export async function addCustomerDocument(req, res) {
       return res.status(404).json({ success: false, message: 'Customer not found.' });
     }
     if (!customer.documents) customer.documents = [];
-    customer.documents.push({ name, url, fileType: fileType || '', size: Number(size || 0) });
+    const newDoc = {
+      name,
+      url,
+      fileType: fileType || '',
+      size: Number(size || 0),
+      category: category || 'General',
+      notes: notes || '',
+      uploadedAt: new Date(),
+    };
+    customer.documents.push(newDoc);
     await customer.save();
-    return res.json({ success: true, message: 'Document attached successfully', customer });
+    return res.json({ success: true, message: 'Document/photo attached successfully', customer, document: newDoc });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+export async function deleteCustomerDocument(req, res) {
+  try {
+    const { id, docId } = req.params;
+    const customer = await Customer.findById(id);
+    if (!customer) {
+      return res.status(404).json({ success: false, message: 'Customer not found.' });
+    }
+    customer.documents = (customer.documents || []).filter(
+      (doc) => doc._id && doc._id.toString() !== docId && doc.url !== docId
+    );
+    await customer.save();
+    return res.json({ success: true, message: 'Document removed successfully', customer });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }

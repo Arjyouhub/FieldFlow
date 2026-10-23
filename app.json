@@ -49,6 +49,11 @@
     "runtimeVersion": {
       "policy": "appVersion"
     },
+    "updates": {
+      "url": "https://u.expo.dev/4211f7d1-480e-4f5b-b088-f714e44bc10e",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "owner": "arju.exe"
   }
 }

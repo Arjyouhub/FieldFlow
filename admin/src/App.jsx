@@ -54,6 +54,8 @@ import {
   ChevronRight,
   Share2,
   MessageCircle,
+  Image,
+  Camera,
 } from 'lucide-react';
 
 import PortfoliosView from './components/PortfoliosView';
@@ -187,10 +189,15 @@ export default function App() {
   const [uploadingSingleDoc, setUploadingSingleDoc] = useState(false);
   const singleDocInputRef = useRef(null);
 
-  // Existing customer document attachment modal
+  // Existing customer document & photo attachment modal
   const [selectedCustomerForDoc, setSelectedCustomerForDoc] = useState(null);
   const [uploadingDocModal, setUploadingDocModal] = useState(false);
   const docModalInputRef = useRef(null);
+  const [docFile, setDocFile] = useState(null);
+  const [docPreviewUrl, setDocPreviewUrl] = useState('');
+  const [docTitle, setDocTitle] = useState('');
+  const [docCategory, setDocCategory] = useState('Customer Photo');
+  const [docNotes, setDocNotes] = useState('');
 
   // Forms
   const [staffForm, setStaffForm] = useState({ name: '', phone: '', employeeId: '', team: 'Field Operations', assignedArea: 'Kozhikode Central' });
@@ -1435,41 +1442,97 @@ export default function App() {
     }
   };
 
-  // Attach Document to existing customer
-  const handleAttachDocToExistingCustomer = async (e) => {
+  // Customer File & Photo Handlers for Modal
+  const handleSelectDocFile = (e) => {
     const file = e.target.files?.[0];
-    if (!file || !selectedCustomerForDoc) return;
+    if (!file) return;
+    setDocFile(file);
+    // Populate default title from filename
+    const baseName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
+    setDocTitle(baseName);
+
+    if (file.type?.startsWith('image/')) {
+      const preview = URL.createObjectURL(file);
+      setDocPreviewUrl(preview);
+      setDocCategory('Customer Photo');
+    } else {
+      setDocPreviewUrl('');
+      if (file.name.toLowerCase().endsWith('.pdf')) {
+        setDocCategory('Loan Agreement');
+      } else if (file.name.toLowerCase().match(/\.(xlsx|xls|csv)$/)) {
+        setDocCategory('Other Document');
+      }
+    }
+  };
+
+  const handleClearSelectedDoc = () => {
+    setDocFile(null);
+    setDocPreviewUrl('');
+    setDocTitle('');
+    setDocNotes('');
+    setDocCategory('Customer Photo');
+    if (docModalInputRef.current) docModalInputRef.current.value = '';
+  };
+
+  const handleSubmitCustomerDoc = async (e) => {
+    if (e) e.preventDefault();
+    if (!docFile || !selectedCustomerForDoc) {
+      setErrorMsg('Please select a photo or document file to upload.');
+      return;
+    }
     setUploadingDocModal(true);
     try {
-      const uploaded = await uploadDocumentFile(file);
-      await apiFetch(`/api/admin/customers/${selectedCustomerForDoc._id}/documents`, {
+      const uploaded = await uploadDocumentFile(docFile);
+      const titleToSave = docTitle.trim() || uploaded.originalName;
+      const res = await apiFetch(`/api/admin/customers/${selectedCustomerForDoc._id}/documents`, {
         method: 'POST',
         body: JSON.stringify({
-          name: uploaded.originalName,
+          name: titleToSave,
           url: uploaded.fileUrl,
           fileType: uploaded.fileType,
           size: uploaded.size,
+          category: docCategory,
+          notes: docNotes.trim(),
         }),
       });
-      setSuccessMsg(`Document "${uploaded.originalName}" attached to ${selectedCustomerForDoc.name}!`);
+      const newDoc = res.document || {
+        name: titleToSave,
+        url: uploaded.fileUrl,
+        fileType: uploaded.fileType,
+        size: uploaded.size,
+        category: docCategory,
+        notes: docNotes.trim(),
+        uploadedAt: new Date(),
+      };
+      setSuccessMsg(`"${titleToSave}" attached to ${selectedCustomerForDoc.name}!`);
       setSelectedCustomerForDoc((prev) => ({
         ...prev,
-        documents: [
-          ...(prev.documents || []),
-          {
-            name: uploaded.originalName,
-            url: uploaded.fileUrl,
-            fileType: uploaded.fileType,
-            size: uploaded.size,
-          },
-        ],
+        documents: [...(prev.documents || []), newDoc],
+      }));
+      handleClearSelectedDoc();
+      loadData();
+    } catch (err) {
+      setErrorMsg('Failed to attach document: ' + err.message);
+    } finally {
+      setUploadingDocModal(false);
+    }
+  };
+
+  const handleDeleteCustomerDoc = async (docId) => {
+    if (!selectedCustomerForDoc) return;
+    if (!window.confirm('Are you sure you want to remove this file/photo record?')) return;
+    try {
+      await apiFetch(`/api/admin/customers/${selectedCustomerForDoc._id}/documents/${docId}`, {
+        method: 'DELETE',
+      });
+      setSuccessMsg('Record removed successfully.');
+      setSelectedCustomerForDoc((prev) => ({
+        ...prev,
+        documents: (prev.documents || []).filter((d) => d._id !== docId && d.url !== docId),
       }));
       loadData();
     } catch (err) {
-      setErrorMsg(err.message);
-    } finally {
-      setUploadingDocModal(false);
-      e.target.value = '';
+      setErrorMsg('Failed to remove record: ' + err.message);
     }
   };
 
@@ -2515,12 +2578,10 @@ export default function App() {
                             Staff: <strong>{c.assignedStaff?.name || 'Unassigned'}</strong>
                           </div>
                           <div>
-                            {c.documents?.length > 0 ? (
-                              <span className="badge badge-info" style={{ fontSize: '11px' }}>
-                                <Paperclip size={11} /> {c.documents.length} File{c.documents.length > 1 ? 's' : ''}
+                            {c.documents && c.documents.length > 0 && (
+                              <span className="badge badge-success" style={{ fontSize: '10.5px', gap: '3px' }}>
+                                <Image size={11} /> {c.documents.length} File{c.documents.length > 1 ? 's' : ''}
                               </span>
-                            ) : (
-                              <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>No files</span>
                             )}
                           </div>
                         </div>
@@ -2529,10 +2590,13 @@ export default function App() {
                           <button
                             type="button"
                             className="btn btn-secondary btn-sm"
-                            style={{ flex: 1, justifyContent: 'center' }}
-                            onClick={() => setSelectedCustomerForDoc(c)}
+                            style={{ flex: 1, justifyContent: 'center', gap: '4px' }}
+                            onClick={() => {
+                              handleClearSelectedDoc();
+                              setSelectedCustomerForDoc(c);
+                            }}
                           >
-                            <Paperclip size={13} /> Documents
+                            <Image size={13} /> Files & Photos {c.documents?.length > 0 ? `(${c.documents.length})` : ''}
                           </button>
                           <button
                             type="button"
@@ -2561,7 +2625,6 @@ export default function App() {
                         <th>Outstanding Balance</th>
                         <th>Due EMI</th>
                         <th>Status</th>
-                        <th>Attached Files</th>
                         <th>Assigned Staff</th>
                         <th>Actions</th>
                       </tr>
@@ -2569,7 +2632,7 @@ export default function App() {
                     <tbody>
                       {filteredCustomers.length === 0 ? (
                         <tr>
-                          <td colSpan={9} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
+                          <td colSpan={8} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
                             No customer cases match the current filter.
                           </td>
                         </tr>
@@ -2599,45 +2662,6 @@ export default function App() {
                               </span>
                             </td>
                             <td>
-                              {c.documents && c.documents.length > 0 ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                  <button
-                                    type="button"
-                                    onClick={() => setSelectedCustomerForDoc(c)}
-                                    className="btn btn-secondary btn-sm"
-                                    style={{ fontSize: '11px', padding: '3px 8px', gap: '4px', alignSelf: 'flex-start' }}
-                                  >
-                                    <Paperclip size={12} /> {c.documents.length} file{c.documents.length > 1 ? 's' : ''}
-                                  </button>
-                                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                                    {c.documents.slice(0, 2).map((d, i) => (
-                                      <a
-                                        key={i}
-                                        href={d.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className={`file-pill ${d.fileType === 'pdf' ? 'badge-file-pdf' : d.fileType?.includes('xls') || d.fileType === 'csv' ? 'badge-file-xlsx' : 'badge-file-doc'}`}
-                                        style={{ fontSize: '10px', padding: '2px 6px', textDecoration: 'none' }}
-                                        title={d.name}
-                                      >
-                                        {d.fileType?.toUpperCase() || 'DOC'}
-                                      </a>
-                                    ))}
-                                  </div>
-                                </div>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedCustomerForDoc(c)}
-                                  className="btn btn-secondary btn-sm"
-                                  style={{ fontSize: '11px', padding: '3px 8px', color: 'var(--text-muted)' }}
-                                  title="Attach document (PDF, DOC, XLSX)"
-                                >
-                                  <Paperclip size={12} /> Attach
-                                </button>
-                              )}
-                            </td>
-                            <td>
                               <div style={{ fontSize: '13px' }}>{c.assignedStaff?.name || 'Unassigned'}</div>
                             </td>
                             <td>
@@ -2645,10 +2669,19 @@ export default function App() {
                                 <button
                                   type="button"
                                   className="btn btn-secondary btn-sm"
-                                  onClick={() => setSelectedCustomerForDoc(c)}
-                                  title="Manage Attached Documents"
+                                  onClick={() => {
+                                    handleClearSelectedDoc();
+                                    setSelectedCustomerForDoc(c);
+                                  }}
+                                  title="Upload & View Customer Files and Photos"
+                                  style={{ gap: '4px' }}
                                 >
-                                  <Paperclip size={13} />
+                                  <Image size={13} /> Files & Photos
+                                  {c.documents && c.documents.length > 0 && (
+                                    <span style={{ background: '#DCFCE7', color: '#166534', fontSize: '10px', padding: '1px 5px', borderRadius: '10px', fontWeight: 700 }}>
+                                      {c.documents.length}
+                                    </span>
+                                  )}
                                 </button>
                                 <button
                                   type="button"
@@ -5998,112 +6031,313 @@ export default function App() {
         </div>
       )}
 
-      {/* EXISTING CUSTOMER DOCUMENT ATTACHMENT MODAL */}
+      {/* CUSTOMER FILES & PHOTO RECORDS MODAL */}
       {selectedCustomerForDoc && (
         <div className="modal-overlay">
-          <div className="modal-card" style={{ maxWidth: '540px' }}>
+          <div className="modal-card" style={{ maxWidth: '640px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
             <div className="modal-header">
-              <div>
-                <h3 className="card-title">Attached Files & Documents</h3>
-                <p className="card-subtitle" style={{ fontSize: '12px' }}>
-                  {selectedCustomerForDoc.name} ({selectedCustomerForDoc.loanAccountNo})
-                </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ background: '#ECFDF5', padding: '8px', borderRadius: '8px', color: '#047857' }}>
+                  <Image size={22} />
+                </div>
+                <div>
+                  <h3 className="card-title">Customer Files & Photo Records</h3>
+                  <p className="card-subtitle" style={{ fontSize: '12px' }}>
+                    {selectedCustomerForDoc.name} • A/C: <strong>{selectedCustomerForDoc.loanAccountNo}</strong> • Phone: {selectedCustomerForDoc.phone}
+                  </p>
+                </div>
               </div>
               <button
-                onClick={() => setSelectedCustomerForDoc(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+                onClick={() => {
+                  handleClearSelectedDoc();
+                  setSelectedCustomerForDoc(null);
+                }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="modal-body">
-              {/* Existing documents list */}
-              <div style={{ marginBottom: '18px' }}>
-                <strong style={{ fontSize: '13px', display: 'block', marginBottom: '8px' }}>
-                  Customer Case Files ({selectedCustomerForDoc.documents?.length || 0})
-                </strong>
-
-                {(!selectedCustomerForDoc.documents || selectedCustomerForDoc.documents.length === 0) ? (
-                  <div style={{ padding: '16px', background: 'var(--bg-card-subtle)', borderRadius: '8px', textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)' }}>
-                    No documents attached for this customer yet.
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {selectedCustomerForDoc.documents.map((doc, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '10px 14px',
-                          background: 'var(--bg-card-subtle)',
-                          borderRadius: '8px',
-                          border: '1px solid var(--border)',
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          {doc.fileType === 'pdf' ? (
-                            <File size={20} color="#dc2626" />
-                          ) : doc.fileType?.includes('xls') || doc.fileType === 'csv' ? (
-                            <FileSpreadsheet size={20} color="#16a34a" />
-                          ) : (
-                            <FileText size={20} color="#0284c7" />
-                          )}
-                          <div>
-                            <strong style={{ fontSize: '13px', display: 'block' }}>{doc.name}</strong>
-                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                              {(doc.size / 1024).toFixed(1)} KB • Uploaded {new Date(doc.uploadedAt || Date.now()).toLocaleDateString()}
-                            </div>
-                          </div>
-                        </div>
-
-                        <a
-                          href={doc.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn btn-secondary btn-sm"
-                          style={{ textDecoration: 'none', gap: '4px' }}
-                        >
-                          <ExternalLink size={12} /> View File
-                        </a>
-                      </div>
-                    ))}
-                  </div>
-                )}
+            <div className="modal-body" style={{ overflowY: 'auto', flex: 1, padding: '20px' }}>
+              {/* Customer Quick Stats Bar */}
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '18px', padding: '10px 14px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '12px' }}>
+                <div><strong>Outstanding:</strong> <span style={{ color: '#047857', fontWeight: 700 }}>₹{selectedCustomerForDoc.outstandingAmount?.toLocaleString('en-IN')}</span></div>
+                <div>•</div>
+                <div><strong>Area:</strong> {selectedCustomerForDoc.area || selectedCustomerForDoc.city || 'Kozhikode'}</div>
+                <div>•</div>
+                <div><strong>Status:</strong> <span style={{ textTransform: 'uppercase', fontWeight: 600 }}>{selectedCustomerForDoc.status}</span></div>
+                <div>•</div>
+                <div><strong>Staff:</strong> {selectedCustomerForDoc.assignedStaff?.name || 'Unassigned'}</div>
               </div>
 
-              {/* Upload new document */}
-              <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
-                <strong style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>
-                  Attach New File (PDF, DOC, DOCX, XLSX, Images)
-                </strong>
+              {/* SECTION 1: UPLOAD NEW FILE / PHOTO FORM */}
+              <div style={{ background: '#FFFFFF', border: '1.5px dashed #CBD5E1', borderRadius: '12px', padding: '16px', marginBottom: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <strong style={{ fontSize: '13.5px', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Plus size={16} color="var(--primary)" /> Attach New File or Photo
+                  </strong>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    JPG, PNG, WEBP, PDF, DOCX, XLSX
+                  </span>
+                </div>
+
+                {/* File picker drop box */}
                 <input
                   ref={docModalInputRef}
                   type="file"
-                  accept=".xlsx,.xls,.csv,.doc,.docx,.pdf,.png,.jpg,.jpeg"
+                  accept=".xlsx,.xls,.csv,.doc,.docx,.pdf,.png,.jpg,.jpeg,.webp"
                   style={{ display: 'none' }}
-                  onChange={handleAttachDocToExistingCustomer}
+                  onChange={handleSelectDocFile}
                 />
+
+                {!docFile ? (
+                  <div
+                    onClick={() => docModalInputRef.current?.click()}
+                    style={{
+                      border: '1.5px dashed var(--primary)',
+                      borderRadius: '10px',
+                      padding: '18px',
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      background: 'var(--primary-light)',
+                      marginBottom: '14px',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    <div style={{ display: 'inline-flex', padding: '8px', background: '#FFFFFF', borderRadius: '50%', color: 'var(--primary)', marginBottom: '6px' }}>
+                      <Camera size={22} />
+                    </div>
+                    <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--primary-dark)' }}>
+                      Click to choose photo or document
+                    </div>
+                    <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
+                      Upload customer portrait, identity proof, loan contract, or house photo
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '12px', marginBottom: '14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        {docPreviewUrl ? (
+                          <img
+                            src={docPreviewUrl}
+                            alt="Preview"
+                            style={{ width: '56px', height: '56px', objectFit: 'cover', borderRadius: '8px', border: '1.5px solid #047857' }}
+                          />
+                        ) : (
+                          <div style={{ width: '48px', height: '48px', background: '#E0F2FE', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284C7' }}>
+                            <FileText size={24} />
+                          </div>
+                        )}
+                        <div>
+                          <strong style={{ fontSize: '13px', display: 'block', maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {docFile.name}
+                          </strong>
+                          <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
+                            {(docFile.size / 1024).toFixed(1)} KB • {docFile.type || 'Document'}
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleClearSelectedDoc}
+                        className="btn btn-secondary btn-sm"
+                        style={{ fontSize: '11px', padding: '3px 8px', color: 'var(--danger)' }}
+                      >
+                        <X size={12} /> Change
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Metadata Fields: Title, Category, Notes */}
+                <div className="grid-2" style={{ gap: '10px', marginBottom: '10px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#334155' }}>
+                      Document / Photo Title *
+                    </label>
+                    <input
+                      type="text"
+                      className="input-field"
+                      style={{ fontSize: '13px', padding: '7px 10px' }}
+                      value={docTitle}
+                      onChange={(e) => setDocTitle(e.target.value)}
+                      placeholder="e.g. Customer Photo, Aadhaar Card, Loan Agreement"
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#334155' }}>
+                      Category / Type *
+                    </label>
+                    <select
+                      className="input-field"
+                      style={{ fontSize: '13px', padding: '7px 10px' }}
+                      value={docCategory}
+                      onChange={(e) => setDocCategory(e.target.value)}
+                    >
+                      <option value="Customer Photo">Customer Photo / Portrait</option>
+                      <option value="ID Proof / KYC">ID Proof / KYC (Aadhaar, PAN, Voter)</option>
+                      <option value="Loan Agreement">Loan Agreement / Sanction Letter</option>
+                      <option value="House / Property Photo">House / Property Photo</option>
+                      <option value="Bank Document">Bank Passbook / Cheque</option>
+                      <option value="Legal Notice">Legal Notice / Demand Letter</option>
+                      <option value="Other Document">Other Document</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', marginBottom: '4px', color: '#334155' }}>
+                    Remarks / Details (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    className="input-field"
+                    style={{ fontSize: '13px', padding: '7px 10px' }}
+                    value={docNotes}
+                    onChange={(e) => setDocNotes(e.target.value)}
+                    placeholder="e.g. Captured during field verification, original verified"
+                  />
+                </div>
+
                 <button
                   type="button"
                   className="btn btn-primary"
-                  style={{ width: '100%', justifyContent: 'center' }}
-                  onClick={() => docModalInputRef.current?.click()}
-                  disabled={uploadingDocModal}
+                  style={{ width: '100%', justifyContent: 'center', gap: '6px' }}
+                  onClick={handleSubmitCustomerDoc}
+                  disabled={uploadingDocModal || !docFile}
                 >
-                  <UploadCloud size={16} />
-                  {uploadingDocModal ? 'Uploading and attaching document...' : 'Upload Document to Customer Record'}
+                  {uploadingDocModal ? (
+                    <>
+                      <RefreshCw size={14} className="animate-spin" /> Uploading & Saving Record...
+                    </>
+                  ) : (
+                    <>
+                      <UploadCloud size={15} /> Upload File & Save Record
+                    </>
+                  )}
                 </button>
+              </div>
+
+              {/* SECTION 2: ATTACHED FILES & PHOTOS LIST */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <strong style={{ fontSize: '13px', color: '#1E293B' }}>
+                    Customer Files & Photos ({selectedCustomerForDoc.documents?.length || 0})
+                  </strong>
+                </div>
+
+                {(!selectedCustomerForDoc.documents || selectedCustomerForDoc.documents.length === 0) ? (
+                  <div style={{ padding: '24px', background: '#F8FAFC', borderRadius: '10px', textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)', border: '1px solid #E2E8F0' }}>
+                    <Image size={28} color="#94A3B8" style={{ marginBottom: '6px' }} />
+                    <div>No files or photos uploaded for this customer yet.</div>
+                    <div style={{ fontSize: '11.5px', marginTop: '2px' }}>Use the form above to attach customer photos or documents.</div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {selectedCustomerForDoc.documents.map((doc, idx) => {
+                      const isImg = doc.fileType?.startsWith('image/') || /\.(jpg|jpeg|png|webp)$/i.test(doc.name || '') || /\.(jpg|jpeg|png|webp)$/i.test(doc.url || '');
+                      return (
+                        <div
+                          key={doc._id || idx}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '12px 14px',
+                            background: '#FFFFFF',
+                            borderRadius: '10px',
+                            border: '1px solid #E2E8F0',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                            gap: '12px',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
+                            {isImg ? (
+                              <a href={doc.url} target="_blank" rel="noopener noreferrer" title="Click to view full photo">
+                                <img
+                                  src={doc.url}
+                                  alt={doc.name}
+                                  style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #E2E8F0' }}
+                                />
+                              </a>
+                            ) : (
+                              <div style={{ width: '44px', height: '44px', background: doc.fileType === 'pdf' ? '#FEE2E2' : '#DCFCE7', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                {doc.fileType === 'pdf' ? (
+                                  <File size={22} color="#DC2626" />
+                                ) : doc.fileType?.includes('xls') || doc.fileType === 'csv' ? (
+                                  <FileSpreadsheet size={22} color="#16A34A" />
+                                ) : (
+                                  <FileText size={22} color="#0284C7" />
+                                )}
+                              </div>
+                            )}
+
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '2px' }}>
+                                <strong style={{ fontSize: '13px', color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '240px' }}>
+                                  {doc.name}
+                                </strong>
+                                <span style={{
+                                  fontSize: '10px',
+                                  padding: '2px 7px',
+                                  borderRadius: '6px',
+                                  fontWeight: 700,
+                                  background: doc.category === 'Customer Photo' ? '#DCFCE7' : doc.category?.includes('ID') ? '#E0F2FE' : '#FEF3C7',
+                                  color: doc.category === 'Customer Photo' ? '#166534' : doc.category?.includes('ID') ? '#0369A1' : '#B45309',
+                                }}>
+                                  {doc.category || 'General'}
+                                </span>
+                              </div>
+                              {doc.notes && (
+                                <div style={{ fontSize: '11.5px', color: '#475569', marginBottom: '2px', fontStyle: 'italic' }}>
+                                  "{doc.notes}"
+                                </div>
+                              )}
+                              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                {doc.size ? `${(doc.size / 1024).toFixed(1)} KB • ` : ''}
+                                Uploaded {new Date(doc.uploadedAt || Date.now()).toLocaleDateString()}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <a
+                              href={doc.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn btn-secondary btn-sm"
+                              style={{ textDecoration: 'none', gap: '4px', fontSize: '12px' }}
+                              title="Open file / photo in new tab"
+                            >
+                              <ExternalLink size={12} /> View
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCustomerDoc(doc._id || doc.url)}
+                              className="btn btn-secondary btn-sm"
+                              style={{ color: 'var(--danger)', padding: '5px 8px' }}
+                              title="Delete this file"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="modal-footer">
+            <div className="modal-footer" style={{ borderTop: '1px solid #E2E8F0', padding: '12px 20px' }}>
               <button
                 type="button"
                 className="btn btn-secondary"
-                onClick={() => setSelectedCustomerForDoc(null)}
+                onClick={() => {
+                  handleClearSelectedDoc();
+                  setSelectedCustomerForDoc(null);
+                }}
               >
                 Close
               </button>

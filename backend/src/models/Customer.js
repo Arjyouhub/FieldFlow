@@ -106,6 +106,8 @@ const customerSchema = new mongoose.Schema(
         url: { type: String, required: true },
         fileType: { type: String, default: '' },
         size: { type: Number, default: 0 },
+        category: { type: String, default: 'General' },
+        notes: { type: String, default: '' },
         uploadedAt: { type: Date, default: Date.now },
       },
     ],

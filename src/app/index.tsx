@@ -190,7 +190,7 @@ export default function LoginScreen() {
   // -------------------------------------------------------------
   const handleLogin = async () => {
     if (!phone.trim() || !password) {
-      setErrorText("Please enter your mobile number and password.");
+      setErrorText("Please enter your mobile number or email ID and password.");
       return;
     }
 
@@ -448,13 +448,22 @@ export default function LoginScreen() {
     }
   };
 
+  // Automatically capture device GPS coordinates when opening Create Account
+  useEffect(() => {
+    if (currentView === "register" && !regLocation && !capturingLocation) {
+      handleCaptureLocation();
+    }
+  }, [currentView]);
+
   const handleSubmitRegistration = async () => {
     if (!regName.trim()) {
       setRegError("Please enter your full name.");
       return;
     }
-    if (!regPhone.trim() || regPhone.trim().length < 10) {
-      setRegError("Please enter a valid 10-digit mobile number.");
+    const trimmedId = regPhone.trim();
+    const isEmail = trimmedId.includes("@");
+    if (!trimmedId || (!isEmail && trimmedId.replace(/\D/g, "").length < 10) || (isEmail && !trimmedId.includes("."))) {
+      setRegError("Please enter a valid 10-digit mobile number or email ID.");
       return;
     }
     if (!regPassword || regPassword.length < 6) {
@@ -480,7 +489,8 @@ export default function LoginScreen() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: regName.trim(),
-          phone: regPhone.trim(),
+          phone: trimmedId,
+          email: isEmail ? trimmedId.toLowerCase() : undefined,
           password: regPassword,
           assignedArea: regArea.trim(),
           employeeId: regEmployeeId.trim() || undefined,
@@ -964,20 +974,19 @@ export default function LoginScreen() {
                       />
                     </View>
 
-                    {/* Mobile Number with +91 Badge */}
-                    <Text style={styles.modernInputLabel}>Mobile Number (Login Username) *</Text>
+                    {/* Mobile Number or Email ID */}
+                    <Text style={styles.modernInputLabel}>Mobile Number or Email ID *</Text>
                     <View style={styles.regModernInputWrapper}>
-                      <View style={styles.modernPhonePrefixBadge}>
-                        <Text style={styles.modernPhonePrefixText}>+91</Text>
-                      </View>
+                      <Ionicons name="mail-outline" size={18} color="#64748B" style={{ marginRight: 10 }} />
                       <TextInput
                         style={styles.modernInputFlex}
-                        placeholder="10-digit mobile number"
+                        placeholder="Enter mobile number or email ID"
                         placeholderTextColor={theme.textMuted}
                         value={regPhone}
                         onChangeText={setRegPhone}
-                        keyboardType="phone-pad"
-                        maxLength={10}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        autoCorrect={false}
                       />
                     </View>
 
@@ -1000,7 +1009,7 @@ export default function LoginScreen() {
                       <Ionicons name="lock-closed-outline" size={18} color="#64748B" style={{ marginRight: 10 }} />
                       <TextInput
                         style={styles.modernInputFlex}
-                        placeholder="Minimum 6 characters"
+                        placeholder="Enter password"
                         placeholderTextColor={theme.textMuted}
                         value={regPassword}
                         onChangeText={setRegPassword}
@@ -1025,7 +1034,7 @@ export default function LoginScreen() {
                       <Ionicons name="shield-checkmark-outline" size={18} color="#64748B" style={{ marginRight: 10 }} />
                       <TextInput
                         style={styles.modernInputFlex}
-                        placeholder="Re-enter password"
+                        placeholder="Confirm password"
                         placeholderTextColor={theme.textMuted}
                         value={regConfirmPassword}
                         onChangeText={setRegConfirmPassword}
@@ -1167,34 +1176,33 @@ export default function LoginScreen() {
               </View>
             ) : null}
 
-            {/* Input 1: Mobile Number */}
+            {/* Input 1: Mobile Number or Email ID */}
             <View style={styles.exactInputContainer}>
               <View style={styles.exactInputIconCol}>
                 <Ionicons
-                  name="phone-portrait-outline"
+                  name="person-outline"
                   size={20}
                   color="#64748B"
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.exactFloatingLabel}>Mobile Number</Text>
+                <Text style={styles.exactFloatingLabel}>Mobile Number or Email ID</Text>
                 <TextInput
                   style={styles.exactTextInput}
-                  placeholder="+91 98765 43210"
+                  placeholder="Enter mobile or email ID"
                   placeholderTextColor="#94A3B8"
                   value={phone}
                   onChangeText={(val) => {
                     setPhone(val);
                     if (errorText) setErrorText("");
                   }}
-                  keyboardType="phone-pad"
-                  maxLength={10}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  spellCheck={false}
+                  keyboardType="email-address"
                   autoComplete="off"
                   textContentType="none"
                   importantForAutofill="no"
-                  autoCorrect={false}
-                  spellCheck={false}
-                  autoCapitalize="none"
                 />
               </View>
             </View>
@@ -1212,7 +1220,7 @@ export default function LoginScreen() {
                 <Text style={styles.exactFloatingLabel}>Password</Text>
                 <TextInput
                   style={styles.exactTextInput}
-                  placeholder="••••••••"
+                  placeholder="Enter password"
                   placeholderTextColor="#94A3B8"
                   secureTextEntry={!showPassword}
                   value={password}

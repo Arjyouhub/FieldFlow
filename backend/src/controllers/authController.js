@@ -331,14 +331,25 @@ export async function registerStaff(req, res) {
       return res.status(400).json({ success: false, message: 'Full name is required.' });
     }
     if (!phone || !phone.trim()) {
-      return res.status(400).json({ success: false, message: 'Mobile number is required.' });
+      return res.status(400).json({ success: false, message: 'Mobile number or email ID is required.' });
     }
     if (!password || password.length < 6) {
       return res.status(400).json({ success: false, message: 'Password must be at least 6 characters.' });
     }
 
-    const cleanPhone = phone.trim().replace(/[^\d+]/g, '');
-    const existing = await User.findOne({ phone: cleanPhone });
+    const trimmedInput = phone.trim();
+    const isEmail = trimmedInput.includes('@');
+    const cleanPhone = isEmail
+      ? `EML-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 1000)}`
+      : trimmedInput.replace(/[^\d+]/g, '');
+    const cleanEmail = isEmail ? trimmedInput.toLowerCase() : (email ? email.trim().toLowerCase() : undefined);
+
+    const existing = await User.findOne({
+      $or: [
+        ...(isEmail && cleanEmail ? [{ email: cleanEmail }] : []),
+        ...(!isEmail && cleanPhone ? [{ phone: cleanPhone }] : []),
+      ],
+    });
     if (existing) {
       if (existing.status === 'pending_approval') {
         return res.status(409).json({
@@ -349,7 +360,7 @@ export async function registerStaff(req, res) {
       }
       return res.status(409).json({
         success: false,
-        message: 'This mobile number is already registered. Please login or reset your password.',
+        message: 'This mobile number or email ID is already registered. Please login or reset your password.',
       });
     }
 

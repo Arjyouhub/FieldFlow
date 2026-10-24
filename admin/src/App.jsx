@@ -2540,10 +2540,10 @@ export default function App() {
           {/* TAB 2: CUSTOMERS & CASES */}
           {/* ================================================================ */}
           {activeTab === 'customers' && (
-            <div>
-              <div className="card-header-row" style={{ alignItems: 'center', gap: '10px' }}>
-                <div style={{ display: 'flex', gap: '8px', flex: '1 1 300px', flexWrap: 'wrap', width: '100%' }}>
-                  <div style={{ position: 'relative', flex: '1 1 180px', minWidth: '140px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div className="card cases-filter-card">
+                <div className="cases-filter-top-row">
+                  <div className="cases-search-box">
                     <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                     <input
                       type="text"
@@ -2551,74 +2551,76 @@ export default function App() {
                       placeholder="Search customer, account, phone..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      style={{ width: '100%' }}
+                      style={{ width: '100%', paddingLeft: '32px' }}
                     />
                   </div>
-                  <select
-                    className="filter-select-sm"
-                    style={{ flex: '1 1 110px', minWidth: '100px' }}
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                  >
-                    <option value="ALL">All Statuses</option>
-                    <option value="pending">Pending</option>
-                    <option value="visited">Visited</option>
-                    <option value="collected">Collected</option>
-                    <option value="ptp">PTP</option>
-                    <option value="broken_ptp">Broken PTP</option>
-                  </select>
-                  <select
-                    className="filter-select-sm"
-                    style={{ flex: '1 1 130px', minWidth: '120px' }}
-                    value={customerStaffFilter}
-                    onChange={(e) => setCustomerStaffFilter(e.target.value)}
-                    title="Filter customers by assigned field staff"
-                  >
-                    <option value="ALL">All Field Staff ({staffList.length})</option>
-                    <option value="UNASSIGNED">Unassigned Cases</option>
-                    {staffList.map((stf) => (
-                      <option key={stf._id} value={stf._id}>
-                        {stf.name} {stf.employeeId ? `(${stf.employeeId})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
 
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={() => {
-                      setImportModalTab('file');
-                      setShowImportModal(true);
-                    }}
-                    style={{ gap: '5px' }}
-                  >
-                    <UploadCloud size={14} /> Import File
-                  </button>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => {
-                      setImportModalTab('single');
-                      setShowImportModal(true);
-                    }}
-                    style={{ gap: '5px' }}
-                  >
-                    <Plus size={14} /> Add Single Case
-                  </button>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={handleDownloadSampleTemplate}
-                    title="Download Excel sample template (.xlsx)"
-                    style={{ gap: '5px' }}
-                  >
-                    <Download size={14} /> Template
-                  </button>
+                  <div className="cases-dropdown-group">
+                    <select
+                      className="filter-select-sm"
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                    >
+                      <option value="ALL">All Statuses</option>
+                      <option value="pending">Pending</option>
+                      <option value="visited">Visited</option>
+                      <option value="collected">Collected</option>
+                      <option value="ptp">PTP</option>
+                      <option value="broken_ptp">Broken PTP</option>
+                    </select>
+
+                    <select
+                      className="filter-select-sm"
+                      value={customerStaffFilter}
+                      onChange={(e) => setCustomerStaffFilter(e.target.value)}
+                      title="Filter customers by assigned field staff"
+                    >
+                      <option value="ALL">All Staff ({staffList.length})</option>
+                      <option value="UNASSIGNED">Unassigned</option>
+                      {staffList.map((stf) => (
+                        <option key={stf._id} value={stf._id}>
+                          {stf.name} {stf.employeeId ? `(${stf.employeeId})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="cases-actions-group">
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={() => {
+                        setImportModalTab('file');
+                        setShowImportModal(true);
+                      }}
+                      style={{ gap: '5px' }}
+                    >
+                      <UploadCloud size={14} /> Import File
+                    </button>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => {
+                        setImportModalTab('single');
+                        setShowImportModal(true);
+                      }}
+                      style={{ gap: '5px' }}
+                    >
+                      <Plus size={14} /> Add Single Case
+                    </button>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={handleDownloadSampleTemplate}
+                      title="Download Excel sample template (.xlsx)"
+                      style={{ gap: '5px' }}
+                    >
+                      <Download size={14} /> Template
+                    </button>
+                  </div>
                 </div>
               </div>
 
               {(customerViewMode === 'cards' || customerViewMode === 'auto') && (
                 /* Mobile Stacked Card View */
-                <div className={customerViewMode === 'auto' ? 'responsive-auto-cards' : ''} style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div className={customerViewMode === 'auto' ? 'responsive-auto-cards' : ''} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {filteredCustomers.length === 0 ? (
                     <div className="card" style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
                       No customer cases match the current filter.
@@ -2638,34 +2640,47 @@ export default function App() {
 
                         <div className="case-card-row" style={{ marginTop: '6px' }}>
                           <span className="case-card-label">Phone:</span>
-                          <a href={`tel:${c.phone}`} style={{ color: 'var(--primary)', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <a
+                            href={`tel:${c.phone}`}
+                            style={{
+                              color: 'var(--primary)',
+                              fontWeight: 600,
+                              textDecoration: 'none',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}
+                          >
                             <Phone size={12} /> {c.phone}
                           </a>
                         </div>
 
-                        <div className="case-card-row">
+                        <div className="case-card-row" style={{ alignItems: 'flex-start', marginTop: '4px' }}>
                           <span className="case-card-label">Address:</span>
-                          <span className="case-card-val" style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {c.address} {c.area ? `(${c.area})` : ''}
+                          <span className="case-card-val" style={{ whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.4 }}>
+                            {c.address || 'No address provided'} {c.area ? `(${c.area})` : ''}
                           </span>
                         </div>
 
-                        <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
-                          <div style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }}>
-                            <span style={{ color: '#065F46', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 700 }}>Total Balance: </span>
+                        <div className="case-card-financials">
+                          <div style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: '6px', padding: '5px 10px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ color: '#065F46', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 700 }}>Total Balance:</span>
                             <strong style={{ color: '#047857' }}>₹{c.outstandingAmount?.toLocaleString('en-IN')}</strong>
                           </div>
                           {c.emiAmount > 0 && (
-                            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }}>
-                              <span style={{ color: '#64748B', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 700 }}>Due EMI: </span>
+                            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '5px 10px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              <span style={{ color: '#64748B', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 700 }}>Due EMI:</span>
                               <strong style={{ color: '#334155' }}>₹{c.emiAmount?.toLocaleString('en-IN')}</strong>
                             </div>
                           )}
                         </div>
 
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', fontSize: '12px', borderTop: '1px dashed var(--border)', paddingTop: '8px' }}>
-                          <div style={{ color: 'var(--text-secondary)' }}>
-                            Staff: <strong>{c.assignedStaff?.name || 'Unassigned'}</strong>
+                          <div style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span className="case-card-label">Staff:</span>
+                            <strong style={{ color: c.assignedStaff ? 'var(--text-main)' : 'var(--warning-text, #d97706)' }}>
+                              {c.assignedStaff?.name || 'Unassigned'}
+                            </strong>
                           </div>
                           <div>
                             {c.documents && c.documents.length > 0 && (
@@ -2676,11 +2691,11 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div className="case-card-actions" style={{ marginTop: '10px' }}>
+                        <div className="case-card-actions">
                           <button
                             type="button"
                             className="btn btn-secondary btn-sm"
-                            style={{ flex: 1, justifyContent: 'center', gap: '4px' }}
+                            style={{ flex: 1, justifyContent: 'center', gap: '5px' }}
                             onClick={() => {
                               handleClearSelectedDoc();
                               setSelectedCustomerForDoc(c);
@@ -2992,25 +3007,9 @@ export default function App() {
             return (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 {/* UNIFIED PAGE HEADER WITH SUB-TAB CONTROLS */}
-                <div
-                  className="card"
-                  style={{
-                    padding: '18px 24px',
-                    background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
-                    borderRadius: 'var(--radius-xl)',
-                    border: '1px solid var(--border)',
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      flexWrap: 'wrap',
-                      gap: '16px',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div className="card staff-header-card">
+                  <div className="staff-header-banner">
+                    <div className="staff-header-info">
                       <div
                         style={{
                           width: '46px',
@@ -3042,40 +3041,22 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                    <div className="staff-subnav-container">
                       {/* Sub-Tab Navigation Pill Switcher */}
-                      <div
-                        style={{
-                          display: 'inline-flex',
-                          background: 'var(--bg-card-subtle)',
-                          padding: '3px',
-                          borderRadius: 'var(--radius-md)',
-                          border: '1px solid var(--border)',
-                          maxWidth: '100%',
-                          overflowX: 'auto',
-                          WebkitOverflowScrolling: 'touch',
-                        }}
-                      >
+                      <div className="staff-subtabs-pill">
                         <button
                           type="button"
                           onClick={() => setStaffSubTab('both')}
+                          className="staff-subtab-btn"
                           style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '7px',
-                            padding: '8px 16px',
-                            borderRadius: 'var(--radius-sm)',
-                            border: 'none',
                             background: currentSubTab === 'both' ? 'var(--primary)' : 'transparent',
                             color: currentSubTab === 'both' ? '#ffffff' : 'var(--text-secondary)',
                             fontWeight: currentSubTab === 'both' ? 700 : 500,
-                            fontSize: '13px',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s ease',
                           }}
                         >
                           <Layers size={14} />
-                          <span>All-in-One (Both)</span>
+                          <span className="subtab-label-full">All-in-One (Both)</span>
+                          <span className="subtab-label-short">All-in-One</span>
                         </button>
 
                         <button
@@ -3084,36 +3065,29 @@ export default function App() {
                             setStaffSubTab('approvals');
                             setApprovalsFilter('pending');
                           }}
+                          className="staff-subtab-btn"
                           style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '7px',
-                            padding: '8px 16px',
-                            borderRadius: 'var(--radius-sm)',
-                            border: 'none',
                             background: currentSubTab === 'approvals' ? 'var(--primary)' : 'transparent',
                             color: currentSubTab === 'approvals' ? '#ffffff' : 'var(--text-secondary)',
                             fontWeight: currentSubTab === 'approvals' ? 700 : 500,
-                            fontSize: '13px',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s ease',
                           }}
                         >
                           <UserCheck size={14} />
-                          <span>Approvals Portal</span>
+                          <span className="subtab-label-full">Approvals Portal</span>
+                          <span className="subtab-label-short">Approvals</span>
                           {pendingStaff.length > 0 && (
                             <span
                               style={{
                                 fontSize: '11px',
                                 fontWeight: 800,
-                                padding: '1px 8px',
+                                padding: '1px 6px',
                                 borderRadius: '10px',
                                 background: currentSubTab === 'approvals' ? '#FEF3C7' : 'var(--warning-light)',
                                 color: currentSubTab === 'approvals' ? '#92400E' : 'var(--warning-text)',
                                 border: '1px solid var(--warning-border)',
                               }}
                             >
-                              {pendingStaff.length} PENDING
+                              {pendingStaff.length}
                             </span>
                           )}
                         </button>
@@ -3121,27 +3095,20 @@ export default function App() {
                         <button
                           type="button"
                           onClick={() => setStaffSubTab('directory')}
+                          className="staff-subtab-btn"
                           style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '7px',
-                            padding: '8px 16px',
-                            borderRadius: 'var(--radius-sm)',
-                            border: 'none',
                             background: currentSubTab === 'directory' ? 'var(--primary)' : 'transparent',
                             color: currentSubTab === 'directory' ? '#ffffff' : 'var(--text-secondary)',
                             fontWeight: currentSubTab === 'directory' ? 700 : 500,
-                            fontSize: '13px',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s ease',
                           }}
                         >
                           <Briefcase size={14} />
-                          <span>Directory Only</span>
+                          <span className="subtab-label-full">Directory Only</span>
+                          <span className="subtab-label-short">Directory</span>
                           <span
                             style={{
                               fontSize: '11px',
-                              padding: '1px 7px',
+                              padding: '1px 6px',
                               borderRadius: '10px',
                               background: currentSubTab === 'directory' ? 'rgba(255,255,255,0.25)' : 'var(--border)',
                               color: currentSubTab === 'directory' ? '#ffffff' : 'var(--text-muted)',
@@ -3153,22 +3120,24 @@ export default function App() {
                         </button>
                       </div>
 
-                      <button
-                        onClick={loadData}
-                        className="btn btn-secondary btn-sm"
-                        title="Refresh Staff Roster"
-                        style={{ gap: '6px' }}
-                      >
-                        <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
-                      </button>
+                      <div className="staff-action-btns">
+                        <button
+                          onClick={loadData}
+                          className="btn btn-secondary btn-sm"
+                          title="Refresh Staff Roster"
+                          style={{ gap: '6px' }}
+                        >
+                          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
+                        </button>
 
-                      <button
-                        onClick={() => setShowCreateStaffModal(true)}
-                        className="btn btn-primary btn-sm"
-                        style={{ gap: '6px' }}
-                      >
-                        <Plus size={14} /> Register Staff
-                      </button>
+                        <button
+                          onClick={() => setShowCreateStaffModal(true)}
+                          className="btn btn-primary btn-sm"
+                          style={{ gap: '6px' }}
+                        >
+                          <Plus size={14} /> Register Staff
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -3379,14 +3348,14 @@ export default function App() {
                       </div>
                     ) : (
                       currentSubTab === 'both' && (
-                        <div className="card" style={{ padding: '16px 20px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                        <div className="card approvals-summary-card">
+                          <div className="approvals-summary-banner">
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                              <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#ECFDF5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#ECFDF5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 <CheckCircle size={22} />
                               </div>
                               <div>
-                                <h3 className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '15px', margin: 0 }}>
+                                <h3 className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '15px', margin: 0, flexWrap: 'wrap' }}>
                                   Staff Registration Approvals
                                   <span className="badge badge-success" style={{ fontSize: '11px', padding: '2px 8px' }}>All Verified (0 Pending)</span>
                                 </h3>
@@ -3401,7 +3370,7 @@ export default function App() {
                                 setStaffSubTab('approvals');
                                 setApprovalsFilter('all');
                               }}
-                              className="btn btn-secondary btn-sm"
+                              className="btn btn-secondary btn-sm approvals-history-btn"
                               style={{ gap: '6px', fontSize: '12px' }}
                             >
                               <ExternalLink size={13} /> View Approvals History

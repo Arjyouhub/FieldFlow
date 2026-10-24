@@ -2488,6 +2488,25 @@ h1, .topbar-title {
   .approval-kpi-card {
     padding: 10px 12px !important;
   }
+
+  .case-mobile-card {
+    padding: 12px !important;
+    gap: 8px !important;
+  }
+
+  .case-card-actions {
+    flex-direction: column !important;
+    gap: 6px !important;
+  }
+
+  .case-card-actions .btn {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  .case-card-val {
+    max-width: 100% !important;
+  }
 }
 
 

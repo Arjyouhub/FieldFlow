@@ -85,8 +85,9 @@ export function StaffDetailsModal({
           <div
             style={{
               display: 'flex',
-              gap: '18px',
+              gap: '16px',
               alignItems: 'center',
+              flexWrap: 'wrap',
               padding: '16px',
               background: 'var(--bg-card-subtle)',
               borderRadius: '12px',
@@ -95,7 +96,7 @@ export function StaffDetailsModal({
             }}
           >
             {/* Selfie Photo */}
-            <div style={{ position: 'relative' }}>
+            <div style={{ position: 'relative', flexShrink: 0 }}>
               {resolvedPhoto ? (
                 <img
                   src={resolvedPhoto}
@@ -148,7 +149,7 @@ export function StaffDetailsModal({
             </div>
 
             {/* Officer Meta */}
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ flex: '1 1 200px', minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <h4 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: 'var(--text-main)' }}>
                   {staff.name}
@@ -179,7 +180,7 @@ export function StaffDetailsModal({
           </div>
 
           {/* Details Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '18px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: '12px', marginBottom: '18px' }}>
             <div style={{ padding: '12px', background: '#fff', border: '1px solid var(--border)', borderRadius: '10px' }}>
               <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: '700' }}>
                 Employee / Agent ID
@@ -295,7 +296,7 @@ export function StaffDetailsModal({
             <Edit2 size={13} /> Edit Staff Details
           </button>
 
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             {staff.status === 'pending_approval' && (
               <>
                 <button

@@ -2541,9 +2541,9 @@ export default function App() {
           {/* ================================================================ */}
           {activeTab === 'customers' && (
             <div>
-              <div className="card-header-row" style={{ alignItems: 'center' }}>
-                <div style={{ display: 'flex', gap: '8px', flex: 1, flexWrap: 'wrap', maxWidth: '720px' }}>
-                  <div style={{ position: 'relative', flex: 1, minWidth: '180px' }}>
+              <div className="card-header-row" style={{ alignItems: 'center', gap: '10px' }}>
+                <div style={{ display: 'flex', gap: '8px', flex: '1 1 300px', flexWrap: 'wrap', width: '100%' }}>
+                  <div style={{ position: 'relative', flex: '1 1 180px', minWidth: '140px' }}>
                     <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                     <input
                       type="text"
@@ -2551,11 +2551,12 @@ export default function App() {
                       placeholder="Search customer, account, phone..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
+                      style={{ width: '100%' }}
                     />
                   </div>
                   <select
                     className="filter-select-sm"
-                    style={{ minWidth: '120px' }}
+                    style={{ flex: '1 1 110px', minWidth: '100px' }}
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
                   >
@@ -2568,7 +2569,7 @@ export default function App() {
                   </select>
                   <select
                     className="filter-select-sm"
-                    style={{ minWidth: '150px' }}
+                    style={{ flex: '1 1 130px', minWidth: '120px' }}
                     value={customerStaffFilter}
                     onChange={(e) => setCustomerStaffFilter(e.target.value)}
                     title="Filter customers by assigned field staff"

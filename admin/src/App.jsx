@@ -5791,7 +5791,7 @@ export default function App() {
                         className="input-field"
                         value={customerForm.name}
                         onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })}
-                        placeholder="e.g. Rahul Nambiar"
+                        placeholder="Enter customer full name"
                         required
                       />
                     </div>

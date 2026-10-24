@@ -980,7 +980,7 @@ export default function LoginScreen() {
                       <Ionicons name="mail-outline" size={18} color="#64748B" style={{ marginRight: 10 }} />
                       <TextInput
                         style={styles.modernInputFlex}
-                        placeholder="Enter mobile number or email ID"
+                        placeholder="e.g. 9876543210 or user@fieldflow.com"
                         placeholderTextColor={theme.textMuted}
                         value={regPhone}
                         onChangeText={setRegPhone}
@@ -1009,7 +1009,7 @@ export default function LoginScreen() {
                       <Ionicons name="lock-closed-outline" size={18} color="#64748B" style={{ marginRight: 10 }} />
                       <TextInput
                         style={styles.modernInputFlex}
-                        placeholder="Enter password"
+                        placeholder="Create a strong password"
                         placeholderTextColor={theme.textMuted}
                         value={regPassword}
                         onChangeText={setRegPassword}
@@ -1034,7 +1034,7 @@ export default function LoginScreen() {
                       <Ionicons name="shield-checkmark-outline" size={18} color="#64748B" style={{ marginRight: 10 }} />
                       <TextInput
                         style={styles.modernInputFlex}
-                        placeholder="Confirm password"
+                        placeholder="Re-enter password to confirm"
                         placeholderTextColor={theme.textMuted}
                         value={regConfirmPassword}
                         onChangeText={setRegConfirmPassword}
@@ -1178,64 +1178,56 @@ export default function LoginScreen() {
 
             {/* Input 1: Mobile Number or Email ID */}
             <View style={styles.exactInputContainer}>
-              <View style={styles.exactInputIconCol}>
-                <Ionicons
-                  name="person-outline"
-                  size={20}
-                  color="#64748B"
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.exactFloatingLabel}>Mobile Number or Email ID</Text>
-                <TextInput
-                  style={styles.exactTextInput}
-                  placeholder="Enter mobile or email ID"
-                  placeholderTextColor="#94A3B8"
-                  value={phone}
-                  onChangeText={(val) => {
-                    setPhone(val);
-                    if (errorText) setErrorText("");
-                  }}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  spellCheck={false}
-                  keyboardType="email-address"
-                  autoComplete="off"
-                  textContentType="none"
-                  importantForAutofill="no"
-                />
-              </View>
+              <Ionicons
+                name="person-outline"
+                size={19}
+                color="#64748B"
+                style={{ marginRight: scale(10) }}
+              />
+              <TextInput
+                style={styles.exactTextInput}
+                placeholder="Enter mobile or email ID"
+                placeholderTextColor="#94A3B8"
+                value={phone}
+                onChangeText={(val) => {
+                  setPhone(val);
+                  if (errorText) setErrorText("");
+                }}
+                autoCapitalize="none"
+                autoCorrect={false}
+                spellCheck={false}
+                keyboardType="email-address"
+                autoComplete="off"
+                textContentType="none"
+                importantForAutofill="no"
+              />
             </View>
 
             {/* Input 2: Password */}
-            <View style={[styles.exactInputContainer, { marginTop: 14 }]}>
-              <View style={styles.exactInputIconCol}>
-                <Ionicons
-                  name="lock-closed-outline"
-                  size={20}
-                  color="#64748B"
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.exactFloatingLabel}>Password</Text>
-                <TextInput
-                  style={styles.exactTextInput}
-                  placeholder="Enter password"
-                  placeholderTextColor="#94A3B8"
-                  secureTextEntry={!showPassword}
-                  value={password}
-                  onChangeText={(val) => {
-                    setPassword(val);
-                    if (errorText) setErrorText("");
-                  }}
-                  autoComplete="off"
-                  textContentType="none"
-                  importantForAutofill="no"
-                  autoCorrect={false}
-                  spellCheck={false}
-                  autoCapitalize="none"
-                />
-              </View>
+            <View style={[styles.exactInputContainer, { marginTop: verticalScale(12) }]}>
+              <Ionicons
+                name="lock-closed-outline"
+                size={19}
+                color="#64748B"
+                style={{ marginRight: scale(10) }}
+              />
+              <TextInput
+                style={styles.exactTextInput}
+                placeholder="Enter password"
+                placeholderTextColor="#94A3B8"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={(val) => {
+                  setPassword(val);
+                  if (errorText) setErrorText("");
+                }}
+                autoComplete="off"
+                textContentType="none"
+                importantForAutofill="no"
+                autoCorrect={false}
+                spellCheck={false}
+                autoCapitalize="none"
+              />
               <Pressable
                 onPress={() => setShowPassword(!showPassword)}
                 style={styles.exactEyeBtn}
@@ -2380,10 +2372,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#F8FAFC",
     borderWidth: 1.5,
     borderColor: "#E2E8F0",
-    borderRadius: 16,
+    borderRadius: 14,
     paddingHorizontal: scale(14),
-    paddingVertical: verticalScale(8),
-    minHeight: verticalScale(60),
+    height: verticalScale(48),
   },
   exactInputContainerFocused: {
     borderColor: BRAND_DARK_GREEN,
@@ -2394,25 +2385,17 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-  exactInputIconCol: {
-    width: scale(32),
-    justifyContent: "center",
-    alignItems: "flex-start",
-  },
-  exactFloatingLabel: {
-    fontSize: fontScale(11),
-    fontWeight: "600",
-    color: "#64748B",
-    marginBottom: 2,
-  },
   exactTextInput: {
-    fontSize: fontScale(15),
-    fontWeight: "700",
+    flex: 1,
+    fontSize: fontScale(14.5),
+    fontWeight: "600",
     color: "#0F172A",
-    padding: 0,
+    paddingVertical: 0,
+    height: "100%",
   },
   exactEyeBtn: {
     padding: 6,
+    marginLeft: scale(4),
   },
   exactForgotRow: {
     alignItems: "flex-end",

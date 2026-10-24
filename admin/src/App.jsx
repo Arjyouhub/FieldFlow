@@ -1755,61 +1755,28 @@ export default function App() {
   // LOGIN SCREEN
   if (!token || !adminUser) {
     return (
-      <div style={{
-        minHeight: '100vh',
-        background: 'radial-gradient(ellipse at 50% 15%, rgba(14, 165, 233, 0.15) 0%, #0f172a 75%)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px',
-        position: 'relative',
-        overflow: 'hidden'
-      }}>
-        {/* Subtle decorative glow */}
-        <div style={{
-          position: 'absolute',
-          width: '500px',
-          height: '500px',
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(13, 148, 136, 0.12) 0%, transparent 70%)',
-          top: '-150px',
-          pointerEvents: 'none'
-        }} />
+      <div className="admin-login-wrapper">
+        {/* Subtle decorative glows */}
+        <div className="admin-login-glow" />
+        <div className="admin-login-glow-bottom" />
 
-        <div className="card login-card" style={{
-          maxWidth: '440px',
-          width: '100%',
-          padding: '36px 32px',
-          borderRadius: '20px',
-          background: 'rgba(255, 255, 255, 0.98)',
-          boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.45)',
-          border: '1px solid rgba(226, 232, 240, 0.9)',
-          position: 'relative',
-          zIndex: 1
-        }}>
+        <div className="admin-login-card">
           {/* Brand Header */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '24px' }}>
-            <div style={{
-              background: 'linear-gradient(135deg, #0d9488 0%, #0891b2 100%)',
-              color: '#fff',
-              borderRadius: '14px',
-              padding: '12px',
-              display: 'flex',
-              boxShadow: '0 8px 16px -4px rgba(13, 148, 136, 0.35)'
-            }}>
-              <LayoutDashboard size={24} />
+          <div className="admin-login-header">
+            <div className="admin-login-logo">
+              <LayoutDashboard size={26} />
             </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#0f172a', letterSpacing: '-0.4px', margin: 0 }}>FieldFlow</h1>
-                <span style={{ fontSize: '10.5px', fontWeight: '700', padding: '2px 7px', background: '#ecfeff', color: '#0891b2', borderRadius: '12px', border: '1px solid #cffafe', textTransform: 'uppercase' }}>Admin</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="admin-login-title-row">
+                <h1 className="admin-login-title">FieldFlow</h1>
+                <span className="admin-login-badge">Admin</span>
               </div>
-              <p style={{ fontSize: '12.5px', color: '#64748b', margin: '2px 0 0 0' }}>Operations & Recovery Portal</p>
+              <p className="admin-login-sub">Operations & Recovery Portal</p>
             </div>
           </div>
 
           {errorMsg && (
-            <div style={{ padding: '12px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '10px', color: '#dc2626', fontSize: '13px', marginBottom: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ padding: '12px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '12px', color: '#dc2626', fontSize: '13px', marginBottom: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <ShieldAlert size={16} style={{ flexShrink: 0 }} />
               <span>{errorMsg}</span>
             </div>
@@ -1817,25 +1784,24 @@ export default function App() {
 
           <form onSubmit={handleLogin}>
             {/* Field: Mobile Number */}
-            <div style={{ marginBottom: '18px' }}>
-              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '700', marginBottom: '6px', color: '#1e293b', letterSpacing: '0.2px' }}>
+            <div className="admin-login-field">
+              <label htmlFor="adminLoginPhone" className="admin-login-label">
                 Mobile Number
               </label>
-              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                <span style={{ position: 'absolute', left: '12px', color: '#94a3b8', display: 'flex', pointerEvents: 'none' }}>
-                  <Phone size={17} />
+              <div className="admin-login-input-wrap">
+                <span className="admin-login-icon">
+                  <Phone size={18} />
                 </span>
                 <input
                   type="text"
                   id="adminLoginPhone"
                   name="adminLoginPhone"
-                  className="input-field"
-                  style={{ width: '100%', height: '46px', paddingLeft: '38px', borderRadius: '10px', fontSize: '14px', border: '1.5px solid #e2e8f0', background: '#f8fafc' }}
+                  className="admin-login-input"
                   value={loginPhone}
                   onChange={(e) => setLoginPhone(e.target.value)}
-                  placeholder="Enter administrator mobile number"
+                  placeholder="Enter admin mobile number"
                   required
-                  autoComplete="off"
+                  autoComplete="username"
                   autoCorrect="off"
                   spellCheck="false"
                 />
@@ -1843,35 +1809,35 @@ export default function App() {
             </div>
 
             {/* Field: Password */}
-            <div style={{ marginBottom: '24px' }}>
+            <div className="admin-login-field" style={{ marginBottom: '22px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <label style={{ fontSize: '12.5px', fontWeight: '700', color: '#1e293b', letterSpacing: '0.2px' }}>
+                <label htmlFor="adminLoginPassword" className="admin-login-label" style={{ marginBottom: 0 }}>
                   Password
                 </label>
               </div>
-              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                <span style={{ position: 'absolute', left: '12px', color: '#94a3b8', display: 'flex', pointerEvents: 'none' }}>
-                  <Lock size={17} />
+              <div className="admin-login-input-wrap">
+                <span className="admin-login-icon">
+                  <Lock size={18} />
                 </span>
                 <input
                   type={showLoginPassword ? 'text' : 'password'}
                   id="adminLoginPassword"
                   name="adminLoginPassword"
-                  className="input-field"
-                  style={{ width: '100%', height: '46px', paddingLeft: '38px', paddingRight: '40px', borderRadius: '10px', fontSize: '14px', border: '1.5px solid #e2e8f0', background: '#f8fafc' }}
+                  className="admin-login-input admin-login-input-pw"
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
-                  placeholder="Enter administrator password"
+                  placeholder="Enter admin password"
                   required
-                  autoComplete="new-password"
+                  autoComplete="current-password"
                   autoCorrect="off"
                   spellCheck="false"
                 />
                 <button
                   type="button"
                   onClick={() => setShowLoginPassword(!showLoginPassword)}
-                  style={{ position: 'absolute', right: '10px', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '6px', display: 'flex' }}
+                  className="admin-login-eye-btn"
                   title={showLoginPassword ? 'Hide password' : 'Show password'}
+                  aria-label={showLoginPassword ? 'Hide password' : 'Show password'}
                 >
                   {showLoginPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -1880,21 +1846,7 @@ export default function App() {
 
             <button
               type="submit"
-              className="btn btn-primary"
-              style={{
-                width: '100%',
-                height: '46px',
-                fontSize: '14.5px',
-                fontWeight: '700',
-                borderRadius: '10px',
-                background: 'linear-gradient(135deg, #0d9488 0%, #0891b2 100%)',
-                borderColor: '#0d9488',
-                boxShadow: '0 4px 12px rgba(13, 148, 136, 0.3)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px'
-              }}
+              className="admin-login-submit-btn"
               disabled={loading}
             >
               {loading ? (
@@ -1907,6 +1859,26 @@ export default function App() {
               )}
             </button>
           </form>
+
+          {/* Quick Demo Login Preset Bar */}
+          <div className="admin-login-demo-bar">
+            <button
+              type="button"
+              className="admin-login-demo-btn"
+              onClick={() => {
+                setLoginPhone('9876543210');
+                setLoginPassword('password123');
+              }}
+            >
+              <ShieldCheck size={15} style={{ color: '#0d9488' }} />
+              <span>Tap to Fill Demo Admin Credentials</span>
+            </button>
+          </div>
+
+          <div className="admin-login-footer">
+            <ShieldCheck size={14} style={{ color: '#0d9488' }} />
+            <span>256-Bit SSL Encrypted Admin Gateway</span>
+          </div>
         </div>
       </div>
     );

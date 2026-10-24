@@ -38,6 +38,10 @@ backend/.env
 # typescript
 *.tsbuildinfo
 
+# Uploads & build artifacts
+backend/uploads/
+admin/dist/
+
 example
 
 # generated native folders

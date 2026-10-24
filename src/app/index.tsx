@@ -134,7 +134,7 @@ export default function LoginScreen() {
   const [otpLoading, setOtpLoading] = useState(false);
   const [resendTimer, setResendTimer] = useState(28);
 
-  const otpInputRefs = useRef<Array<TextInput | null>>([]);
+  const otpInputRefs = useRef<Array<any>>([]);
 
   // Field Staff Registration State
   const [regName, setRegName] = useState("");

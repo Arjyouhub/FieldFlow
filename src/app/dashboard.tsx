@@ -111,20 +111,7 @@ export default function DashboardScreen() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
 
-      // If no customers returned for staff, seed demo cases
-      if (!data.customers || data.customers.length === 0) {
-        await fetch(`${API_BASE_URL}/customers/seed-demo`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${authToken}` },
-        });
-        const retryRes = await fetch(`${API_BASE_URL}/customers/assigned`, {
-          headers: { Authorization: `Bearer ${authToken}` },
-        });
-        const retryData = await retryRes.json();
-        setCustomers(retryData.customers || []);
-      } else {
-        setCustomers(data.customers || []);
-      }
+      setCustomers(data.customers || []);
     } catch (err: any) {
       if (err.message && !err.message.includes("token")) {
         Alert.alert("Network Notice", err.message || "Failed to load assigned field cases.");

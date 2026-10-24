@@ -45,7 +45,7 @@ export default function AccountActivationScreen() {
   const [resendTimer, setResendTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
   const [devOtpNotice, setDevOtpNotice] = useState("");
-  const otpInputRefs = useRef<Array<TextInput | null>>([]);
+  const otpInputRefs = useRef<Array<any>>([]);
 
   // Password State
   const [newPassword, setNewPassword] = useState("");

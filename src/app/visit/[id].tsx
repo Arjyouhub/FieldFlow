@@ -11,6 +11,8 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  Share,
+  Modal,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -135,14 +137,26 @@ export default function StartVisitScreen() {
   const [accuracy, setAccuracy] = useState<number>(8);
   const [verification, setVerification] = useState<any>(null);
 
-  // Photo Evidence State
-  const [photoUri, setPhotoUri] = useState<string | null>(
-    "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=600&auto=format&fit=crop&q=80"
-  );
-  const [photoGallery, setPhotoGallery] = useState<string[]>([
-    "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=400&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=400&auto=format&fit=crop&q=80",
-  ]);
+  // Photo Evidence State (Starts empty, no dummy photo)
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photoGallery, setPhotoGallery] = useState<string[]>([]);
+
+  // Post-submit Share Summary Modal State
+  const [submittedVisitSummary, setSubmittedVisitSummary] = useState<{
+    customerName: string;
+    loanAccountNo: string;
+    phone: string;
+    address: string;
+    outcome: string;
+    collectedAmount?: number;
+    paymentMethod?: string;
+    paymentReference?: string;
+    ptpAmount?: number;
+    ptpDate?: string;
+    remarks: string;
+    visitTime: string;
+    photoUri?: string | null;
+  } | null>(null);
 
   // Visit Outcome Selection
   const [selectedOutcome, setSelectedOutcome] = useState<string>("Promise to Pay (PTP)");
@@ -337,22 +351,64 @@ export default function StartVisitScreen() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
 
-      Alert.alert(
-        "Visit Submitted Successfully",
-        verification?.isSuspicious
-          ? "Visit recorded. GPS location was outside the 100m geofence and flagged for transparent audit."
-          : `Visit record saved for ${customer?.name || "Customer"}.`,
-        [
-          {
-            text: "Return to Dashboard",
-            onPress: () => router.replace("/dashboard"),
-          },
-        ]
-      );
+      // Prepare structured visit report data for sharing
+      const summaryPayload = {
+        customerName: customer?.name || "Customer",
+        loanAccountNo: customer?.loanAccountNo || "N/A",
+        phone: customer?.phone || "N/A",
+        address: `${customer?.address || "N/A"}${customer?.area ? ` (${customer.area})` : ""}`,
+        outcome: outcomeToUse,
+        collectedAmount: outcomeToUse === "Payment Collected" ? Number(collectedAmount || 0) : undefined,
+        paymentMethod: outcomeToUse === "Payment Collected" ? paymentMode : undefined,
+        paymentReference: outcomeToUse === "Payment Collected" ? paymentReference : undefined,
+        ptpAmount: outcomeToUse === "Promise to Pay (PTP)" ? Number(ptpAmount || 0) : undefined,
+        ptpDate: outcomeToUse === "Promise to Pay (PTP)" ? ptpDate : undefined,
+        remarks: remarks.trim() || `${outcomeToUse} visit completed`,
+        visitTime: `${new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}, ${new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}`,
+        photoUri: photoUri || null,
+      };
+
+      setSubmittedVisitSummary(summaryPayload);
     } catch (err: any) {
       Alert.alert("Submission Notice", err.message || "Failed to record visit.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Share Visit Summary with Photo, Details, Feedback & Timestamp
+  const handleShareVisitSummary = async () => {
+    if (!submittedVisitSummary) return;
+    try {
+      const s = submittedVisitSummary;
+      let text = `📋 *FIELDFLOW VISIT REPORT*\n━━━━━━━━━━━━━━━━━━━\n👤 *Customer:* ${s.customerName}\n💳 *Loan A/C:* ${s.loanAccountNo}\n📞 *Phone:* ${s.phone}\n📍 *Address:* ${s.address}\n\n⚡ *Outcome:* ${s.outcome}\n`;
+
+      if (s.outcome === "Payment Collected") {
+        text += `💰 *Collected Amount:* ₹${(s.collectedAmount || 0).toLocaleString("en-IN")}\n`;
+        text += `💳 *Payment Mode:* ${s.paymentMethod}\n`;
+        if (s.paymentReference) {
+          text += `🔖 *Ref/Txn ID:* ${s.paymentReference}\n`;
+        }
+      } else if (s.outcome === "Promise to Pay (PTP)") {
+        text += `🤝 *Promised Amount:* ₹${(s.ptpAmount || 0).toLocaleString("en-IN")}\n`;
+        text += `📅 *PTP Date:* ${s.ptpDate}\n`;
+      }
+
+      text += `📝 *Feedback/Remarks:* ${s.remarks}\n`;
+      text += `🕒 *Visit Time:* ${s.visitTime}\n`;
+      text += `📍 *Geotag Accuracy:* ${accuracy}m\n`;
+      if (s.photoUri) {
+        text += `📷 *Evidence Photo:* Attached\n`;
+      }
+      text += `━━━━━━━━━━━━━━━━━━━\n*FieldFlow Recovery Management*`;
+
+      await Share.share({
+        message: text,
+        url: s.photoUri || undefined,
+        title: `Visit Report - ${s.customerName}`,
+      });
+    } catch (err: any) {
+      console.warn("Share notice:", err.message);
     }
   };
 
@@ -447,8 +503,12 @@ export default function StartVisitScreen() {
                 </Text>
               </View>
             </View>
-            {photoUri && (
+            {photoUri ? (
               <Image source={{ uri: photoUri }} style={styles.photoPromptThumb} />
+            ) : (
+              <View style={[styles.photoPromptThumb, { backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }]}>
+                <Ionicons name="camera" size={20} color="#94A3B8" />
+              </View>
             )}
           </View>
         </ScrollView>
@@ -539,16 +599,41 @@ export default function StartVisitScreen() {
             {/* Photo Evidence Thumbnails */}
             <View style={styles.photoThumbnailsSection}>
               <View style={styles.photoHeaderRow}>
-                <Text style={styles.photoSectionLabel}>Photo Evidence ({photoGallery.length})</Text>
-                <Pressable onPress={handleCapturePhotoAction} hitSlop={6}>
-                  <Text style={styles.retakePhotoText}>Retake Photo</Text>
+                <Text style={styles.photoSectionLabel}>Photo Evidence {photoGallery.length > 0 ? `(${photoGallery.length})` : "(0)"}</Text>
+                <Pressable onPress={handleCapturePhotoAction} hitSlop={6} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Ionicons name="camera" size={14} color={Colors.light.primary} />
+                  <Text style={styles.retakePhotoText}>{photoUri ? "Retake Photo" : "Take Photo"}</Text>
                 </Pressable>
               </View>
-              <View style={styles.photoGridRow}>
-                {photoGallery.map((img, i) => (
-                  <Image key={i} source={{ uri: img }} style={styles.photoThumbnail} />
-                ))}
-              </View>
+              {photoGallery.length > 0 ? (
+                <View style={styles.photoGridRow}>
+                  {photoGallery.map((img, i) => (
+                    <Image key={i} source={{ uri: img }} style={styles.photoThumbnail} />
+                  ))}
+                </View>
+              ) : (
+                <Pressable
+                  onPress={handleCapturePhotoAction}
+                  style={[
+                    styles.photoGridRow,
+                    {
+                      padding: 14,
+                      backgroundColor: "#F8FAFC",
+                      borderRadius: 10,
+                      borderWidth: 1.5,
+                      borderColor: "#CBD5E1",
+                      borderStyle: "dashed",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    },
+                  ]}
+                >
+                  <Ionicons name="camera-outline" size={20} color="#64748B" style={{ marginRight: 6 }} />
+                  <Text style={{ fontSize: 13, color: "#475569", fontWeight: "600" }}>
+                    No photo captured yet. Tap to take photo
+                  </Text>
+                </Pressable>
+              )}
             </View>
           </View>
 
@@ -951,6 +1036,93 @@ export default function StartVisitScreen() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Visit Success & Share Modal */}
+      <Modal
+        visible={!!submittedVisitSummary}
+        transparent
+        animationType="fade"
+        onRequestClose={() => router.replace("/dashboard")}
+      >
+        <View style={styles.shareModalOverlay}>
+          <View style={styles.shareModalContent}>
+            {/* Top Success Icon */}
+            <View style={styles.shareSuccessIconCircle}>
+              <Ionicons name="checkmark-done" size={32} color="#059669" />
+            </View>
+
+            <Text style={styles.shareSuccessTitle}>Visit Submitted!</Text>
+            <Text style={styles.shareSuccessSubtitle}>
+              Visit recorded and verified for {submittedVisitSummary?.customerName}.
+            </Text>
+
+            {/* Structured Visit Summary Box */}
+            <View style={styles.shareSummaryBox}>
+              <View style={styles.shareSummaryRow}>
+                <Text style={styles.shareSummaryLabel}>Outcome:</Text>
+                <Text style={styles.shareSummaryValueBold}>{submittedVisitSummary?.outcome}</Text>
+              </View>
+
+              {submittedVisitSummary?.collectedAmount ? (
+                <View style={styles.shareSummaryRow}>
+                  <Text style={styles.shareSummaryLabel}>Collected:</Text>
+                  <Text style={[styles.shareSummaryValueBold, { color: "#059669" }]}>
+                    ₹{submittedVisitSummary.collectedAmount.toLocaleString("en-IN")} ({submittedVisitSummary.paymentMethod})
+                  </Text>
+                </View>
+              ) : null}
+
+              {submittedVisitSummary?.ptpAmount ? (
+                <View style={styles.shareSummaryRow}>
+                  <Text style={styles.shareSummaryLabel}>PTP Promise:</Text>
+                  <Text style={[styles.shareSummaryValueBold, { color: "#D97706" }]}>
+                    ₹{submittedVisitSummary.ptpAmount.toLocaleString("en-IN")} by {submittedVisitSummary.ptpDate}
+                  </Text>
+                </View>
+              ) : null}
+
+              <View style={styles.shareSummaryRow}>
+                <Text style={styles.shareSummaryLabel}>Feedback:</Text>
+                <Text style={styles.shareSummaryValue} numberOfLines={2}>
+                  {submittedVisitSummary?.remarks}
+                </Text>
+              </View>
+
+              <View style={styles.shareSummaryRow}>
+                <Text style={styles.shareSummaryLabel}>Time:</Text>
+                <Text style={styles.shareSummaryValue}>{submittedVisitSummary?.visitTime}</Text>
+              </View>
+
+              {submittedVisitSummary?.photoUri ? (
+                <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Image
+                    source={{ uri: submittedVisitSummary.photoUri }}
+                    style={{ width: 44, height: 44, borderRadius: 6, backgroundColor: "#E2E8F0" }}
+                  />
+                  <Text style={{ fontSize: 11.5, color: "#059669", fontWeight: "600" }}>
+                    ✓ Photo Evidence Geotagged
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            {/* Actions: Share & Done */}
+            <View style={styles.shareActionsCol}>
+              <Pressable style={styles.shareReportButton} onPress={handleShareVisitSummary}>
+                <Ionicons name="share-social" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                <Text style={styles.shareReportButtonText}>Share Visit Summary</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.doneDashboardButton}
+                onPress={() => router.replace("/dashboard")}
+              >
+                <Text style={styles.doneDashboardButtonText}>Done / Return to Dashboard</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1502,5 +1674,119 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
+  },
+
+  // Share & Completion Modal
+  shareModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.65)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  shareModalContent: {
+    width: "100%",
+    maxWidth: 400,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 22,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  shareSuccessIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#ECFDF5",
+    borderWidth: 2,
+    borderColor: "#A7F3D0",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  shareSuccessTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginBottom: 4,
+  },
+  shareSuccessSubtitle: {
+    fontSize: 13,
+    color: "#64748B",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  shareSummaryBox: {
+    width: "100%",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    padding: 12,
+    gap: 8,
+    marginBottom: 18,
+  },
+  shareSummaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  shareSummaryLabel: {
+    fontSize: 12,
+    color: "#64748B",
+    fontWeight: "600",
+    minWidth: 70,
+  },
+  shareSummaryValue: {
+    fontSize: 12,
+    color: "#1E293B",
+    flex: 1,
+    textAlign: "right",
+  },
+  shareSummaryValueBold: {
+    fontSize: 12.5,
+    color: "#0F172A",
+    fontWeight: "700",
+    flex: 1,
+    textAlign: "right",
+  },
+  shareActionsCol: {
+    width: "100%",
+    gap: 10,
+  },
+  shareReportButton: {
+    backgroundColor: "#059669",
+    borderRadius: 12,
+    paddingVertical: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#059669",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  shareReportButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  doneDashboardButton: {
+    backgroundColor: "#F1F5F9",
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  doneDashboardButtonText: {
+    color: "#475569",
+    fontSize: 14,
+    fontWeight: "600",
   },
 });

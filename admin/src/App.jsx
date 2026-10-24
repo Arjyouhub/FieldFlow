@@ -68,6 +68,7 @@ import NonWorkableView from './components/NonWorkableView';
 import AuditLogsView from './components/AuditLogsView';
 import SuspiciousVisitsView from './components/SuspiciousVisitsView';
 import WhatsAppShareModal from './components/WhatsAppShareModal';
+import StaffApprovalsView from './components/StaffApprovalsView';
 import { StaffDetailsModal, EditStaffModal } from './components/StaffModals';
 import {
   generateCollectionModelImage,
@@ -77,6 +78,8 @@ import {
   generateStaffPerformanceImage,
   generateStaffVisitImage,
 } from './utils/reportImageGenerator';
+import ModernToastContainer, { toast } from './components/ModernToast';
+import { parseSpreadsheetWithAutoHeader, autoDetectColumns, cleanPhoneNumber } from './utils/fileAutoDetector';
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('fieldflow_admin_token') || '');
@@ -101,6 +104,19 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  // Automatically display modern popup notification whenever success or error is dispatched
+  useEffect(() => {
+    if (successMsg) {
+      toast.success(successMsg);
+    }
+  }, [successMsg]);
+
+  useEffect(() => {
+    if (errorMsg) {
+      toast.error(errorMsg);
+    }
+  }, [errorMsg]);
 
   // Portfolios & Global Filter
   const [portfolios, setPortfolios] = useState([]);
@@ -139,7 +155,8 @@ export default function App() {
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [reassignModal, setReassignModal] = useState(null);
 
-  // Field Staff Approvals State
+  // Field Staff Directory & Approvals State
+  const [staffSubTab, setStaffSubTab] = useState('both'); // 'both' | 'approvals' | 'directory'
   const [approvalsFilter, setApprovalsFilter] = useState('pending'); // 'pending' | 'approved' | 'rejected' | 'all'
   const [approvalsSearch, setApprovalsSearch] = useState('');
   const [approvalsViewMode, setApprovalsViewMode] = useState('cards'); // 'cards' | 'table'
@@ -200,6 +217,9 @@ export default function App() {
   const [docTitle, setDocTitle] = useState('');
   const [docCategory, setDocCategory] = useState('Customer Photo');
   const [docNotes, setDocNotes] = useState('');
+  const [customerModalVisits, setCustomerModalVisits] = useState([]);
+  const [customerModalLocations, setCustomerModalLocations] = useState([]);
+  const [loadingCustomerVisits, setLoadingCustomerVisits] = useState(false);
 
   // Forms
   const [staffForm, setStaffForm] = useState({ name: '', phone: '', employeeId: '', team: 'Field Operations', assignedArea: 'Kozhikode Central' });
@@ -237,6 +257,37 @@ export default function App() {
   const [collectionSubView, setCollectionSubView] = useState('model'); // 'model' | 'ledger'
   const [visitSubView, setVisitSubView] = useState('model'); // 'model' | 'logs'
   const [loadingReport, setLoadingReport] = useState(false);
+
+  // Strictly filter out any deleted staff from all reports, matrices, logs & collections client-side
+  const activeStaffIdSet = useMemo(() => {
+    return new Set(
+      (staffList || [])
+        .filter((s) => s.status !== 'deleted' && !s.isDeleted)
+        .map((s) => String(s._id || s.id))
+    );
+  }, [staffList]);
+
+  const visibleTimeSlotMatrix = useMemo(() => {
+    return (reportTimeSlotMatrix || []).filter((r) => activeStaffIdSet.has(String(r.staffId || '')));
+  }, [reportTimeSlotMatrix, activeStaffIdSet]);
+
+  const visiblePerformanceMatrix = useMemo(() => {
+    return (reportPerformanceMatrix || []).filter((r) => activeStaffIdSet.has(String(r.staffId || '')));
+  }, [reportPerformanceMatrix, activeStaffIdSet]);
+
+  const visibleReportVisits = useMemo(() => {
+    return (reportVisits || []).filter((v) => {
+      const sId = String(v.staffId?._id || v.staffId || '');
+      return sId && activeStaffIdSet.has(sId);
+    });
+  }, [reportVisits, activeStaffIdSet]);
+
+  const visibleReportCollections = useMemo(() => {
+    return (reportCollections || []).filter((c) => {
+      const sId = String(c.staffId?._id || c.staffId || '');
+      return sId && activeStaffIdSet.has(sId);
+    });
+  }, [reportCollections, activeStaffIdSet]);
 
   // Manual Navi Visit Counts States (for separate Navi App)
   const [isEditingNavi, setIsEditingNavi] = useState(false);
@@ -527,6 +578,23 @@ export default function App() {
     reportPaymentMethodFilter,
   ]);
 
+  // Load customer visit history and verified GPS locations whenever customer details modal is opened
+  useEffect(() => {
+    if (selectedCustomerForDoc?._id) {
+      setLoadingCustomerVisits(true);
+      apiFetch(`/api/admin/customers/${selectedCustomerForDoc._id}`)
+        .then((data) => {
+          setCustomerModalVisits(data.visits || []);
+          setCustomerModalLocations(data.locations || []);
+        })
+        .catch(() => {})
+        .finally(() => setLoadingCustomerVisits(false));
+    } else {
+      setCustomerModalVisits([]);
+      setCustomerModalLocations([]);
+    }
+  }, [selectedCustomerForDoc?._id]);
+
   // Download Collection Report as Excel (.xlsx)
   const downloadCollectionsExcel = () => {
     if (!reportCollections || reportCollections.length === 0) {
@@ -590,7 +658,7 @@ export default function App() {
 
   // Download Collection Performance Model as formatted Excel (.xlsx)
   const downloadCollectionModelExcel = () => {
-    if (!reportPerformanceMatrix || reportPerformanceMatrix.length === 0) {
+    if (!visiblePerformanceMatrix || visiblePerformanceMatrix.length === 0) {
       setErrorMsg('No staff collection performance data available for current selection.');
       return;
     }
@@ -606,7 +674,7 @@ export default function App() {
       'ACH%',
     ];
 
-    const rows = reportPerformanceMatrix.map((r) => [
+    const rows = visiblePerformanceMatrix.map((r) => [
       r.fsName || 'Staff Member',
       r.sumOfPos || 0,
       r.countOfPos || 0,
@@ -659,12 +727,12 @@ export default function App() {
 
   // Export Collection Performance Model as CSV
   const exportCollectionModelCSV = () => {
-    if (!reportPerformanceMatrix || reportPerformanceMatrix.length === 0) {
+    if (!visiblePerformanceMatrix || visiblePerformanceMatrix.length === 0) {
       setErrorMsg('No staff collection performance data available for current selection.');
       return;
     }
     const headers = ['FS NAME', 'Sum of POS', 'Count of POS', 'Sum of COLLECTION', 'TARGET', 'DRR', 'YET TO GO', 'ACH%'];
-    const rows = reportPerformanceMatrix.map((r) => [
+    const rows = visiblePerformanceMatrix.map((r) => [
       `"${r.fsName || 'Staff'}"`,
       r.sumOfPos || 0,
       r.countOfPos || 0,
@@ -697,7 +765,7 @@ export default function App() {
 
   // Download Daily Visit Time-Slot Matrix as 2-tier formatted Excel (.xlsx)
   const downloadDailyVisitModelExcel = () => {
-    if (!reportTimeSlotMatrix || reportTimeSlotMatrix.length === 0) {
+    if (!visibleTimeSlotMatrix || visibleTimeSlotMatrix.length === 0) {
       setErrorMsg('No daily visit slot matrix data available for current selection.');
       return;
     }
@@ -721,7 +789,7 @@ export default function App() {
       '',
     ];
 
-    const dataRows = reportTimeSlotMatrix.map((r) => [
+    const dataRows = visibleTimeSlotMatrix.map((r) => [
       r.feName || 'Staff Member',
       ...slots.flatMap((s) => pCols.map((p) => r.slots[s]?.[p] ?? (r.isAbsent ? 'AB' : 0))),
       r.totalVisits || 0,
@@ -759,7 +827,7 @@ export default function App() {
 
   // Export Daily Visit Time-Slot Matrix as CSV
   const exportDailyVisitModelCSV = () => {
-    if (!reportTimeSlotMatrix || reportTimeSlotMatrix.length === 0) {
+    if (!visibleTimeSlotMatrix || visibleTimeSlotMatrix.length === 0) {
       setErrorMsg('No daily visit slot matrix data available for current selection.');
       return;
     }
@@ -780,7 +848,7 @@ export default function App() {
       ...slots.flatMap(() => pCols),
       '',
     ];
-    const dataRows = reportTimeSlotMatrix.map((r) => [
+    const dataRows = visibleTimeSlotMatrix.map((r) => [
       `"${r.feName || 'Staff'}"`,
       ...slots.flatMap((s) => pCols.map((p) => {
         const val = r.slots[s]?.[p];
@@ -1093,7 +1161,7 @@ export default function App() {
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
-        const rawRows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+        const { headerRowIndex, rows: rawRows } = parseSpreadsheetWithAutoHeader(worksheet);
 
         if (!rawRows || rawRows.length === 0) {
           throw new Error('No data rows found in spreadsheet.');
@@ -1173,9 +1241,7 @@ export default function App() {
 
           // 3. Phone Number (PHN NO, phnno, phno, phone, mobile, contact, cell)
           let rawPhone = findVal(['phnno', 'phno', 'phnum', 'phnumber', 'phone', 'phoneno', 'phonenumber', 'mobile', 'mobileno', 'mobilenumber', 'contact', 'contactno', 'cell', 'cellno', 'phn', 'mob']);
-          let phone = String(rawPhone || '').trim();
-          if (phone.endsWith('.0')) phone = phone.slice(0, -2);
-          phone = phone.replace(/[^\d+]/g, '');
+          let phone = cleanPhoneNumber(rawPhone);
 
           // 4. Outstanding Amount (TOS, totaloutstanding, outstanding, balance, pos, dueamount, amount)
           const rawOutstanding = findVal(['tos', 'totaloutstanding', 'outstandingamount', 'outstanding', 'totaldue', 'pos', 'principaloutstanding', 'balanceamount', 'balance', 'dueamount', 'overdueamount', 'amount']);
@@ -1628,17 +1694,41 @@ export default function App() {
   };
 
   const handleDeleteStaff = async (staffId) => {
+    const targetId = String(staffId);
+
+    // 1. Instantly & automatically remove from screen, modal, and all state arrays (Optimistic UI)
+    setDeleteConfirmStaff(null);
+    setStaffList((prev) => prev.filter((s) => String(s._id || s.id) !== targetId));
+    setReportTimeSlotMatrix((prev) => prev.filter((r) => String(r.staffId || r.id) !== targetId));
+    setReportPerformanceMatrix((prev) => prev.filter((r) => String(r.staffId || r.id) !== targetId));
+    setReportVisits((prev) => prev.filter((v) => String(v.staffId?._id || v.staffId || '') !== targetId));
+    setReportCollections((prev) => prev.filter((c) => String(c.staffId?._id || c.staffId || '') !== targetId));
+    if (String(reportStaffFilter) === targetId) {
+      setReportStaffFilter('ALL');
+    }
+
     setIsDeletingStaff(true);
     try {
-      const data = await apiFetch(`/api/admin/staff/${staffId}`, {
+      const data = await apiFetch(`/api/admin/staff/${targetId}`, {
         method: 'DELETE',
       });
-      setSuccessMsg(data.message || 'Staff account deleted successfully. Historical visit records preserved.');
+      const successText = data.message || 'Staff member permanently deleted and removed from all reports.';
+      setSuccessMsg(successText);
+      toast.success(successText);
+
+      // 2. Refetch fresh datasets from database in background
       loadData();
-      setStaffList((prev) => prev.filter((s) => s._id !== staffId));
-      setDeleteConfirmStaff(null);
+      if (activeTab === 'reports') {
+        fetchReports();
+      }
     } catch (err) {
       setErrorMsg(err.message);
+      toast.error(err.message || 'Failed to delete staff member.');
+      // Restore dataset if deletion encountered server error
+      loadData();
+      if (activeTab === 'reports') {
+        fetchReports();
+      }
     } finally {
       setIsDeletingStaff(false);
     }
@@ -1655,6 +1745,20 @@ export default function App() {
         }),
       });
       setSuccessMsg(data.message || `Staff registration ${action === 'APPROVE' ? 'approved' : 'declined'}.`);
+      loadData();
+      apiFetch('/api/admin/staff').then((d) => setStaffList(d.staff || [])).catch(() => {});
+    } catch (err) {
+      setErrorMsg(err.message);
+    }
+  };
+
+  const handleUpdateStaffStatus = async (staffId, status) => {
+    try {
+      const data = await apiFetch(`/api/admin/staff/${staffId}/status`, {
+        method: 'PUT',
+        body: JSON.stringify({ status }),
+      });
+      setSuccessMsg(data.message || `Staff status updated to ${status}.`);
       loadData();
       apiFetch('/api/admin/staff').then((d) => setStaffList(d.staff || [])).catch(() => {});
     } catch (err) {
@@ -1944,14 +2048,13 @@ export default function App() {
             { id: 'collections', label: 'Payment Verification', icon: CreditCard, badge: stats?.pendingPaymentVerifications, badgeColor: 'warning' },
             { id: 'ptp', label: 'PTP Commitments', icon: Clock, badge: stats?.ptpCases },
             { id: 'nonworkable', label: 'Non-Workable Cases', icon: UserX, badge: stats?.nonWorkableCases },
-            { id: 'approvals', label: 'Staff Approvals', icon: UserCheck, badge: stats?.pendingStaffApprovals, badgeColor: 'warning' },
-            { id: 'staff', label: 'Staff Directory', icon: Briefcase },
+            { id: 'staff', label: 'Staff Details & Approvals', icon: UserCheck, badge: stats?.pendingStaffApprovals, badgeColor: 'warning' },
             { id: 'reports', label: 'Reports & Export', icon: FileText },
             { id: 'audit', label: 'Audit Logs', icon: FileCheck },
             { id: 'settings', label: 'Settings', icon: Settings },
           ].map((item) => {
             const Icon = item.icon;
-            const isActive = activeTab === item.id;
+            const isActive = activeTab === item.id || (item.id === 'staff' && activeTab === 'approvals');
             return (
               <button
                 key={item.id}
@@ -2008,11 +2111,10 @@ export default function App() {
               {activeTab === 'dashboard' ? 'Operations Dashboard' :
                activeTab === 'portfolios' ? 'Portfolios' :
                activeTab === 'cases' ? 'Cases & Recovery' :
-               activeTab === 'approvals' ? 'Staff Approvals' :
+               (activeTab === 'staff' || activeTab === 'approvals') ? 'Staff Details & Approvals' :
                activeTab === 'customers' ? 'Customer Details' :
                activeTab === 'locations' ? 'Customer Locations' :
                activeTab === 'suspicious' ? 'Suspicious Visits' :
-               activeTab === 'staff' ? 'Staff Directory' :
                activeTab === 'collections' ? 'Collections' :
                activeTab === 'ptp' ? 'PTP Commitments' :
                activeTab === 'nonworkable' ? 'Non-Workable' :
@@ -2123,7 +2225,8 @@ export default function App() {
                   </div>
                   <button
                     onClick={() => {
-                      setActiveTab('approvals');
+                      setActiveTab('staff');
+                      setStaffSubTab('approvals');
                       setApprovalsFilter('pending');
                     }}
                     className="btn btn-sm btn-primary"
@@ -2875,1028 +2978,434 @@ export default function App() {
             />
           )}
 
+
+
           {/* ================================================================ */}
-          {/* TAB: FIELD STAFF APPROVAL */}
+          {/* TAB 5: STAFF MANAGEMENT */}
           {/* ================================================================ */}
-          {activeTab === 'approvals' && (() => {
+          {(activeTab === 'staff' || activeTab === 'approvals') && (() => {
+            const currentSubTab = activeTab === 'approvals' ? 'approvals' : staffSubTab;
             const pendingStaff = staffList.filter((s) => s.status === 'pending_approval');
-            const approvedStaff = staffList.filter((s) => s.status === 'active');
-            const inactiveStaff = staffList.filter((s) => s.status !== 'pending_approval' && s.status !== 'active');
-
-            // Filtered staff based on approvalsFilter & search
-            const filteredStaff = staffList.filter((stf) => {
-              if (approvalsFilter === 'pending' && stf.status !== 'pending_approval') return false;
-              if (approvalsFilter === 'approved' && stf.status !== 'active') return false;
-              if (approvalsFilter === 'rejected' && (stf.status === 'pending_approval' || stf.status === 'active')) return false;
-
-              if (approvalsSearch.trim()) {
-                const q = approvalsSearch.toLowerCase();
-                const matchName = (stf.name || '').toLowerCase().includes(q);
-                const matchPhone = (stf.phone || '').includes(q);
-                const matchEmpId = (stf.employeeId || '').toLowerCase().includes(q);
-                const matchArea = (stf.assignedArea || '').toLowerCase().includes(q);
-                const matchEmail = (stf.email || '').toLowerCase().includes(q);
-                return matchName || matchPhone || matchEmpId || matchArea || matchEmail;
-              }
-              return true;
-            });
+            const approvedStaff = staffList.filter((s) => s.status !== 'pending_approval');
 
             return (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                {/* 1. PORTAL HEADER & KPI STRIP */}
-                <div className="card" style={{ padding: '20px 24px', background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)' }}>
-                  <div className="card-header-row" style={{ marginBottom: '16px' }}>
+                {/* UNIFIED PAGE HEADER WITH SUB-TAB CONTROLS */}
+                <div
+                  className="card"
+                  style={{
+                    padding: '18px 24px',
+                    background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+                    borderRadius: 'var(--radius-xl)',
+                    border: '1px solid var(--border)',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: '16px',
+                    }}
+                  >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                       <div
                         style={{
                           width: '46px',
                           height: '46px',
                           borderRadius: '12px',
-                          background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
+                          background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)',
                           color: '#ffffff',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          boxShadow: '0 4px 10px rgba(16, 185, 129, 0.3)',
+                          boxShadow: '0 4px 10px rgba(5, 150, 105, 0.25)',
                           flexShrink: 0,
                         }}
                       >
-                        <ShieldCheck size={26} />
+                        <Users size={24} />
                       </div>
                       <div>
-                        <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                          Field Staff Approval Portal
+                        <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-main)', margin: 0, display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                          Staff Details & Approvals
                           {pendingStaff.length > 0 && (
-                            <span className="badge badge-warning" style={{ fontSize: '12px', padding: '4px 10px' }}>
-                              {pendingStaff.length} Awaiting Verification
+                            <span className="badge badge-warning" style={{ fontSize: '11px', padding: '3px 8px' }}>
+                              {pendingStaff.length} Approvals Pending
                             </span>
                           )}
                         </h2>
-                        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                          Verify staff verification selfies, GPS sign-up coordinates, assign operating territories, and approve mobile app credentials.
+                        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '3px 0 0 0' }}>
+                          Manage collection officers, assign territories, and review new mobile registration applications
                         </p>
                       </div>
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                      {/* Sub-Tab Navigation Pill Switcher */}
+                      <div
+                        style={{
+                          display: 'inline-flex',
+                          background: 'var(--bg-card-subtle)',
+                          padding: '3px',
+                          borderRadius: 'var(--radius-md)',
+                          border: '1px solid var(--border)',
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setStaffSubTab('both')}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '7px',
+                            padding: '8px 16px',
+                            borderRadius: 'var(--radius-sm)',
+                            border: 'none',
+                            background: currentSubTab === 'both' ? 'var(--primary)' : 'transparent',
+                            color: currentSubTab === 'both' ? '#ffffff' : 'var(--text-secondary)',
+                            fontWeight: currentSubTab === 'both' ? 700 : 500,
+                            fontSize: '13px',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          <Layers size={14} />
+                          <span>All-in-One (Both)</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setStaffSubTab('approvals');
+                            setApprovalsFilter('pending');
+                          }}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '7px',
+                            padding: '8px 16px',
+                            borderRadius: 'var(--radius-sm)',
+                            border: 'none',
+                            background: currentSubTab === 'approvals' ? 'var(--primary)' : 'transparent',
+                            color: currentSubTab === 'approvals' ? '#ffffff' : 'var(--text-secondary)',
+                            fontWeight: currentSubTab === 'approvals' ? 700 : 500,
+                            fontSize: '13px',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          <UserCheck size={14} />
+                          <span>Approvals Portal</span>
+                          {pendingStaff.length > 0 && (
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                fontWeight: 800,
+                                padding: '1px 8px',
+                                borderRadius: '10px',
+                                background: currentSubTab === 'approvals' ? '#FEF3C7' : 'var(--warning-light)',
+                                color: currentSubTab === 'approvals' ? '#92400E' : 'var(--warning-text)',
+                                border: '1px solid var(--warning-border)',
+                              }}
+                            >
+                              {pendingStaff.length} PENDING
+                            </span>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setStaffSubTab('directory')}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '7px',
+                            padding: '8px 16px',
+                            borderRadius: 'var(--radius-sm)',
+                            border: 'none',
+                            background: currentSubTab === 'directory' ? 'var(--primary)' : 'transparent',
+                            color: currentSubTab === 'directory' ? '#ffffff' : 'var(--text-secondary)',
+                            fontWeight: currentSubTab === 'directory' ? 700 : 500,
+                            fontSize: '13px',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          <Briefcase size={14} />
+                          <span>Directory Only</span>
+                          <span
+                            style={{
+                              fontSize: '11px',
+                              padding: '1px 7px',
+                              borderRadius: '10px',
+                              background: currentSubTab === 'directory' ? 'rgba(255,255,255,0.25)' : 'var(--border)',
+                              color: currentSubTab === 'directory' ? '#ffffff' : 'var(--text-muted)',
+                              fontWeight: 700,
+                            }}
+                          >
+                            {approvedStaff.length}
+                          </span>
+                        </button>
+                      </div>
+
                       <button
                         onClick={loadData}
                         className="btn btn-secondary btn-sm"
                         title="Refresh Staff Roster"
                         style={{ gap: '6px' }}
                       >
-                        <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh Roster
+                        <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
                       </button>
+
                       <button
                         onClick={() => setShowCreateStaffModal(true)}
                         className="btn btn-primary btn-sm"
                         style={{ gap: '6px' }}
                       >
-                        <Plus size={14} /> Add Staff Manually
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* 4 SUMMARY STAT CARDS */}
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                      gap: '12px',
-                      marginTop: '16px',
-                    }}
-                  >
-                    <div
-                      className="approval-kpi-card"
-                      style={{
-                        borderLeft: '4px solid #F59E0B',
-                        background: approvalsFilter === 'pending' ? '#FFFBEB' : 'var(--bg-card)',
-                        cursor: 'pointer',
-                      }}
-                      onClick={() => setApprovalsFilter('pending')}
-                    >
-                      <div
-                        style={{
-                          width: '38px',
-                          height: '38px',
-                          borderRadius: '10px',
-                          background: '#FEF3C7',
-                          color: '#D97706',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0,
-                        }}
-                      >
-                        <Clock size={20} />
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                          Pending Review
-                        </div>
-                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#D97706', lineHeight: 1.2 }}>
-                          {pendingStaff.length}
-                        </div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Awaiting approval</div>
-                      </div>
-                    </div>
-
-                    <div
-                      className="approval-kpi-card"
-                      style={{
-                        borderLeft: '4px solid #10B981',
-                        background: approvalsFilter === 'approved' ? '#ECFDF5' : 'var(--bg-card)',
-                        cursor: 'pointer',
-                      }}
-                      onClick={() => setApprovalsFilter('approved')}
-                    >
-                      <div
-                        style={{
-                          width: '38px',
-                          height: '38px',
-                          borderRadius: '10px',
-                          background: '#D1FAE5',
-                          color: '#059669',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0,
-                        }}
-                      >
-                        <CheckCircle size={20} />
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                          Approved & Active
-                        </div>
-                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#059669', lineHeight: 1.2 }}>
-                          {approvedStaff.length}
-                        </div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Authorized field staff</div>
-                      </div>
-                    </div>
-
-                    <div
-                      className="approval-kpi-card"
-                      style={{
-                        borderLeft: '4px solid #EF4444',
-                        background: approvalsFilter === 'rejected' ? '#FEF2F2' : 'var(--bg-card)',
-                        cursor: 'pointer',
-                      }}
-                      onClick={() => setApprovalsFilter('rejected')}
-                    >
-                      <div
-                        style={{
-                          width: '38px',
-                          height: '38px',
-                          borderRadius: '10px',
-                          background: '#FEE2E2',
-                          color: '#DC2626',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0,
-                        }}
-                      >
-                        <UserX size={20} />
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                          Declined / Inactive
-                        </div>
-                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#DC2626', lineHeight: 1.2 }}>
-                          {inactiveStaff.length}
-                        </div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Access denied / suspended</div>
-                      </div>
-                    </div>
-
-                    <div
-                      className="approval-kpi-card"
-                      style={{
-                        borderLeft: '4px solid var(--primary)',
-                        background: approvalsFilter === 'all' ? 'var(--primary-light)' : 'var(--bg-card)',
-                        cursor: 'pointer',
-                      }}
-                      onClick={() => setApprovalsFilter('all')}
-                    >
-                      <div
-                        style={{
-                          width: '38px',
-                          height: '38px',
-                          borderRadius: '10px',
-                          background: 'var(--bg-card-subtle)',
-                          color: 'var(--primary)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0,
-                        }}
-                      >
-                        <Users size={20} />
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                          Total Field Force
-                        </div>
-                        <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-main)', lineHeight: 1.2 }}>
-                          {staffList.length}
-                        </div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>All registered records</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. FILTER & CONTROLS STRIP */}
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '14px',
-                    flexWrap: 'wrap',
-                    background: 'var(--bg-card)',
-                    padding: '14px 18px',
-                    borderRadius: 'var(--radius-lg)',
-                    border: '1px solid var(--border)',
-                  }}
-                >
-                  {/* Status Pills */}
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-                    {[
-                      { key: 'pending', label: 'Awaiting Approval', count: pendingStaff.length, color: 'badge-warning' },
-                      { key: 'approved', label: 'Approved & Active', count: approvedStaff.length, color: 'badge-success' },
-                      { key: 'rejected', label: 'Declined / Inactive', count: inactiveStaff.length, color: 'badge-danger' },
-                      { key: 'all', label: 'All Staff', count: staffList.length, color: 'badge-info' },
-                    ].map((pill) => (
-                      <button
-                        key={pill.key}
-                        onClick={() => setApprovalsFilter(pill.key)}
-                        style={{
-                          padding: '7px 14px',
-                          borderRadius: 'var(--radius-full)',
-                          border: approvalsFilter === pill.key ? '1.5px solid var(--primary)' : '1px solid var(--border)',
-                          background: approvalsFilter === pill.key ? 'var(--primary-light)' : 'var(--bg-card)',
-                          color: approvalsFilter === pill.key ? 'var(--primary-dark)' : 'var(--text-secondary)',
-                          fontWeight: approvalsFilter === pill.key ? 700 : 500,
-                          fontSize: '13px',
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          transition: 'all 0.15s ease',
-                        }}
-                      >
-                        <span>{pill.label}</span>
-                        <span className={`badge ${pill.color}`} style={{ fontSize: '11px', padding: '1px 6px' }}>
-                          {pill.count}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Search & View Switcher */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '1 1 280px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                    <div style={{ position: 'relative', flex: '1 1 200px', maxWidth: '360px' }}>
-                      <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                      <input
-                        type="text"
-                        placeholder="Search by name, phone, STF ID, territory..."
-                        className="input-field"
-                        style={{ paddingLeft: '36px', height: '38px', fontSize: '13px' }}
-                        value={approvalsSearch}
-                        onChange={(e) => setApprovalsSearch(e.target.value)}
-                      />
-                      {approvalsSearch && (
-                        <button
-                          onClick={() => setApprovalsSearch('')}
-                          style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
-                        >
-                          ✕
-                        </button>
-                      )}
-                    </div>
-
-                    <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-                      <button
-                        onClick={() => setApprovalsViewMode('cards')}
-                        style={{
-                          padding: '8px 12px',
-                          background: approvalsViewMode === 'cards' ? 'var(--primary)' : 'var(--bg-card)',
-                          color: approvalsViewMode === 'cards' ? '#fff' : 'var(--text-secondary)',
-                          border: 'none',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          fontSize: '12.5px',
-                          fontWeight: 600,
-                        }}
-                        title="Cards View"
-                      >
-                        <Grid size={15} /> Cards
-                      </button>
-                      <button
-                        onClick={() => setApprovalsViewMode('table')}
-                        style={{
-                          padding: '8px 12px',
-                          background: approvalsViewMode === 'table' ? 'var(--primary)' : 'var(--bg-card)',
-                          color: approvalsViewMode === 'table' ? '#fff' : 'var(--text-secondary)',
-                          border: 'none',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          fontSize: '12.5px',
-                          fontWeight: 600,
-                        }}
-                        title="Table View"
-                      >
-                        <List size={15} /> Table
+                        <Plus size={14} /> Register Staff
                       </button>
                     </div>
                   </div>
                 </div>
 
-                {/* 3. MAIN CONTENT: CARDS VIEW OR TABLE VIEW */}
-                {filteredStaff.length === 0 ? (
-                  <div
-                    className="card"
-                    style={{
-                      padding: '48px 24px',
-                      textAlign: 'center',
-                      background: 'var(--bg-card)',
-                      borderRadius: 'var(--radius-xl)',
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: '64px',
-                        height: '64px',
-                        borderRadius: '50%',
-                        background: 'var(--primary-light)',
-                        color: 'var(--primary)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        margin: '0 auto 16px',
-                      }}
-                    >
-                      <CheckCircle size={32} />
-                    </div>
-                    <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-main)', marginBottom: '6px' }}>
-                      {approvalsFilter === 'pending'
-                        ? 'No Pending Staff Registrations'
-                        : 'No Staff Found'}
-                    </h3>
-                    <p style={{ fontSize: '13.5px', color: 'var(--text-secondary)', maxWidth: '440px', margin: '0 auto 20px' }}>
-                      {approvalsFilter === 'pending'
-                        ? 'All field staff registration requests have been thoroughly reviewed and processed.'
-                        : 'No field staff records matched your search query or filter selection.'}
-                    </p>
-                    {approvalsFilter !== 'all' && (
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => {
-                          setApprovalsFilter('all');
-                          setApprovalsSearch('');
-                        }}
-                      >
-                        View All Staff
-                      </button>
-                    )}
-                  </div>
-                ) : approvalsViewMode === 'cards' ? (
-                  /* RESPONSIVE CARDS GRID */
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 360px), 1fr))',
-                      gap: '18px',
-                    }}
-                  >
-                    {filteredStaff.map((stf) => {
-                      const isPending = stf.status === 'pending_approval';
-                      const isActive = stf.status === 'active';
-                      const currentArea = staffAreaOverrides[stf._id] !== undefined ? staffAreaOverrides[stf._id] : (stf.assignedArea || 'Kozhikode Central');
+                {/* VIEW 1: APPROVALS PORTAL */}
+                {currentSubTab === 'approvals' && (
+                  <StaffApprovalsView
+                    staffList={staffList}
+                    approvalsFilter={approvalsFilter}
+                    setApprovalsFilter={setApprovalsFilter}
+                    approvalsSearch={approvalsSearch}
+                    setApprovalsSearch={setApprovalsSearch}
+                    approvalsViewMode={approvalsViewMode}
+                    setApprovalsViewMode={setApprovalsViewMode}
+                    staffAreaOverrides={staffAreaOverrides}
+                    setStaffAreaOverrides={setStaffAreaOverrides}
+                    handleReviewStaff={handleReviewStaff}
+                    handleUpdateStaffStatus={handleUpdateStaffStatus}
+                    setSelectedPhoto={setSelectedPhoto}
+                    setSelectedStaffDetails={setSelectedStaffDetails}
+                    setEditingStaff={setEditingStaff}
+                    setStaffRejectionModal={setStaffRejectionModal}
+                    loadData={loadData}
+                    loading={loading}
+                    setShowCreateStaffModal={setShowCreateStaffModal}
+                    getPhotoUrl={getPhotoUrl}
+                    brokenImages={brokenImages}
+                    setBrokenImages={setBrokenImages}
+                  />
+                )}
 
-                      return (
-                        <div
-                          key={stf._id}
-                          className="approval-staff-card"
-                          style={{
-                            borderTop: isPending
-                              ? '4px solid #F59E0B'
-                              : isActive
-                              ? '4px solid #10B981'
-                              : '4px solid #EF4444',
-                          }}
-                        >
-                          {/* Top Row: Officer Avatar, Name, Status Badge */}
-                          <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
-                            {(() => {
-                              const rawPhoto = stf.profilePhoto || stf.selfiePhoto;
-                              const fullPhotoUrl = getPhotoUrl(rawPhoto);
-                              const isBroken = brokenImages[stf._id] || !rawPhoto;
-
-                              return (
-                                <div
-                                  className="officer-selfie-container"
-                                  onClick={() => (!isBroken && fullPhotoUrl) ? setSelectedPhoto(fullPhotoUrl) : null}
-                                  title={!isBroken && fullPhotoUrl ? 'Click to inspect verification selfie' : ''}
-                                  style={{
-                                    cursor: (!isBroken && fullPhotoUrl) ? 'pointer' : 'default',
-                                    borderRadius: '50%',
-                                    overflow: 'hidden',
-                                    width: '68px',
-                                    height: '68px',
-                                    flexShrink: 0,
-                                  }}
-                                >
-                                  {!isBroken && fullPhotoUrl ? (
-                                    <img
-                                      src={fullPhotoUrl}
-                                      alt=""
-                                      className="officer-selfie-img"
-                                      onError={() => {
-                                        setBrokenImages((prev) => ({ ...prev, [stf._id]: true }));
-                                      }}
-                                    />
-                                  ) : (
-                                    <div
-                                      style={{
-                                        width: '100%',
-                                        height: '100%',
-                                        borderRadius: '50%',
-                                        background: 'linear-gradient(135deg, #10B981 0%, #047857 100%)',
-                                        border: '2.5px solid #10B981',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        color: '#FFFFFF',
-                                        boxShadow: '0 2px 6px rgba(16,185,129,0.25)',
-                                      }}
-                                    >
-                                      <span style={{ fontSize: '24px', fontWeight: 800, lineHeight: 1 }}>
-                                        {(stf.name || 'O').trim().charAt(0).toUpperCase()}
-                                      </span>
-                                    </div>
-                                  )}
-                                  {!isBroken && fullPhotoUrl && (
-                                    <span className="selfie-zoom-badge">
-                                      <Eye size={12} />
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })()}
-
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
-                                <h4 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-main)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {stf.name}
-                                </h4>
-                                <span
-                                  className={`badge ${
-                                    isPending
-                                      ? 'badge-warning'
-                                      : isActive
-                                      ? 'badge-success'
-                                      : 'badge-danger'
-                                  }`}
-                                  style={{ fontSize: '11px', textTransform: 'uppercase', flexShrink: 0 }}
-                                >
-                                  {isPending ? 'Pending' : isActive ? 'Active' : 'Declined'}
-                                </span>
-                              </div>
-
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
-                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11.5px', background: 'var(--bg-card-subtle)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-                                  {stf.employeeId || 'ID-TBD'}
-                                </span>
-                                <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
-                                  Team: {stf.team || 'Field Operations'}
-                                </span>
-                              </div>
-
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                                <Phone size={13} color="var(--primary)" />
-                                <a
-                                  href={`tel:${stf.phone}`}
-                                  style={{ color: 'var(--text-main)', textDecoration: 'none', fontWeight: 600 }}
-                                >
-                                  +91 {stf.phone}
-                                </a>
-                              </div>
+                {/* VIEW 2: BOTH (ALL-IN-ONE) OR DIRECTORY ONLY */}
+                {currentSubTab !== 'approvals' && (
+                  <>
+                    {/* PENDING APPROVALS SECTION ON THE SAME PAGE */}
+                    {pendingStaff.length > 0 ? (
+                      <div className="card" style={{ border: '1.5px solid var(--warning-border)', background: 'linear-gradient(180deg, #fffdf8 0%, #ffffff 100%)' }}>
+                        <div className="card-header-row">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--warning-light)', color: 'var(--warning-text)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <Clock size={22} />
+                            </div>
+                            <div>
+                              <h3 className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                Field Staff Registration Approvals
+                                <span className="badge badge-warning">{pendingStaff.length} Awaiting Verification</span>
+                              </h3>
+                              <p className="card-subtitle">
+                                Review new officer verification selfie, operating territory, and GPS coordinates before authorizing mobile app access
+                              </p>
                             </div>
                           </div>
 
-                          {/* Email & Date Row */}
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: 'var(--text-muted)', borderTop: '1px dashed var(--border)', paddingTop: '8px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              <Mail size={12} />
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px', whiteSpace: 'nowrap' }}>
-                                {stf.email || `${stf.phone}@fieldflow.local`}
-                              </span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              <Clock size={12} />
-                              <span>{stf.createdAt ? new Date(stf.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recent'}</span>
-                            </div>
-                          </div>
-
-                          {/* Territory Assignment Selector */}
-                          <div style={{ background: 'var(--bg-card-subtle)', padding: '10px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
-                            <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '4px' }}>
-                              Operating Territory / Hub:
-                            </label>
-                            {isPending ? (
-                              <div style={{ display: 'flex', width: '100%' }}>
-                                <input
-                                  type="text"
-                                  className="input-field"
-                                  style={{ height: '36px', fontSize: '13px', padding: '6px 12px', width: '100%' }}
-                                  value={currentArea}
-                                  placeholder="e.g. Kozhikode Central, Palakkad"
-                                  onChange={(e) => {
-                                    setStaffAreaOverrides({
-                                      ...staffAreaOverrides,
-                                      [stf._id]: e.target.value,
-                                    });
-                                  }}
-                                />
-                              </div>
-                            ) : (
-                              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <span>{stf.assignedArea || 'Kozhikode Central'}</span>
-                                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Assigned</span>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* GPS Registration Location Info */}
-                          <div className="gps-info-box">
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                              <span style={{ fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px' }}>
-                                <MapPin size={13} color="var(--primary)" /> GPS Location at Registration
-                              </span>
-                              {stf.registrationLocation?.lat && (
-                                <a
-                                  href={`https://www.google.com/maps/search/?api=1&query=${stf.registrationLocation.lat},${stf.registrationLocation.lng}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  style={{ color: 'var(--primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11px', fontWeight: 700 }}
-                                >
-                                  Google Maps <ExternalLink size={10} />
-                                </a>
-                              )}
-                            </div>
-
-                            {stf.registrationLocation?.lat ? (
-                              <div>
-                                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-secondary)' }}>
-                                  Coords: {stf.registrationLocation.lat.toFixed(5)}, {stf.registrationLocation.lng.toFixed(5)}
-                                </div>
-                                <div style={{ fontSize: '12px', color: 'var(--text-main)', marginTop: '2px' }}>
-                                  {stf.registrationLocation.address || 'Address Tagged at Registration'}
-                                </div>
-                              </div>
-                            ) : (
-                              <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-                                Coordinates not recorded during registration
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Rejection reason notice if inactive */}
-                          {!isPending && !isActive && stf.rejectionReason && (
-                            <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 'var(--radius-md)', padding: '8px 12px', fontSize: '12px', color: '#991B1B' }}>
-                              <strong>Decline Reason:</strong> {stf.rejectionReason}
-                            </div>
-                          )}
-
-                          {/* Action Buttons */}
-                          <div style={{ marginTop: 'auto', paddingTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                              <button
-                                className="btn btn-sm btn-secondary"
-                                style={{ flex: 1, justifyContent: 'center', fontSize: '12px' }}
-                                onClick={() => setSelectedStaffDetails(stf)}
-                                title="Inspect verification selfie, location and staff details"
-                              >
-                                <Eye size={13} /> Check Details
-                              </button>
-                              <button
-                                className="btn btn-sm btn-secondary"
-                                style={{ flex: 1, justifyContent: 'center', fontSize: '12px' }}
-                                onClick={() => setEditingStaff(stf)}
-                                title="Edit staff profile and operational territory"
-                              >
-                                <Edit3 size={13} /> Edit
-                              </button>
-                            </div>
-
-                            {isPending ? (
-                              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                <button
-                                  className="btn btn-sm btn-primary"
-                                  style={{ flex: '1 1 140px', justifyContent: 'center' }}
-                                  onClick={() => handleReviewStaff(stf._id, 'APPROVE', currentArea)}
-                                >
-                                  <CheckCircle size={15} /> Approve & Activate
-                                </button>
-                                <button
-                                  className="btn btn-sm btn-secondary"
-                                  style={{ color: 'var(--danger-text)', borderColor: 'var(--danger-border)', justifyContent: 'center' }}
-                                  onClick={() => setStaffRejectionModal({ staffId: stf._id, name: stf.name, phone: stf.phone })}
-                                >
-                                  <XCircle size={15} /> Decline
-                                </button>
-                              </div>
-                            ) : isActive ? (
-                              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                <button
-                                  className="btn btn-sm btn-secondary"
-                                  style={{ flex: 1, justifyContent: 'center', fontSize: '12px', color: 'var(--danger-text)' }}
-                                  onClick={() => handleUpdateStaffStatus(stf._id, 'inactive')}
-                                >
-                                  <UserX size={13} /> Deactivate Staff
-                                </button>
-                              </div>
-                            ) : (
-                              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                <button
-                                  className="btn btn-sm btn-primary"
-                                  style={{ flex: 1, justifyContent: 'center' }}
-                                  onClick={() => handleReviewStaff(stf._id, 'APPROVE', currentArea)}
-                                >
-                                  <CheckCircle size={15} /> Re-evaluate & Authorize
-                                </button>
-                              </div>
-                            )}
-                          </div>
+                          <button
+                            onClick={() => {
+                              setStaffSubTab('approvals');
+                              setApprovalsFilter('pending');
+                            }}
+                            className="btn btn-secondary btn-sm"
+                            style={{ gap: '6px' }}
+                          >
+                            <ExternalLink size={13} /> Full Approvals Portal
+                          </button>
                         </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  /* RESPONSIVE TABLE VIEW */
-                  <div className="card" style={{ padding: '0' }}>
-                    <div className="table-wrapper" style={{ margin: '0', border: 'none' }}>
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Staff</th>
-                            <th>Contact</th>
-                            <th>Territory</th>
-                            <th>Registration GPS</th>
-                            <th>Applied Date</th>
-                            <th>Status</th>
-                            <th style={{ textAlign: 'right' }}>Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {filteredStaff.map((stf) => {
-                            const isPending = stf.status === 'pending_approval';
-                            const isActive = stf.status === 'active';
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))', gap: '16px', marginTop: '16px' }}>
+                          {pendingStaff.map((stf) => {
+                            const rawPhoto = stf.profilePhoto || stf.selfiePhoto;
+                            const fullPhotoUrl = getPhotoUrl ? getPhotoUrl(rawPhoto) : rawPhoto;
+                            const isBroken = brokenImages[stf._id] || !rawPhoto;
                             const currentArea = staffAreaOverrides[stf._id] !== undefined ? staffAreaOverrides[stf._id] : (stf.assignedArea || 'Kozhikode Central');
 
                             return (
-                              <tr key={stf._id}>
-                                <td>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    <div
-                                      style={{ width: '40px', height: '40px', borderRadius: '50%', overflow: 'hidden', flexShrink: 0, cursor: stf.selfiePhoto || stf.profilePhoto ? 'pointer' : 'default' }}
-                                      onClick={() => stf.selfiePhoto || stf.profilePhoto ? setSelectedPhoto(stf.selfiePhoto || stf.profilePhoto) : null}
-                                    >
-                                      {stf.selfiePhoto || stf.profilePhoto ? (
-                                        <img src={stf.selfiePhoto || stf.profilePhoto} alt={stf.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                      ) : (
-                                        <div style={{ width: '100%', height: '100%', background: 'var(--bg-card-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
-                                          {(stf.name || 'O').charAt(0).toUpperCase()}
-                                        </div>
-                                      )}
-                                    </div>
-                                    <div>
-                                      <strong style={{ fontSize: '13.5px' }}>{stf.name}</strong>
-                                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                                        {stf.employeeId || 'ID-TBD'} • {stf.team || 'Field'}
+                              <div
+                                key={stf._id}
+                                style={{
+                                  border: '1px solid var(--border)',
+                                  borderRadius: 'var(--radius-lg)',
+                                  padding: '16px',
+                                  background: 'var(--bg-card)',
+                                  boxShadow: 'var(--shadow-sm)',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '12px',
+                                  borderTop: '4px solid #F59E0B',
+                                }}
+                              >
+                                <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+                                  <div
+                                    style={{ position: 'relative', cursor: (!isBroken && fullPhotoUrl) ? 'pointer' : 'default', width: '64px', height: '64px', borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}
+                                    onClick={() => (!isBroken && fullPhotoUrl) && setSelectedPhoto(fullPhotoUrl)}
+                                    title={!isBroken && fullPhotoUrl ? 'Click to inspect verification selfie' : ''}
+                                  >
+                                    {!isBroken && fullPhotoUrl ? (
+                                      <img
+                                        src={fullPhotoUrl}
+                                        alt={stf.name}
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                        onError={() => setBrokenImages((prev) => ({ ...prev, [stf._id]: true }))}
+                                      />
+                                    ) : (
+                                      <div style={{ width: '100%', height: '100%', background: 'var(--bg-card-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', fontWeight: 800, fontSize: '20px' }}>
+                                        {(stf.name || 'O').charAt(0).toUpperCase()}
                                       </div>
+                                    )}
+                                    {!isBroken && fullPhotoUrl && (
+                                      <span style={{ position: 'absolute', bottom: '2px', right: '2px', background: 'var(--primary)', color: '#fff', borderRadius: '50%', padding: '3px', display: 'flex' }}>
+                                        <Eye size={10} />
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                      <strong style={{ fontSize: '15px' }}>{stf.name}</strong>
+                                      <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+                                        ({stf.employeeId || 'ID-TBD'})
+                                      </span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                                      <Phone size={13} color="var(--primary)" />
+                                      <span>+91 {stf.phone}</span>
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: 'var(--primary-dark)', fontWeight: 600, marginTop: '2px' }}>
+                                      Territory: {currentArea}
                                     </div>
                                   </div>
-                                </td>
-                                <td>
-                                  <div style={{ fontSize: '13px', fontWeight: 600 }}>+91 {stf.phone}</div>
-                                  <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>{stf.email || `${stf.phone}@fieldflow.local`}</div>
-                                </td>
-                                <td>
-                                  <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--primary-dark)' }}>
-                                    {stf.assignedArea || 'Kozhikode Central'}
-                                  </span>
-                                </td>
-                                <td>
-                                  {stf.registrationLocation?.lat ? (
-                                    <div style={{ fontSize: '11.5px' }}>
+                                </div>
+
+                                {/* Registration Location Box */}
+                                <div
+                                  style={{
+                                    background: 'var(--bg-card-subtle)',
+                                    borderRadius: 'var(--radius-md)',
+                                    padding: '10px 12px',
+                                    fontSize: '12px',
+                                    border: '1px solid var(--border)',
+                                  }}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                    <span style={{ fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                      <MapPin size={13} color="var(--primary)" /> GPS Location at Sign-Up
+                                    </span>
+                                    {stf.registrationLocation?.lat && (
                                       <a
                                         href={`https://www.google.com/maps/search/?api=1&query=${stf.registrationLocation.lat},${stf.registrationLocation.lng}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                                        style={{ color: 'var(--primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11px', fontWeight: 600 }}
                                       >
-                                        <MapPin size={11} /> {stf.registrationLocation.lat.toFixed(4)}, {stf.registrationLocation.lng.toFixed(4)}
+                                        View Map <ExternalLink size={10} />
                                       </a>
-                                      <div style={{ color: 'var(--text-muted)', fontSize: '11px' }}>{stf.registrationLocation.address || 'Tagged'}</div>
-                                    </div>
-                                  ) : (
-                                    <span style={{ color: 'var(--text-muted)', fontSize: '11.5px' }}>Not recorded</span>
-                                  )}
-                                </td>
-                                <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                                  {stf.createdAt ? new Date(stf.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '-'}
-                                </td>
-                                <td>
-                                  <span
-                                    className={`badge ${
-                                      isPending
-                                        ? 'badge-warning'
-                                        : isActive
-                                        ? 'badge-success'
-                                        : 'badge-danger'
-                                    }`}
-                                  >
-                                    {isPending ? 'Pending' : isActive ? 'Active' : 'Declined'}
-                                  </span>
-                                </td>
-                                <td style={{ textAlign: 'right' }}>
-                                  <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
-                                    <button
-                                      className="btn btn-sm btn-secondary"
-                                      onClick={() => setSelectedStaffDetails(stf)}
-                                      title="Check Details & Verification"
-                                      style={{ gap: '4px' }}
-                                    >
-                                      <Eye size={12} /> Check Details
-                                    </button>
-                                    <button
-                                      className="btn btn-sm btn-secondary"
-                                      onClick={() => setEditingStaff(stf)}
-                                      title="Edit Staff Details"
-                                      style={{ gap: '4px' }}
-                                    >
-                                      <Edit3 size={12} /> Edit
-                                    </button>
-                                    {isPending ? (
-                                      <>
-                                        <button
-                                          className="btn btn-sm btn-primary"
-                                          onClick={() => handleReviewStaff(stf._id, 'APPROVE', currentArea)}
-                                          title="Approve staff"
-                                        >
-                                          <Check size={12} /> Approve
-                                        </button>
-                                        <button
-                                          className="btn btn-sm btn-secondary"
-                                          style={{ color: 'var(--danger-text)' }}
-                                          onClick={() => setStaffRejectionModal({ staffId: stf._id, name: stf.name, phone: stf.phone })}
-                                          title="Decline registration"
-                                        >
-                                          <X size={12} /> Decline
-                                        </button>
-                                      </>
-                                    ) : isActive ? (
-                                      <button
-                                        className="btn btn-sm btn-secondary"
-                                        style={{ color: 'var(--danger-text)', fontSize: '11.5px' }}
-                                        onClick={() => handleUpdateStaffStatus(stf._id, 'inactive')}
-                                      >
-                                        Deactivate
-                                      </button>
-                                    ) : (
-                                      <button
-                                        className="btn btn-sm btn-primary"
-                                        onClick={() => handleReviewStaff(stf._id, 'APPROVE', currentArea)}
-                                      >
-                                        Re-activate
-                                      </button>
                                     )}
                                   </div>
-                                </td>
-                              </tr>
+                                  {stf.registrationLocation?.lat ? (
+                                    <div>
+                                      <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', fontSize: '11px' }}>
+                                        Lat: {stf.registrationLocation.lat.toFixed(5)}, Lng: {stf.registrationLocation.lng.toFixed(5)}
+                                      </div>
+                                      <div style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>
+                                        {stf.registrationLocation.address || 'Location Tagged at Registration'}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <span style={{ color: 'var(--text-muted)' }}>Coordinates not recorded</span>
+                                  )}
+                                </div>
+
+                                {/* Action Buttons */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: 'auto' }}>
+                                  <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button
+                                      className="btn btn-sm btn-secondary"
+                                      style={{ flex: 1, justifyContent: 'center', fontSize: '12px' }}
+                                      onClick={() => setSelectedStaffDetails(stf)}
+                                    >
+                                      <Eye size={13} /> Check Details
+                                    </button>
+                                    <button
+                                      className="btn btn-sm btn-secondary"
+                                      style={{ flex: 1, justifyContent: 'center', fontSize: '12px' }}
+                                      onClick={() => setEditingStaff(stf)}
+                                    >
+                                      <Edit3 size={13} /> Edit
+                                    </button>
+                                  </div>
+                                  <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button
+                                      className="btn btn-sm btn-primary"
+                                      style={{ flex: 1, justifyContent: 'center' }}
+                                      onClick={() => handleReviewStaff(stf._id, 'APPROVE', currentArea)}
+                                    >
+                                      <CheckCircle size={14} /> Approve Staff Account
+                                    </button>
+                                    <button
+                                      className="btn btn-sm btn-secondary"
+                                      style={{ color: 'var(--danger-text)', borderColor: 'var(--danger-border)', justifyContent: 'center' }}
+                                      onClick={() => setStaffRejectionModal({ staffId: stf._id, name: stf.name, phone: stf.phone })}
+                                    >
+                                      <XCircle size={14} /> Decline
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
                             );
                           })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-
-          {/* ================================================================ */}
-          {/* TAB 5: STAFF MANAGEMENT */}
-          {/* ================================================================ */}
-          {activeTab === 'staff' && (() => {
-            const pendingStaff = staffList.filter((s) => s.status === 'pending_approval');
-            const approvedStaff = staffList.filter((s) => s.status !== 'pending_approval');
-
-            return (
-              <div>
-                {/* PENDING STAFF APPROVALS BANNER / CARDS */}
-                {pendingStaff.length > 0 && (
-                  <div className="card" style={{ marginBottom: '24px', border: '1px solid var(--warning-border)', background: 'linear-gradient(180deg, #fffdf8 0%, #ffffff 100%)' }}>
-                    <div className="card-header-row">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--warning-light)', color: 'var(--warning-text)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <Clock size={22} />
-                        </div>
-                        <div>
-                          <h3 className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            Field Staff Registration Requests
-                            <span className="badge badge-warning">{pendingStaff.length} Awaiting Approval</span>
-                          </h3>
-                          <p className="card-subtitle">
-                            Verify staff selfie photo, territory, and GPS tag before authorizing mobile app access
-                          </p>
                         </div>
                       </div>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))', gap: '16px', marginTop: '16px' }}>
-                      {pendingStaff.map((stf) => (
-                        <div
-                          key={stf._id}
-                          style={{
-                            border: '1px solid var(--border)',
-                            borderRadius: 'var(--radius-lg)',
-                            padding: '16px',
-                            background: 'var(--bg-card)',
-                            boxShadow: 'var(--shadow-sm)',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '12px',
-                          }}
-                        >
-                          <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
-                            {/* Officer Selfie Thumbnail */}
-                            <div
-                              style={{ position: 'relative', cursor: stf.selfiePhoto ? 'pointer' : 'default' }}
-                              onClick={() => stf.selfiePhoto && setSelectedPhoto(stf.selfiePhoto)}
-                              title={stf.selfiePhoto ? 'Click to inspect verification selfie' : ''}
-                            >
-                              {stf.selfiePhoto ? (
-                                <img
-                                  src={stf.selfiePhoto}
-                                  alt={stf.name}
-                                  style={{
-                                    width: '68px',
-                                    height: '68px',
-                                    borderRadius: '50%',
-                                    objectFit: 'cover',
-                                    border: '2px solid var(--primary)',
-                                    boxShadow: 'var(--shadow-xs)',
-                                  }}
-                                />
-                              ) : (
-                                <div
-                                  style={{
-                                    width: '68px',
-                                    height: '68px',
-                                    borderRadius: '50%',
-                                    background: 'var(--bg-card-subtle)',
-                                    border: '2px solid var(--border)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    color: 'var(--text-muted)',
-                                  }}
-                                >
-                                  <UserCheck size={28} />
-                                </div>
-                              )}
-                              {stf.selfiePhoto && (
-                                <span
-                                  style={{
-                                    position: 'absolute',
-                                    bottom: '-2px',
-                                    right: '-2px',
-                                    background: 'var(--primary)',
-                                    color: '#fff',
-                                    borderRadius: '50%',
-                                    padding: '3px',
-                                    display: 'flex',
-                                  }}
-                                >
-                                  <Eye size={10} />
-                                </span>
-                              )}
-                            </div>
-
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <strong style={{ fontSize: '15px' }}>{stf.name}</strong>
-                                <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-                                  ({stf.employeeId || 'ID Auto-Gen'})
-                                </span>
+                    ) : (
+                      currentSubTab === 'both' && (
+                        <div className="card" style={{ padding: '16px 20px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                              <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#ECFDF5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <CheckCircle size={22} />
                               </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                                <Phone size={13} />
-                                <span>+91 {stf.phone}</span>
-                              </div>
-                              <div style={{ fontSize: '12px', color: 'var(--primary-dark)', fontWeight: 600, marginTop: '2px' }}>
-                                Territory: {stf.assignedArea || 'Kozhikode Central'}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Registration Location Box */}
-                          <div
-                            style={{
-                              background: 'var(--bg-card-subtle)',
-                              borderRadius: 'var(--radius-md)',
-                              padding: '10px 12px',
-                              fontSize: '12px',
-                              border: '1px solid var(--border)',
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                              <span style={{ fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <MapPin size={13} color="var(--primary)" /> GPS Location at Sign-Up
-                              </span>
-                              {stf.registrationLocation?.lat && (
-                                <a
-                                  href={`https://www.google.com/maps/search/?api=1&query=${stf.registrationLocation.lat},${stf.registrationLocation.lng}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  style={{ color: 'var(--info-text)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11px', fontWeight: 600 }}
-                                >
-                                  View Map <ExternalLink size={10} />
-                                </a>
-                              )}
-                            </div>
-                            {stf.registrationLocation?.lat ? (
                               <div>
-                                <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', fontSize: '11px' }}>
-                                  Lat: {stf.registrationLocation.lat}, Lng: {stf.registrationLocation.lng}
-                                </div>
-                                <div style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>
-                                  {stf.registrationLocation.address || 'Location Tagged'}
-                                </div>
+                                <h3 className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '15px', margin: 0 }}>
+                                  Staff Registration Approvals
+                                  <span className="badge badge-success" style={{ fontSize: '11px', padding: '2px 8px' }}>All Verified (0 Pending)</span>
+                                </h3>
+                                <p className="card-subtitle" style={{ margin: '3px 0 0 0', fontSize: '12px' }}>
+                                  All collection staff are verified and active. Total registered officers: {staffList.length}
+                                </p>
                               </div>
-                            ) : (
-                              <span style={{ color: 'var(--text-muted)' }}>Coordinates not tagged</span>
-                            )}
-                          </div>
+                            </div>
 
-                          {/* Action Buttons */}
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                              <button
-                                className="btn btn-sm btn-secondary"
-                                style={{ flex: 1, justifyContent: 'center', fontSize: '12px' }}
-                                onClick={() => setSelectedStaffDetails(stf)}
-                                title="Check registration selfie & details"
-                              >
-                                <Eye size={13} /> Check Details
-                              </button>
-                              <button
-                                className="btn btn-sm btn-secondary"
-                                style={{ flex: 1, justifyContent: 'center', fontSize: '12px' }}
-                                onClick={() => setEditingStaff(stf)}
-                                title="Edit staff details"
-                              >
-                                <Edit3 size={13} /> Edit
-                              </button>
-                            </div>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                              <button
-                                className="btn btn-sm btn-primary"
-                                style={{ flex: 1, justifyContent: 'center' }}
-                                onClick={() => handleReviewStaff(stf._id, 'APPROVE', stf.assignedArea)}
-                              >
-                                <CheckCircle size={14} /> Approve Staff Account
-                              </button>
-                              <button
-                                className="btn btn-sm btn-secondary"
-                                style={{ color: 'var(--danger-text)', borderColor: 'var(--danger-border)', justifyContent: 'center' }}
-                                onClick={() => {
-                                  const reason = window.prompt(`Decline registration for ${stf.name}:`, 'Selfie or territory details not verified');
-                                  if (reason !== null) {
-                                    handleReviewStaff(stf._id, 'REJECT', '', reason);
-                                  }
-                                }}
-                              >
-                                <XCircle size={14} /> Decline
-                              </button>
-                            </div>
+                            <button
+                              onClick={() => {
+                                setStaffSubTab('approvals');
+                                setApprovalsFilter('all');
+                              }}
+                              className="btn btn-secondary btn-sm"
+                              style={{ gap: '6px', fontSize: '12px' }}
+                            >
+                              <ExternalLink size={13} /> View Approvals History
+                            </button>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                      )
+                    )}
 
                 {/* FULL STAFF DIRECTORY TABLE & MOBILE CARDS */}
                 <div className="card">
@@ -4200,9 +3709,11 @@ export default function App() {
                     </div>
                   )}
                 </div>
-              </div>
-            );
-          })()}
+              </>
+            )}
+          </div>
+        );
+      })()}
 
           {/* ================================================================ */}
           {/* TAB 6: COLLECTIONS VERIFICATION */}
@@ -4732,7 +4243,7 @@ export default function App() {
                         className={`report-subview-btn ${collectionSubView === 'model' ? 'active' : ''}`}
                         onClick={() => setCollectionSubView('model')}
                       >
-                        <BarChart2 size={15} /> Staff Performance Model ({reportPerformanceMatrix.length})
+                        <BarChart2 size={15} /> Staff Performance Model ({visiblePerformanceMatrix.length})
                       </button>
                       <button
                         type="button"
@@ -4792,14 +4303,14 @@ export default function App() {
                             </tr>
                           </thead>
                           <tbody>
-                            {reportPerformanceMatrix.length === 0 ? (
+                            {visiblePerformanceMatrix.length === 0 ? (
                               <tr>
                                 <td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
                                   No staff performance records available for this period.
                                 </td>
                               </tr>
                             ) : (
-                              reportPerformanceMatrix.map((row) => {
+                              visiblePerformanceMatrix.map((row) => {
                                 const achClass = row.achPercent >= 40 ? 'ach-high' : row.achPercent >= 10 ? 'ach-mid' : 'ach-low';
                                 return (
                                   <tr key={row.staffId}>
@@ -4879,7 +4390,7 @@ export default function App() {
                     <div className="card table-card">
                       <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)' }}>
                         <div>
-                          <strong style={{ fontSize: '15px' }}>Collection Transaction Records ({reportCollections.length})</strong>
+                          <strong style={{ fontSize: '15px' }}>Collection Transaction Records ({visibleReportCollections.length})</strong>
                           <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                             All individual recoveries logged by field agents and administrative staff
                           </div>
@@ -4909,14 +4420,14 @@ export default function App() {
                             </tr>
                           </thead>
                           <tbody>
-                            {reportCollections.length === 0 ? (
+                            {visibleReportCollections.length === 0 ? (
                               <tr>
                                 <td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
                                   No collection records found for the selected date range and filter criteria.
                                 </td>
                               </tr>
                             ) : (
-                              reportCollections.map((col) => (
+                              visibleReportCollections.map((col) => (
                                 <tr key={col._id}>
                                   <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                                     {new Date(col.createdAt || col.serverTimestamp).toLocaleDateString('en-IN', {
@@ -4993,7 +4504,7 @@ export default function App() {
                         className={`report-subview-btn ${visitSubView === 'model' ? 'active' : ''}`}
                         onClick={() => setVisitSubView('model')}
                       >
-                        <Clock size={15} /> Hourly Time-Slot Matrix ({reportTimeSlotMatrix.length})
+                        <Clock size={15} /> Hourly Time-Slot Matrix ({visibleTimeSlotMatrix.length})
                       </button>
                       <button
                         type="button"
@@ -5135,14 +4646,14 @@ export default function App() {
                             </tr>
                           </thead>
                           <tbody>
-                            {reportTimeSlotMatrix.length === 0 ? (
+                            {visibleTimeSlotMatrix.length === 0 ? (
                               <tr>
                                 <td colSpan={22} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
                                   No field staff visit matrix records available for this date.
                                 </td>
                               </tr>
                             ) : (
-                              reportTimeSlotMatrix.map((row) => (
+                              visibleTimeSlotMatrix.map((row) => (
                                 <tr key={row.staffId}>
                                   <td className="fe-name-col">
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
@@ -5225,7 +4736,7 @@ export default function App() {
                     <div className="card table-card">
                       <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)' }}>
                         <div>
-                          <strong style={{ fontSize: '15px' }}>Daily Agent Visits Log ({reportVisits.length})</strong>
+                          <strong style={{ fontSize: '15px' }}>Daily Agent Visits Log ({visibleReportVisits.length})</strong>
                           <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                             Detailed field movements, contact outcomes, and GPS verification status
                           </div>
@@ -5262,14 +4773,14 @@ export default function App() {
                             </tr>
                           </thead>
                           <tbody>
-                            {reportVisits.length === 0 ? (
+                            {visibleReportVisits.length === 0 ? (
                               <tr>
                                 <td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
                                   No visit logs recorded for the selected date range and filter criteria.
                                 </td>
                               </tr>
                             ) : (
-                              reportVisits.map((v) => (
+                              visibleReportVisits.map((v) => (
                                 <tr key={v._id}>
                                   <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                                     {new Date(v.createdAt || v.serverTimestamp).toLocaleDateString('en-IN', {
@@ -6233,7 +5744,99 @@ export default function App() {
                 </button>
               </div>
 
-              {/* SECTION 2: ATTACHED FILES & PHOTOS LIST */}
+              {/* SECTION 2: VERIFIED GPS LOCATIONS */}
+              <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '16px', marginBottom: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <strong style={{ fontSize: '13.5px', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <MapPin size={16} color="var(--primary)" /> Verified GPS Locations ({customerModalLocations.length})
+                  </strong>
+                </div>
+                {customerModalLocations.length === 0 ? (
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic', padding: '8px 0' }}>
+                    No verified GPS locations captured yet. When field staff visits this customer, the coordinates are automatically saved.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {customerModalLocations.map((loc, idx) => (
+                      <div key={loc._id || idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                        <div>
+                          <strong>{loc.label || 'Saved Location'}</strong> {loc.isDefault && <span className="badge badge-info" style={{ fontSize: '10px', marginLeft: '6px' }}>DEFAULT</span>}
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: '2px' }}>
+                            📍 {loc.coordinates?.lat?.toFixed(5)}, {loc.coordinates?.lng?.toFixed(5)} • Accuracy: ±{Math.round(loc.accuracy || 0)}m
+                          </div>
+                        </div>
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${loc.coordinates?.lat},${loc.coordinates?.lng}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn-secondary btn-sm"
+                          style={{ gap: '4px', fontSize: '11px' }}
+                        >
+                          <MapPin size={12} color="#0284c7" /> Open Maps
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* SECTION 3: COMPLETE VISIT & RECOVERY HISTORY */}
+              <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '16px', marginBottom: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <strong style={{ fontSize: '13.5px', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Clock size={16} color="var(--primary)" /> Complete Visit & Collection History ({customerModalVisits.length})
+                  </strong>
+                  {loadingCustomerVisits && <RefreshCw size={14} className="animate-spin" color="var(--primary)" />}
+                </div>
+
+                {customerModalVisits.length === 0 ? (
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic', padding: '8px 0' }}>
+                    No recorded field visits or collection attempts for this customer yet.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {customerModalVisits.map((v, idx) => (
+                      <div key={v._id || idx} style={{ padding: '12px 14px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap', gap: '6px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span className={`badge ${v.collectedAmount > 0 ? 'badge-success' : v.outcome === 'Promise to Pay (PTP)' ? 'badge-warning' : 'badge-info'}`}>
+                              {v.outcome || 'Field Visit'}
+                            </span>
+                            {v.collectedAmount > 0 && (
+                              <strong style={{ color: '#15803d', fontSize: '13px' }}>
+                                Collected: ₹{v.collectedAmount.toLocaleString('en-IN')}
+                              </strong>
+                            )}
+                            {v.ptpAmount > 0 && (
+                              <strong style={{ color: '#1d4ed8', fontSize: '13px' }}>
+                                PTP: ₹{v.ptpAmount.toLocaleString('en-IN')} ({v.ptpDate ? new Date(v.ptpDate).toLocaleDateString() : 'N/A'})
+                              </strong>
+                            )}
+                          </div>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            {new Date(v.createdAt).toLocaleDateString()} at {new Date(v.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                          👤 <strong>Visited by:</strong> {v.staffName || v.staffId?.name || 'Field Executive'}
+                          {v.coordinates?.lat && (
+                            <span style={{ marginLeft: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '11px' }}>
+                              📍 {v.coordinates.lat.toFixed(5)}, {v.coordinates.lng.toFixed(5)} ({v.verificationStatus === 'LOCATION_MATCHED' ? 'Verified on site' : v.verificationStatus || 'Captured'})
+                            </span>
+                          )}
+                        </div>
+                        {v.notes && (
+                          <div style={{ fontSize: '12px', fontStyle: 'italic', color: '#334155', background: '#FFFFFF', padding: '6px 10px', borderRadius: '6px', border: '1px solid #E2E8F0', marginTop: '4px' }}>
+                            "{v.notes}"
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* SECTION 4: ATTACHED FILES & PHOTOS LIST */}
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                   <strong style={{ fontSize: '13px', color: '#1E293B' }}>
@@ -6798,19 +6401,6 @@ export default function App() {
           <span>Dashboard</span>
         </button>
         <button
-          className={`mobile-bottom-tab ${activeTab === 'approvals' ? 'active' : ''}`}
-          onClick={() => {
-            setActiveTab('approvals');
-            setApprovalsFilter('pending');
-          }}
-        >
-          <UserCheck size={20} />
-          <span>Approvals</span>
-          {stats?.pendingStaffApprovals > 0 && (
-            <span className="mobile-bottom-badge">{stats.pendingStaffApprovals}</span>
-          )}
-        </button>
-        <button
           className={`mobile-bottom-tab ${activeTab === 'customers' ? 'active' : ''}`}
           onClick={() => setActiveTab('customers')}
         >
@@ -6818,11 +6408,19 @@ export default function App() {
           <span>Cases</span>
         </button>
         <button
-          className={`mobile-bottom-tab ${activeTab === 'staff' ? 'active' : ''}`}
-          onClick={() => setActiveTab('staff')}
+          className={`mobile-bottom-tab ${(activeTab === 'staff' || activeTab === 'approvals') ? 'active' : ''}`}
+          onClick={() => {
+            setActiveTab('staff');
+            if (stats?.pendingStaffApprovals > 0) {
+              setStaffSubTab('approvals');
+            }
+          }}
         >
-          <Briefcase size={20} />
+          <UserCheck size={20} />
           <span>Staff</span>
+          {stats?.pendingStaffApprovals > 0 && (
+            <span className="mobile-bottom-badge">{stats.pendingStaffApprovals}</span>
+          )}
         </button>
         <button
           className="mobile-bottom-tab"
@@ -7209,7 +6807,7 @@ export default function App() {
                   lineHeight: '1.45',
                 }}
               >
-                ⚠️ <strong>Notice:</strong> This staff member will be removed from the Admin Staff Directory, any pending unvisited cases will be unassigned for reallocation, and their mobile app login session will be revoked immediately.
+                ⚠️ <strong>Notice:</strong> This staff member will be removed from the Staff Directory. All their past visit updates and collection report records will be permanently removed, any assigned cases will be unassigned for reallocation, and their mobile app login session will be revoked immediately.
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
@@ -7273,6 +6871,9 @@ export default function App() {
         onSave={handleUpdateStaffDetails}
         isSaving={isUpdatingStaff}
       />
+
+      {/* GLOBAL MODERN NOTIFICATION TOAST POPUP */}
+      <ModernToastContainer />
     </div>
   );
 }

@@ -16,12 +16,21 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react';
+import { toast } from './ModernToast';
 
 export default function AdminAccountsView({ apiFetch, currentAdminId, adminUser }) {
   const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  useEffect(() => {
+    if (successMsg) toast.success(successMsg);
+  }, [successMsg]);
+
+  useEffect(() => {
+    if (errorMsg) toast.error(errorMsg);
+  }, [errorMsg]);
 
   // Create Modal State
   const [showCreateModal, setShowCreateModal] = useState(false);

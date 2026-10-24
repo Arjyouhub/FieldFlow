@@ -10,6 +10,7 @@ import {
   reassignCases,
   listCustomers,
   createCustomer,
+  getCustomerDetails,
   importMonthlyCases,
   addCustomerDocument,
   deleteCustomerDocument,
@@ -47,6 +48,7 @@ router.delete('/staff/:id', deleteStaff);
 router.post('/staff/reassign', reassignCases);
 
 router.get('/customers', listCustomers);
+router.get('/customers/:id', getCustomerDetails);
 router.post('/customers', createCustomer);
 router.post('/customers/:id/documents', addCustomerDocument);
 router.delete('/customers/:id/documents/:docId', deleteCustomerDocument);

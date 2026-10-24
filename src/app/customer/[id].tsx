@@ -368,10 +368,26 @@ export default function CustomerDetailScreen() {
                 <View key={`visit-${v._id || 'v'}-${i}`} style={styles.historyItemRow}>
                   <Text style={styles.historyItemDot}>•</Text>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.historyItemTitle}>{v.outcome || "Field Visit"}</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={styles.historyItemTitle}>{v.outcome || "Field Visit"}</Text>
+                      {v.collectedAmount > 0 ? (
+                        <Text style={{ fontSize: fontScale(12), fontWeight: '700', color: '#16a34a' }}>
+                          ₹{v.collectedAmount.toLocaleString('en-IN')}
+                        </Text>
+                      ) : v.ptpAmount > 0 ? (
+                        <Text style={{ fontSize: fontScale(12), fontWeight: '700', color: '#2563eb' }}>
+                          PTP: ₹{v.ptpAmount.toLocaleString('en-IN')}
+                        </Text>
+                      ) : null}
+                    </View>
                     <Text style={styles.historyItemDate}>
-                      {new Date(v.createdAt).toLocaleDateString()} at {new Date(v.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(v.createdAt).toLocaleDateString()} at {new Date(v.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • By {v.staffId?.name || v.staffName || 'Field Executive'}
                     </Text>
+                    {v.coordinates?.lat && v.coordinates?.lng ? (
+                      <Text style={{ fontSize: fontScale(11), color: '#64748B', marginTop: 2 }}>
+                        📍 {v.coordinates.lat.toFixed(5)}, {v.coordinates.lng.toFixed(5)} {v.verificationStatus === 'LOCATION_MATCHED' ? '(Verified on site)' : ''}
+                      </Text>
+                    ) : null}
                     {v.notes ? <Text style={styles.historyItemNotes}>"{v.notes}"</Text> : null}
                   </View>
                 </View>

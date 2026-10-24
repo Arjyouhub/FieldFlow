@@ -18,6 +18,7 @@ import {
   CheckCircle,
   XCircle,
 } from 'lucide-react';
+import { toast } from './ModernToast';
 
 export default function CasesView({ apiFetch, staffList = [], portfolios = [], onOpenImport }) {
   const [cases, setCases] = useState([]);
@@ -25,6 +26,14 @@ export default function CasesView({ apiFetch, staffList = [], portfolios = [], o
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  useEffect(() => {
+    if (successMsg) toast.success(successMsg);
+  }, [successMsg]);
+
+  useEffect(() => {
+    if (errorMsg) toast.error(errorMsg);
+  }, [errorMsg]);
 
   // Filters
   const [portfolioFilter, setPortfolioFilter] = useState('ALL');

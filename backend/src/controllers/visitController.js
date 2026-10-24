@@ -109,12 +109,16 @@ export async function submitVisit(req, res) {
       inputPortfolioId || targetCase?.portfolioId || customerDoc?.portfolioId || null;
     const resolvedCaseId = targetCase?._id || null;
 
-    // Create the Visit record with server timestamp
+    // Create the Visit record with server timestamp & permanent staff snapshot
     const visit = await Visit.create({
       customerId,
       caseId: resolvedCaseId,
       portfolioId: resolvedPortfolioId,
       staffId: req.user._id,
+      staffName: req.user.name || '',
+      staffPhone: req.user.phone || '',
+      staffEmployeeId: req.user.employeeId || '',
+      locationAddress: customerDoc?.address || customerDoc?.area || '',
       coordinates: { lat: Number(lat), lng: Number(lng) },
       accuracy: Number(accuracy || 0),
       clientTimestamp: clientTimestamp ? new Date(clientTimestamp) : new Date(),
@@ -135,6 +139,21 @@ export async function submitVisit(req, res) {
       notes: notes || '',
       photoUrl: photoUrl || '',
     });
+
+    // Ensure customer has a verified CustomerLocation saved in database for future visits
+    const existingLocCount = await CustomerLocation.countDocuments({ customerId, isActive: true });
+    if (existingLocCount === 0 && Number(lat) && Number(lng)) {
+      await CustomerLocation.create({
+        customerId,
+        label: customerDoc?.area || customerDoc?.city ? `${customerDoc.area || customerDoc.city} Verified Location` : 'Primary Residence',
+        type: 'Home',
+        coordinates: { lat: Number(lat), lng: Number(lng) },
+        accuracy: Number(accuracy || 0),
+        capturedBy: req.user._id,
+        isDefault: true,
+        isActive: true,
+      }).catch(() => {});
+    }
 
     // If visit is outside radius, generate an audit record in SuspiciousEvent
     if (check.isSuspicious) {

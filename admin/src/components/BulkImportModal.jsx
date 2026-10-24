@@ -14,6 +14,8 @@ import {
   RefreshCw,
   X,
 } from 'lucide-react';
+import { toast } from './ModernToast';
+import { parseSpreadsheetWithAutoHeader, autoDetectColumns, cleanPhoneNumber } from '../utils/fileAutoDetector';
 
 export default function BulkImportModal({
   isOpen,
@@ -48,6 +50,21 @@ export default function BulkImportModal({
   const [parsedRows, setParsedRows] = useState([]);
   const [previewError, setPreviewError] = useState('');
   const [columnMappingSummary, setColumnMappingSummary] = useState(null);
+  const [availableColumns, setAvailableColumns] = useState([]);
+  const [rawSheetRows, setRawSheetRows] = useState([]);
+  const [columnMapping, setColumnMapping] = useState({
+    loanAccountNo: '',
+    name: '',
+    phone: '',
+    altPhone: '',
+    address: '',
+    area: '',
+    outstandingAmount: '',
+    dueAmount: '',
+    referenceNumber: '',
+    staff: '',
+  });
+  const [showMappingEditor, setShowMappingEditor] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -59,6 +76,87 @@ export default function BulkImportModal({
   const [showQuickPortfolio, setShowQuickPortfolio] = useState(false);
   const [quickPortName, setQuickPortName] = useState('');
   const [quickPortCode, setQuickPortCode] = useState('');
+
+  const cleanPhone = (val) => {
+    if (!val) return '';
+    let s = String(val).trim();
+    if (s.endsWith('.0')) s = s.slice(0, -2);
+    let digits = s.replace(/[^0-9]/g, '');
+    if (digits.length === 12 && digits.startsWith('91')) {
+      digits = digits.slice(2);
+    } else if (digits.length === 11 && digits.startsWith('0')) {
+      digits = digits.slice(1);
+    }
+    return digits;
+  };
+
+  const recomputeRows = (rows, mapping, staffId = defaultStaffId) => {
+    const processed = rows.map((r, idx) => {
+      const loanAccountNo = String(r[mapping.loanAccountNo] || `ACC-${Date.now().toString().slice(-6)}-${idx + 1}`).trim();
+      const customerName = String(r[mapping.name] || '').trim();
+      const phone = cleanPhone(r[mapping.phone]);
+      const altPhone = mapping.altPhone ? cleanPhone(r[mapping.altPhone]) : '';
+      const address = String(r[mapping.address] || '').trim();
+      const area = String(r[mapping.area] || 'Kozhikode Central').trim();
+      const outstandingAmount = Number(String(r[mapping.outstandingAmount] || 0).replace(/[^0-9.-]/g, '')) || 0;
+      const dueAmount = Number(String(r[mapping.dueAmount] || outstandingAmount).replace(/[^0-9.-]/g, '')) || 0;
+      const referenceNumber = mapping.referenceNumber ? String(r[mapping.referenceNumber] || '').trim() : '';
+
+      // Staff resolution
+      let assignedStaffId = staffId || '';
+      if (mapping.staff && r[mapping.staff]) {
+        const staffVal = String(r[mapping.staff]).toLowerCase().trim();
+        const matched = staffList.find(
+          (s) =>
+            s.name?.toLowerCase().includes(staffVal) ||
+            s.phone?.includes(staffVal) ||
+            s.employeeId?.toLowerCase() === staffVal
+        );
+        if (matched) assignedStaffId = matched._id;
+      }
+
+      // Row validation error flags
+      const errors = [];
+      if (!customerName) errors.push('Missing Name');
+      if (!phone || phone.length < 10) errors.push('Invalid Phone');
+      if (!loanAccountNo) errors.push('Missing Account ID');
+
+      return {
+        rowNum: idx + 2,
+        loanAccountNo,
+        name: customerName,
+        phone,
+        alternatePhone: altPhone,
+        address: address || 'Address on file',
+        area,
+        city: 'Kozhikode',
+        outstandingAmount,
+        dueAmount,
+        referenceNumber,
+        assignedStaffId,
+        errors,
+        isValid: errors.length === 0,
+      };
+    });
+
+    setParsedRows(processed);
+  };
+
+  const handleMappingChange = (field, newCol) => {
+    const nextMapping = { ...columnMapping, [field]: newCol };
+    setColumnMapping(nextMapping);
+    setColumnMappingSummary({
+      loanAccount: nextMapping.loanAccountNo || 'Auto-generated or Missing',
+      name: nextMapping.name || 'Required',
+      phone: nextMapping.phone || 'Required',
+      address: nextMapping.address || 'Address',
+      outstanding: nextMapping.outstandingAmount || 'Outstanding Amount',
+      staff: nextMapping.staff || 'Staff Member',
+    });
+    if (rawSheetRows.length > 0) {
+      recomputeRows(rawSheetRows, nextMapping, defaultStaffId);
+    }
+  };
 
   const handleQuickCreatePortfolio = async (e) => {
     e.preventDefault();
@@ -103,92 +201,42 @@ export default function BulkImportModal({
       const workbook = XLSX.read(arrayBuffer, { type: 'array' });
       const firstSheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[firstSheetName];
-      const rawRows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+      
+      // Auto-detect header row even if row 1 is a title or empty banner
+      const { headerRowIndex, rows: nonEmptyRows } = parseSpreadsheetWithAutoHeader(worksheet);
 
-      if (!rawRows || rawRows.length === 0) {
+      if (!nonEmptyRows || nonEmptyRows.length === 0) {
         throw new Error('Spreadsheet contains no data rows.');
       }
 
-      const clean = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      // Collect all column keys from the auto-detected header row
+      const allKeys = Array.from(new Set(nonEmptyRows.flatMap((r) => Object.keys(r))));
+      setAvailableColumns(allKeys);
+      setRawSheetRows(nonEmptyRows);
 
-      // Identify mapped keys from first row headers
-      const sample = rawRows[0];
-      const keys = Object.keys(sample);
+      // Intelligent multi-bank dictionary + content value auto-detection
+      const { detectedMapping, confidence } = autoDetectColumns(allKeys, nonEmptyRows);
 
-      const findKey = (candidates) =>
-        keys.find((k) => candidates.some((cand) => clean(k).includes(clean(cand)))) || '';
-
-      const colLoanAcc = findKey(['loanaccount', 'accountid', 'accountno', 'loanid', 'caseid', 'account']);
-      const colName = findKey(['customername', 'borrowername', 'clientname', 'name']);
-      const colPhone = findKey(['phone', 'mobile', 'primaryphone', 'contact']);
-      const colAltPhone = findKey(['alternate', 'altphone', 'altmobile', 'secondphone']);
-      const colAddress = findKey(['address', 'customeraddress', 'fulladdress', 'location']);
-      const colArea = findKey(['area', 'city', 'locality', 'district', 'town']);
-      const colOutstanding = findKey(['outstanding', 'totaldue', 'pos', 'balance', 'principal', 'amount']);
-      const colDue = findKey(['dueamount', 'emi', 'currentdue', 'overdue', 'installment']);
-      const colRef = findKey(['reference', 'referenceno', 'externalid']);
-      const colStaff = findKey(['staff', 'officer', 'staffid', 'agent', 'employee']);
-
+      setColumnMapping(detectedMapping);
       setColumnMappingSummary({
-        loanAccount: colLoanAcc || 'Auto-generated or Column Missing',
-        name: colName || 'Required',
-        phone: colPhone || 'Required',
-        address: colAddress || 'Address',
-        outstanding: colOutstanding || 'Outstanding Amount',
-        staff: colStaff || 'Staff Member',
+        loanAccount: detectedMapping.loanAccountNo || 'Auto-generated or Column Missing',
+        name: detectedMapping.name || 'Required',
+        phone: detectedMapping.phone || 'Required',
+        address: detectedMapping.address || 'Address',
+        outstanding: detectedMapping.outstandingAmount || 'Outstanding Amount',
+        staff: detectedMapping.staff || 'Staff Member',
       });
 
-      const processed = rawRows.map((r, idx) => {
-        const loanAccountNo = String(r[colLoanAcc] || `ACC-${Date.now().toString().slice(-6)}-${idx + 1}`).trim();
-        const customerName = String(r[colName] || '').trim();
-        const phone = String(r[colPhone] || '').replace(/[^0-9]/g, '');
-        const altPhone = colAltPhone ? String(r[colAltPhone] || '').replace(/[^0-9]/g, '') : '';
-        const address = String(r[colAddress] || '').trim();
-        const area = String(r[colArea] || 'Kozhikode Central').trim();
-        const outstandingAmount = Number(r[colOutstanding] || 0) || 0;
-        const dueAmount = Number(r[colDue] || outstandingAmount) || 0;
-        const referenceNumber = colRef ? String(r[colRef] || '').trim() : '';
-
-        // Staff resolution
-        let assignedStaffId = defaultStaffId || '';
-        if (colStaff && r[colStaff]) {
-          const staffVal = String(r[colStaff]).toLowerCase().trim();
-          const matched = staffList.find(
-            (s) =>
-              s.name?.toLowerCase().includes(staffVal) ||
-              s.phone?.includes(staffVal) ||
-              s.employeeId?.toLowerCase() === staffVal
-          );
-          if (matched) assignedStaffId = matched._id;
-        }
-
-        // Row validation error flags
-        const errors = [];
-        if (!customerName) errors.push('Missing Name');
-        if (!phone || phone.length < 10) errors.push('Invalid Phone');
-        if (!loanAccountNo) errors.push('Missing Account ID');
-
-        return {
-          rowNum: idx + 2,
-          loanAccountNo,
-          name: customerName,
-          phone,
-          alternatePhone: altPhone,
-          address: address || 'Address on file',
-          area,
-          city: 'Kozhikode',
-          outstandingAmount,
-          dueAmount,
-          referenceNumber,
-          assignedStaffId,
-          errors,
-          isValid: errors.length === 0,
-        };
-      });
-
-      setParsedRows(processed);
+      recomputeRows(nonEmptyRows, detectedMapping, defaultStaffId);
+      
+      const matchedCount = Object.keys(confidence).length;
+      toast.success(
+        `${nonEmptyRows.length} rows loaded. ${matchedCount} columns auto-detected accurately (Header on row ${headerRowIndex + 1})`,
+        'Auto-Detect Success'
+      );
     } catch (err) {
       setPreviewError(`Failed to parse file: ${err.message}`);
+      toast.error(err.message, 'File Parsing Error');
     } finally {
       setIsParsing(false);
     }
@@ -213,7 +261,13 @@ export default function BulkImportModal({
       return;
     }
     if (parsedRows.length === 0) {
-      setPreviewError('No valid data rows to import.');
+      setPreviewError('No data rows to import.');
+      return;
+    }
+
+    const validRows = parsedRows.filter((r) => r.isValid);
+    if (validRows.length === 0) {
+      setPreviewError('No valid rows found to import. Please check that Customer Name and valid 10-digit Phone numbers are properly mapped.');
       return;
     }
 
@@ -221,8 +275,8 @@ export default function BulkImportModal({
     setPreviewError('');
 
     try {
-      // Map to API format expected by /api/cases/import-bulk
-      const casesPayload = parsedRows.map((r) => ({
+      // Map to API format expected by /api/cases/import-bulk (valid rows only)
+      const casesPayload = validRows.map((r) => ({
         loanAccountNo: r.loanAccountNo,
         referenceNumber: r.referenceNumber,
         name: r.name,
@@ -247,9 +301,11 @@ export default function BulkImportModal({
       });
 
       setImportResult(res);
+      toast.success(res.message || `Successfully imported ${res.createdCases ?? validRows.length} customer cases!`, 'Bulk Import Succeeded');
       if (onSuccess) onSuccess();
     } catch (err) {
       setPreviewError(err.message || 'Import operation failed.');
+      toast.error(err.message || 'Import operation failed.', 'Import Failed');
     } finally {
       setIsImporting(false);
     }
@@ -541,7 +597,7 @@ export default function BulkImportModal({
 
               {parsedRows.length > 0 && !isParsing && (
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
                     <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-main)' }}>
                       Preview: {parsedRows.length} Rows Detected
                       <span className="badge badge-success" style={{ marginLeft: '8px' }}>
@@ -553,12 +609,208 @@ export default function BulkImportModal({
                         </span>
                       )}
                     </div>
-                    {columnMappingSummary && (
-                      <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
-                        Linked to: <strong>{targetPortfolio?.name || 'Selected Portfolio'}</strong>
-                      </span>
-                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setShowMappingEditor(!showMappingEditor)}
+                        style={{
+                          background: showMappingEditor ? 'var(--primary-light)' : 'none',
+                          border: '1px solid var(--border)',
+                          borderRadius: '6px',
+                          padding: '4px 8px',
+                          fontSize: '11.5px',
+                          fontWeight: '600',
+                          color: 'var(--primary)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {showMappingEditor ? 'Hide Column Mapping' : '⚙ Adjust Column Mapping'}
+                      </button>
+                      {targetPortfolio && (
+                        <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
+                          Linked to: <strong>{targetPortfolio.name}</strong>
+                        </span>
+                      )}
+                    </div>
                   </div>
+
+                  {/* AUTO-DETECTED COLUMNS STATUS STRIP */}
+                  <div
+                    style={{
+                      background: 'linear-gradient(135deg, #ECFDF5 0%, #F0FDF4 100%)',
+                      border: '1px solid #A7F3D0',
+                      borderRadius: '8px',
+                      padding: '10px 14px',
+                      marginBottom: '14px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: '700', color: '#065F46', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <CheckCircle size={15} color="#059669" /> Auto-Detected Spreadsheet Columns:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowMappingEditor(!showMappingEditor)}
+                        style={{
+                          background: '#ffffff',
+                          border: '1px solid #A7F3D0',
+                          borderRadius: '6px',
+                          padding: '3px 9px',
+                          fontSize: '11px',
+                          fontWeight: '700',
+                          color: '#065F46',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {showMappingEditor ? 'Hide Column Adjuster' : '⚙ Adjust Column Match'}
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                      <span className="badge" style={{ background: columnMapping.loanAccountNo ? '#D1FAE5' : '#FEE2E2', color: columnMapping.loanAccountNo ? '#065F46' : '#991B1B', border: '1px solid', borderColor: columnMapping.loanAccountNo ? '#6EE7B7' : '#FCA5A5' }}>
+                        Loan ID: <strong>{columnMapping.loanAccountNo || 'Missing'}</strong>
+                      </span>
+                      <span className="badge" style={{ background: columnMapping.name ? '#D1FAE5' : '#FEE2E2', color: columnMapping.name ? '#065F46' : '#991B1B', border: '1px solid', borderColor: columnMapping.name ? '#6EE7B7' : '#FCA5A5' }}>
+                        Name: <strong>{columnMapping.name || 'Missing'}</strong>
+                      </span>
+                      <span className="badge" style={{ background: columnMapping.phone ? '#D1FAE5' : '#FEE2E2', color: columnMapping.phone ? '#065F46' : '#991B1B', border: '1px solid', borderColor: columnMapping.phone ? '#6EE7B7' : '#FCA5A5' }}>
+                        Phone: <strong>{columnMapping.phone || 'Missing'}</strong>
+                      </span>
+                      {columnMapping.altPhone && (
+                        <span className="badge" style={{ background: '#E0F2FE', color: '#0369A1', border: '1px solid #BAE6FD' }}>
+                          Alt Phone: <strong>{columnMapping.altPhone}</strong>
+                        </span>
+                      )}
+                      <span className="badge" style={{ background: columnMapping.address ? '#D1FAE5' : '#F3F4F6', color: columnMapping.address ? '#065F46' : '#6B7280', border: '1px solid #E5E7EB' }}>
+                        Address: <strong>{columnMapping.address || 'Address on file'}</strong>
+                      </span>
+                      <span className="badge" style={{ background: columnMapping.outstandingAmount ? '#D1FAE5' : '#F3F4F6', color: columnMapping.outstandingAmount ? '#065F46' : '#6B7280', border: '1px solid #E5E7EB' }}>
+                        Outstanding: <strong>{columnMapping.outstandingAmount || 'Not Mapped'}</strong>
+                      </span>
+                      {columnMapping.dueAmount && (
+                        <span className="badge" style={{ background: '#D1FAE5', color: '#065F46', border: '1px solid #6EE7B7' }}>
+                          Due/EMI: <strong>{columnMapping.dueAmount}</strong>
+                        </span>
+                      )}
+                      {columnMapping.area && (
+                        <span className="badge" style={{ background: '#E0E7FF', color: '#3730A3', border: '1px solid #C7D2FE' }}>
+                          Territory: <strong>{columnMapping.area}</strong>
+                        </span>
+                      )}
+                      {columnMapping.staff && (
+                        <span className="badge" style={{ background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A' }}>
+                          Staff: <strong>{columnMapping.staff}</strong>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Column Mapping Summary / Editor */}
+                  {showMappingEditor && availableColumns.length > 0 && (
+                    <div style={{ padding: '12px', background: 'var(--bg-card-subtle)', border: '1px solid var(--border)', borderRadius: '8px', marginBottom: '16px' }}>
+                      <div style={{ fontSize: '12px', fontWeight: '700', marginBottom: '8px', color: 'var(--text-main)' }}>
+                        Spreadsheet Column Mappings (Verify or Change):
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '2px' }}>
+                            Customer Name *
+                          </label>
+                          <select
+                            className="input-field"
+                            style={{ fontSize: '12px', padding: '4px 6px' }}
+                            value={columnMapping.name}
+                            onChange={(e) => handleMappingChange('name', e.target.value)}
+                          >
+                            <option value="">-- Missing / Not Mapped --</option>
+                            {availableColumns.map((c) => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '2px' }}>
+                            Phone Number *
+                          </label>
+                          <select
+                            className="input-field"
+                            style={{ fontSize: '12px', padding: '4px 6px' }}
+                            value={columnMapping.phone}
+                            onChange={(e) => handleMappingChange('phone', e.target.value)}
+                          >
+                            <option value="">-- Missing / Not Mapped --</option>
+                            {availableColumns.map((c) => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '2px' }}>
+                            Account / Loan ID *
+                          </label>
+                          <select
+                            className="input-field"
+                            style={{ fontSize: '12px', padding: '4px 6px' }}
+                            value={columnMapping.loanAccountNo}
+                            onChange={(e) => handleMappingChange('loanAccountNo', e.target.value)}
+                          >
+                            <option value="">-- Auto-generate IDs --</option>
+                            {availableColumns.map((c) => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '2px' }}>
+                            Address
+                          </label>
+                          <select
+                            className="input-field"
+                            style={{ fontSize: '12px', padding: '4px 6px' }}
+                            value={columnMapping.address}
+                            onChange={(e) => handleMappingChange('address', e.target.value)}
+                          >
+                            <option value="">-- Not Mapped --</option>
+                            {availableColumns.map((c) => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '2px' }}>
+                            Outstanding (TOS / POS)
+                          </label>
+                          <select
+                            className="input-field"
+                            style={{ fontSize: '12px', padding: '4px 6px' }}
+                            value={columnMapping.outstandingAmount}
+                            onChange={(e) => handleMappingChange('outstandingAmount', e.target.value)}
+                          >
+                            <option value="">-- Not Mapped (0) --</option>
+                            {availableColumns.map((c) => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '2px' }}>
+                            Staff / TC Name
+                          </label>
+                          <select
+                            className="input-field"
+                            style={{ fontSize: '12px', padding: '4px 6px' }}
+                            value={columnMapping.staff}
+                            onChange={(e) => handleMappingChange('staff', e.target.value)}
+                          >
+                            <option value="">-- Use Default Staff --</option>
+                            {availableColumns.map((c) => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Preview Table (First 5 rows) */}
                   <div style={{ border: '1px solid var(--border)', borderRadius: '8px', marginBottom: '20px' }}>

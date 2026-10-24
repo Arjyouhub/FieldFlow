@@ -24,6 +24,26 @@ const visitSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    staffName: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    staffPhone: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    staffEmployeeId: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    locationAddress: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     coordinates: {
       lat: { type: Number, required: true },
       lng: { type: Number, required: true },

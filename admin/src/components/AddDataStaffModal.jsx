@@ -18,6 +18,8 @@ import {
   CreditCard,
   Building,
 } from 'lucide-react';
+import { toast } from './ModernToast';
+import { parseSpreadsheetWithAutoHeader, autoDetectColumns, cleanPhoneNumber } from '../utils/fileAutoDetector';
 
 export default function AddDataStaffModal({
   isOpen,
@@ -121,10 +123,12 @@ export default function AddDataStaffModal({
       setSuccessMsg(
         `✓ Case created successfully and assigned to ${staff.name}! It is now visible on their mobile app.`
       );
+      toast.success(`Case created and assigned to ${staff.name}!`, 'Case Added Successfully');
       resetSingleForm();
       if (onSuccess) onSuccess();
     } catch (err) {
       setErrorMsg(err.message || 'Failed to create case');
+      toast.error(err.message || 'Failed to create case', 'Failed to Add Case');
     } finally {
       setIsSubmittingSingle(false);
     }
@@ -153,38 +157,35 @@ export default function AddDataStaffModal({
       const workbook = XLSX.read(arrayBuffer, { type: 'array' });
       const firstSheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[firstSheetName];
-      const rawRows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+      
+      const { headerRowIndex, rows: nonEmptyRows } = parseSpreadsheetWithAutoHeader(worksheet);
 
-      if (!rawRows || rawRows.length === 0) {
+      if (!nonEmptyRows || nonEmptyRows.length === 0) {
         throw new Error('Spreadsheet contains no data rows.');
       }
 
-      const clean = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-      const sample = rawRows[0];
-      const keys = Object.keys(sample);
+      const allKeys = Array.from(new Set(nonEmptyRows.flatMap((r) => Object.keys(r))));
+      const { detectedMapping, confidence } = autoDetectColumns(allKeys, nonEmptyRows);
 
-      const findKey = (candidates) =>
-        keys.find((k) => candidates.some((cand) => clean(k).includes(clean(cand)))) || '';
+      const colLoanAcc = detectedMapping.loanAccountNo;
+      const colName = detectedMapping.name;
+      const colPhone = detectedMapping.phone;
+      const colAltPhone = detectedMapping.altPhone;
+      const colAddress = detectedMapping.address;
+      const colArea = detectedMapping.area;
+      const colOutstanding = detectedMapping.outstandingAmount;
+      const colDue = detectedMapping.dueAmount;
+      const colRef = detectedMapping.referenceNumber;
 
-      const colLoanAcc = findKey(['loanaccount', 'accountid', 'accountno', 'loanid', 'caseid', 'account']);
-      const colName = findKey(['customername', 'borrowername', 'clientname', 'name']);
-      const colPhone = findKey(['phone', 'mobile', 'primaryphone', 'contact']);
-      const colAltPhone = findKey(['alternate', 'altphone', 'altmobile', 'secondphone']);
-      const colAddress = findKey(['address', 'customeraddress', 'fulladdress', 'location']);
-      const colArea = findKey(['area', 'city', 'locality', 'district', 'town']);
-      const colOutstanding = findKey(['outstanding', 'totaldue', 'pos', 'balance', 'principal', 'amount']);
-      const colDue = findKey(['dueamount', 'emi', 'currentdue', 'overdue', 'installment']);
-      const colRef = findKey(['reference', 'referenceno', 'externalid']);
-
-      const processed = rawRows.map((r, idx) => {
+      const processed = nonEmptyRows.map((r, idx) => {
         const loanAcc = String(r[colLoanAcc] || `ACC-${Date.now().toString().slice(-6)}-${idx + 1}`).trim();
         const cName = String(r[colName] || '').trim();
-        const ph = String(r[colPhone] || '').replace(/[^0-9]/g, '');
-        const alt = colAltPhone ? String(r[colAltPhone] || '').replace(/[^0-9]/g, '') : '';
+        const ph = cleanPhoneNumber(r[colPhone]);
+        const alt = colAltPhone ? cleanPhoneNumber(r[colAltPhone]) : '';
         const addr = String(r[colAddress] || '').trim();
         const ar = String(r[colArea] || staff.assignedArea || 'Kozhikode Central').trim();
-        const out = Number(r[colOutstanding] || 0) || 0;
-        const due = Number(r[colDue] || out) || 0;
+        const out = Number(String(r[colOutstanding] || 0).replace(/[^0-9.-]/g, '')) || 0;
+        const due = Number(String(r[colDue] || out).replace(/[^0-9.-]/g, '')) || 0;
         const ref = colRef ? String(r[colRef] || '').trim() : '';
 
         return {
@@ -204,8 +205,15 @@ export default function AddDataStaffModal({
       });
 
       setParsedRows(processed);
+      const validC = processed.filter((r) => r.isValid).length;
+      toast.success(
+        `${validC} valid cases auto-detected and mapped for ${staff.name} (Header on row ${headerRowIndex + 1})`,
+        'Auto-Detect Complete'
+      );
+      toast.success(`${validC} valid cases ready for ${staff.name}`, 'Spreadsheet Loaded');
     } catch (err) {
       setErrorMsg(`Failed to parse file: ${err.message}`);
+      toast.error(err.message, 'File Parsing Error');
     } finally {
       setIsParsing(false);
     }
@@ -241,12 +249,15 @@ export default function AddDataStaffModal({
       });
 
       setFileImportStats(res.stats || res);
+      const importedCount = res.stats?.successCount || validRows.length;
       setSuccessMsg(
-        `✓ Successfully imported and assigned cases directly to ${staff.name}! (${res.stats?.successCount || validRows.length} cases)`
+        `✓ Successfully imported and assigned cases directly to ${staff.name}! (${importedCount} cases)`
       );
+      toast.success(`Imported ${importedCount} cases directly to ${staff.name}!`, 'Data Import Complete');
       if (onSuccess) onSuccess();
     } catch (err) {
       setErrorMsg(err.message || 'File import failed.');
+      toast.error(err.message || 'File import failed.', 'Import Failed');
     } finally {
       setIsImportingFile(false);
     }

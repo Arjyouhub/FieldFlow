@@ -14,12 +14,21 @@ import {
   Trash2,
   Filter,
 } from 'lucide-react';
+import { toast } from './ModernToast';
 
 export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload }) {
   const [portfolios, setPortfolios] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  useEffect(() => {
+    if (successMsg) toast.success(successMsg);
+  }, [successMsg]);
+
+  useEffect(() => {
+    if (errorMsg) toast.error(errorMsg);
+  }, [errorMsg]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
 

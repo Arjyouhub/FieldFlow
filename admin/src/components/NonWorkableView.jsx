@@ -89,10 +89,7 @@ export default function NonWorkableView({ apiFetch, portfolios = [] }) {
       <div className="card">
         <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
           <div>
-            <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-main)' }}>Non-Workable Portfolio Cases</h3>
-            <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-              Cases flagged as untraceable, door locked, wrong address, or customer refusal.
-            </p>
+            <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-main)', margin: 0 }}>Non-Workable Portfolio Cases</h3>
           </div>
           <span className="badge badge-danger">{cases.length} Cases</span>
         </div>

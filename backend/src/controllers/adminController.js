@@ -10,6 +10,7 @@ import { Case } from '../models/Case.js';
 import { MonthlyBatch } from '../models/MonthlyBatch.js';
 import { ExternalVisitMetric } from '../models/ExternalVisitMetric.js';
 import { Session } from '../models/Session.js';
+import { CallLog } from '../models/CallLog.js';
 
 /**
  * 1. Admin Dashboard KPI Statistics (Portfolio & Multi-dimensional Filter Aware)
@@ -364,25 +365,41 @@ export async function deleteStaff(req, res) {
       return res.status(400).json({ success: false, message: 'Only field staff accounts can be deleted through this endpoint.' });
     }
 
-    // 1. Soft-delete staff so historical Visit records and references remain intact in database
+    // 1. Terminate all active sessions so the staff member cannot log in
+    await Session.deleteMany({ userId: id });
+
+    // 2. CRITICAL PRESERVATION:
+    // DO NOT DELETE Customer Visit records or CustomerLocation records!
+    // Customer visits and verified GPS locations belong to the customer/case and must be permanently preserved in database.
+    // Snapshot staff's name onto all their visits so customer history displays clearly forever.
+    await Visit.updateMany(
+      { staffId: id },
+      {
+        $set: {
+          staffName: targetStaff.name,
+          staffPhone: targetStaff.phone,
+          staffEmployeeId: targetStaff.employeeId || '',
+        },
+      }
+    );
+
+    // 3. Unassign active cases & customers from this staff member so they can be reallocated to another active staff.
+    // DO NOT wipe lastVisitDate or lastVisitId from the case!
+    await Case.updateMany(
+      { assignedStaff: id },
+      { $set: { assignedStaff: null } }
+    );
+    await Customer.updateMany(
+      { assignedStaff: id },
+      { $set: { assignedStaff: null } }
+    );
+
+    // 4. Soft-delete staff account so it is removed from Staff Directory, active daily reports, login, and assignment
     targetStaff.status = 'deleted';
     targetStaff.isDeleted = true;
     await targetStaff.save();
 
-    // 2. Terminate active sessions so they cannot access mobile app
-    await Session.deleteMany({ userId: id });
-
-    // 3. Unassign unvisited/pending cases so they can be reassigned to active officers
-    await Case.updateMany(
-      { assignedStaff: id, status: { $in: ['pending', 'unassigned'] } },
-      { $set: { assignedStaff: null, assignmentStatus: 'unassigned' } }
-    );
-    await Customer.updateMany(
-      { assignedStaff: id, status: { $in: ['pending', 'unassigned'] } },
-      { $set: { assignedStaff: null } }
-    );
-
-    // 4. Create audit log
+    // 5. Create audit log
     await AuditLog.create({
       actorId: req.user._id,
       actorName: req.user.name,
@@ -393,13 +410,13 @@ export async function deleteStaff(req, res) {
       details: {
         staffName: targetStaff.name,
         phone: targetStaff.phone,
-        note: 'Staff removed from admin directory. All past visits and payment records preserved in database.'
+        note: `Staff member deactivated & removed from active directory. All customer visit history, GPS locations, and collection records are securely preserved in database.`,
       },
     }).catch(() => {});
 
     return res.json({
       success: true,
-      message: `Staff account "${targetStaff.name}" deleted successfully. All past field visit history and recovery logs have been safely preserved in the database.`,
+      message: `Staff member "${targetStaff.name}" deleted. All customer visit history, GPS locations, and notes have been securely preserved in the database.`,
       staffId: id,
     });
   } catch (error) {
@@ -502,6 +519,40 @@ export async function createCustomer(req, res) {
     });
 
     return res.status(201).json({ success: true, message: 'Customer created successfully', customer });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+export async function getCustomerDetails(req, res) {
+  try {
+    const { id } = req.params;
+    const customer = await Customer.findById(id).populate('assignedStaff', 'name phone employeeId');
+    if (!customer) {
+      return res.status(404).json({ success: false, message: 'Customer not found.' });
+    }
+
+    const locations = await CustomerLocation.find({ customerId: customer._id, isActive: true }).sort({ isDefault: -1, createdAt: -1 });
+    const visits = await Visit.find({ customerId: customer._id })
+      .populate('staffId', 'name phone employeeId')
+      .sort({ createdAt: -1 });
+
+    const formattedVisits = visits.map((v) => {
+      const vObj = v.toObject();
+      return {
+        ...vObj,
+        staffName: vObj.staffId?.name || vObj.staffName || 'Former Field Staff',
+        staffPhone: vObj.staffId?.phone || vObj.staffPhone || '',
+        staffEmployeeId: vObj.staffId?.employeeId || vObj.staffEmployeeId || '',
+      };
+    });
+
+    return res.json({
+      success: true,
+      customer,
+      locations,
+      visits: formattedVisits,
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -613,6 +664,11 @@ export async function listCollections(req, res) {
     const filter = { collectedAmount: { $gt: 0 } };
     if (status && status !== 'ALL') {
       filter.paymentStatus = status;
+    }
+
+    const deletedStaff = await User.find({ isDeleted: true }, '_id');
+    if (deletedStaff.length > 0) {
+      filter.staffId = { $nin: deletedStaff.map((s) => s._id) };
     }
 
     const collections = await Visit.find(filter)
@@ -820,6 +876,32 @@ export async function getDailyVisitsReport(req, res) {
       filter.outcome = outcome;
     }
 
+    const deletedStaff = await User.find({ isDeleted: true }, '_id');
+    const deletedStaffIds = deletedStaff.map((s) => s._id.toString());
+
+    if (deletedStaffIds.length > 0) {
+      if (staffId && staffId !== 'ALL' && deletedStaffIds.includes(staffId.toString())) {
+        return res.json({
+          success: true,
+          totalVisits: 0,
+          visits: [],
+          stats: {
+            totalVisits: 0,
+            totalCollectedAmount: 0,
+            paymentsCount: 0,
+            ptpCount: 0,
+            totalPtpAmount: 0,
+            houseLockedCount: 0,
+            customerUnavailableCount: 0,
+            suspiciousCount: 0,
+          },
+        });
+      }
+      if (!filter.staffId) {
+        filter.staffId = { $nin: deletedStaff.map((s) => s._id) };
+      }
+    }
+
     const visits = await Visit.find(filter)
       .populate('customerId', 'name phone loanAccountNo address city area status outstandingAmount portfolioId')
       .populate('portfolioId', 'name code')
@@ -839,7 +921,28 @@ export async function getDailyVisitsReport(req, res) {
       );
     }
 
-    // Calculate aggregated statistics
+    // -------------------------------------------------------------
+    // Build Hourly Slot & Portfolio Matrix Model (FE Name x Time Slots)
+    // Fetch only active, approved, non-deleted staff
+    // -------------------------------------------------------------
+    const allStaff = await User.find({
+      role: 'staff',
+      status: 'active',
+      isDeleted: { $ne: true },
+    })
+      .select('name phone assignedArea employeeId status')
+      .sort({ name: 1 })
+      .lean();
+
+    const activeStaffIds = new Set(allStaff.map((s) => s._id.toString()));
+
+    // Purge any visits belonging to deleted/inactive staff from both matrix and stats
+    filteredVisits = filteredVisits.filter((v) => {
+      const sId = v.staffId?._id?.toString() || v.staffId?.toString();
+      return sId && activeStaffIds.has(sId);
+    });
+
+    // Calculate aggregated statistics on verified active staff visits
     let totalVisits = filteredVisits.length;
     let totalCollectedAmount = 0;
     let paymentsCount = 0;
@@ -862,16 +965,6 @@ export async function getDailyVisitsReport(req, res) {
       if (v.outcome === 'Customer Unavailable') customerUnavailableCount++;
       if (v.isSuspicious) suspiciousCount++;
     }
-
-    // -------------------------------------------------------------
-    // Build Hourly Slot & Portfolio Matrix Model (FE Name x Time Slots)
-    // Portfolios: KB (KreditBee), SC (SmartCoin), NAVI, MV (MoneyView/MoneySmart)
-    // Time Slots: 9-11, 11-1, 1-3, 3-5, 5-6
-    // -------------------------------------------------------------
-    const allStaff = await User.find({ role: 'staff', status: { $ne: 'rejected' } })
-      .select('name phone assignedArea employeeId status')
-      .sort({ name: 1 })
-      .lean();
 
     const getPortfolioCode = (p) => {
       if (!p) return 'KB';
@@ -1035,6 +1128,31 @@ export async function getCollectionsReport(req, res) {
       filter.paymentStatus = paymentStatus;
     }
 
+    const deletedStaff = await User.find({ isDeleted: true }, '_id');
+    const deletedStaffIds = deletedStaff.map((s) => s._id.toString());
+
+    if (deletedStaffIds.length > 0) {
+      if (staffId && staffId !== 'ALL' && deletedStaffIds.includes(staffId.toString())) {
+        return res.json({
+          success: true,
+          totalCount: 0,
+          collections: [],
+          stats: {
+            totalAmount: 0,
+            cashTotal: 0,
+            upiTotal: 0,
+            bankTransferTotal: 0,
+            approvedTotal: 0,
+            pendingTotal: 0,
+            rejectedTotal: 0,
+          },
+        });
+      }
+      if (!filter.staffId) {
+        filter.staffId = { $nin: deletedStaff.map((s) => s._id) };
+      }
+    }
+
     const collections = await Visit.find(filter)
       .populate('customerId', 'name phone loanAccountNo address city area status outstandingAmount portfolioId')
       .populate('portfolioId', 'name code')
@@ -1052,6 +1170,27 @@ export async function getCollectionsReport(req, res) {
           c.paymentReference?.toLowerCase().includes(q)
       );
     }
+
+    // -------------------------------------------------------------
+    // Build Collection Report Model (FS NAME, Sum of POS, Count of POS, Sum of COLLECTION, TARGET, DRR, YET TO GO, ACH%)
+    // Fetch only active, approved, non-deleted staff
+    // -------------------------------------------------------------
+    const allStaff = await User.find({
+      role: 'staff',
+      status: 'active',
+      isDeleted: { $ne: true },
+    })
+      .select('name phone assignedArea employeeId status')
+      .sort({ name: 1 })
+      .lean();
+
+    const activeStaffIds = new Set(allStaff.map((s) => s._id.toString()));
+
+    // Exclude any collections belonging to deleted/inactive staff
+    filteredCollections = filteredCollections.filter((c) => {
+      const sId = c.staffId?._id?.toString() || c.staffId?.toString();
+      return sId && activeStaffIds.has(sId);
+    });
 
     let totalAmount = 0;
     let cashTotal = 0;
@@ -1072,14 +1211,6 @@ export async function getCollectionsReport(req, res) {
       else if (c.paymentStatus === 'PENDING_VERIFICATION') pendingTotal += amt;
       else if (c.paymentStatus === 'REJECTED') rejectedTotal += amt;
     }
-
-    // -------------------------------------------------------------
-    // Build Collection Report Model (FS NAME, Sum of POS, Count of POS, Sum of COLLECTION, TARGET, DRR, YET TO GO, ACH%)
-    // -------------------------------------------------------------
-    const allStaff = await User.find({ role: 'staff', status: { $ne: 'rejected' } })
-      .select('name phone assignedArea employeeId status')
-      .sort({ name: 1 })
-      .lean();
 
     // Aggregations on Customer POS by staff
     const customerAgg = await Customer.aggregate([
@@ -1223,6 +1354,10 @@ export async function recordStaffVisit(req, res) {
     const visit = await Visit.create({
       customerId: customer._id,
       staffId: staff._id,
+      staffName: staff.name || '',
+      staffPhone: staff.phone || '',
+      staffEmployeeId: staff.employeeId || '',
+      locationAddress: customer.address || customer.area || '',
       coordinates,
       accuracy: 10,
       clientTimestamp: parsedDate,

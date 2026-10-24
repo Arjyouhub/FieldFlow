@@ -130,10 +130,11 @@ let serverInstance = null;
 
 async function startServer() {
   await connectDB();
-  serverInstance = app.listen(PORT, () => {
+  serverInstance = app.listen(PORT, '0.0.0.0', () => {
     console.log(`===============================================`);
-    console.log(`🚀 FieldFlow Backend Server running on port ${PORT}`);
-    console.log(`📡 Health Check: http://localhost:${PORT}/api/health`);
+    console.log(`🚀 FieldFlow Backend Server running on port ${PORT} (0.0.0.0)`);
+    console.log(`📡 Local Health Check: http://localhost:${PORT}/api/health`);
+    console.log(`📡 LAN Health Check: http://192.168.31.239:${PORT}/api/health`);
     console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`===============================================`);
   });

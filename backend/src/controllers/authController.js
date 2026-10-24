@@ -37,7 +37,7 @@ export async function login(req, res) {
       await SecurityEvent.create({
         eventType: 'FAILED_LOGIN',
         severity: 'LOW',
-        actor: { identifier: trimmed, role: 'unknown' },
+        actor: { identifier, role: 'unknown' },
         endpoint: '/api/auth/login',
         ipAddress: req.ip || '127.0.0.1',
         details: { reason: 'User not found' },

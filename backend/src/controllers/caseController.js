@@ -120,12 +120,22 @@ export async function getCaseById(req, res) {
       .populate('staffId', 'name phone')
       .sort({ createdAt: -1 });
 
+    const formattedVisits = visits.map((v) => {
+      const vObj = v.toObject();
+      return {
+        ...vObj,
+        staffName: vObj.staffId?.name || vObj.staffName || 'Former Field Staff',
+        staffPhone: vObj.staffId?.phone || vObj.staffPhone || '',
+        staffEmployeeId: vObj.staffId?.employeeId || vObj.staffEmployeeId || '',
+      };
+    });
+
     return res.json({
       success: true,
       case: singleCase,
       customer: singleCase.customerId,
       locations,
-      visits,
+      visits: formattedVisits,
       calls,
     });
   } catch (error) {
@@ -246,15 +256,55 @@ export async function importBulkCases(req, res) {
       const row = rawCases[i];
       const rowNum = i + 1;
 
-      const accountNo = (row.accountNumber || row.loanAccountNo || row.accountId || row.loanNo || '').toString().trim();
-      const customerName = (row.customerName || row.name || '').toString().trim();
-      const mobile = (row.mobileNumber || row.mobile || row.phone || '').toString().trim().replace(/[^\d+]/g, '');
-      const outstanding = Number(row.outstandingAmount || row.outstanding || row.pos || 0);
-      const due = Number(row.dueAmount || row.emiAmount || row.due || 0);
-      const refNo = (row.referenceNumber || row.refNo || '').toString().trim();
-      const address = (row.address || 'Address on file').toString().trim();
-      const city = (row.city || 'Kozhikode').toString().trim();
-      const area = (row.area || '').toString().trim();
+      const accountNo = (
+        row.accountNumber ||
+        row.loanAccountNo ||
+        row.accountId ||
+        row.loanNo ||
+        row.kbloanid ||
+        row.lan ||
+        ''
+      ).toString().trim() || `ACC-${Date.now().toString().slice(-6)}-${rowNum}`;
+
+      const customerName = (
+        row.customerName ||
+        row.name ||
+        row.cxName ||
+        row['cx name'] ||
+        row.borrowerName ||
+        row.clientName ||
+        ''
+      ).toString().trim();
+
+      let mobile = (
+        row.mobileNumber ||
+        row.mobile ||
+        row.phone ||
+        row[' PHN NO '] ||
+        row['PHN NO'] ||
+        row.phnNo ||
+        row.phn ||
+        ''
+      ).toString().trim().replace(/[^\d+]/g, '');
+
+      if (mobile.length === 12 && mobile.startsWith('91')) {
+        mobile = mobile.slice(2);
+      } else if (mobile.length === 11 && mobile.startsWith('0')) {
+        mobile = mobile.slice(1);
+      }
+
+      const outstanding = Number(
+        String(row.outstandingAmount || row.outstanding || row.pos || row.tos || row.loan_amount || 0).replace(/[^0-9.-]/g, '')
+      ) || 0;
+
+      const due = Number(
+        String(row.dueAmount || row.emiAmount || row.due || outstanding).replace(/[^0-9.-]/g, '')
+      ) || 0;
+
+      const refNo = (row.referenceNumber || row.refNo || row.ref || '').toString().trim();
+      const address = (row.address || row.ADDRESS || 'Address on file').toString().trim();
+      const city = (row.city || row.permanent_city || 'Kozhikode').toString().trim();
+      const area = (row.area || row.permanent_city || row.permanent_pincode || '').toString().trim();
       const rowStaff = row.assignedStaffId || row.staffId || row.assignedStaff || defaultStaffId || null;
 
       // Validation
@@ -263,14 +313,9 @@ export async function importBulkCases(req, res) {
         errors.push({ row: rowNum, error: 'Customer Name is required' });
         continue;
       }
-      if (!mobile) {
+      if (!mobile || mobile.length < 10) {
         failedCount++;
-        errors.push({ row: rowNum, error: 'Mobile Number is required' });
-        continue;
-      }
-      if (!accountNo) {
-        failedCount++;
-        errors.push({ row: rowNum, error: 'Account/Loan Number is required' });
+        errors.push({ row: rowNum, error: 'Valid 10-digit Mobile Number is required' });
         continue;
       }
 

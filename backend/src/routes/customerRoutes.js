@@ -104,11 +104,21 @@ router.get('/:id', async (req, res) => {
       .populate('staffId', 'name phone')
       .sort({ createdAt: -1 });
 
+    const formattedVisits = visits.map((v) => {
+      const vObj = v.toObject();
+      return {
+        ...vObj,
+        staffName: vObj.staffId?.name || vObj.staffName || 'Former Field Staff',
+        staffPhone: vObj.staffId?.phone || vObj.staffPhone || '',
+        staffEmployeeId: vObj.staffId?.employeeId || vObj.staffEmployeeId || '',
+      };
+    });
+
     return res.json({
       success: true,
       customer,
       locations,
-      visits,
+      visits: formattedVisits,
       calls,
     });
   } catch (error) {

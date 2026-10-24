@@ -1874,11 +1874,6 @@ export default function App() {
               <span>Tap to Fill Demo Admin Credentials</span>
             </button>
           </div>
-
-          <div className="admin-login-footer">
-            <ShieldCheck size={14} style={{ color: '#0d9488' }} />
-            <span>256-Bit SSL Encrypted Admin Gateway</span>
-          </div>
         </div>
       </div>
     );

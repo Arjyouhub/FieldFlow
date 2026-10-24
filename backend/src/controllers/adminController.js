@@ -9,6 +9,7 @@ import { Portfolio } from '../models/Portfolio.js';
 import { Case } from '../models/Case.js';
 import { MonthlyBatch } from '../models/MonthlyBatch.js';
 import { ExternalVisitMetric } from '../models/ExternalVisitMetric.js';
+import { Session } from '../models/Session.js';
 
 /**
  * 1. Admin Dashboard KPI Statistics (Portfolio & Multi-dimensional Filter Aware)
@@ -60,9 +61,9 @@ export async function getDashboardStats(req, res) {
         ? await Case.countDocuments({ ...caseFilter, status: 'non_workable' })
         : await Customer.countDocuments({ ...filter, status: 'non_workable' });
 
-    const totalStaff = await User.countDocuments({ role: 'staff' });
-    const activeStaff = await User.countDocuments({ role: 'staff', status: 'active' });
-    const pendingStaffApprovals = await User.countDocuments({ role: 'staff', status: 'pending_approval' });
+    const totalStaff = await User.countDocuments({ role: 'staff', status: { $ne: 'deleted' }, isDeleted: { $ne: true } });
+    const activeStaff = await User.countDocuments({ role: 'staff', status: 'active', isDeleted: { $ne: true } });
+    const pendingStaffApprovals = await User.countDocuments({ role: 'staff', status: 'pending_approval', isDeleted: { $ne: true } });
 
     const suspiciousCount = await SuspiciousEvent.countDocuments({
       reviewStatus: 'PENDING_REVIEW',
@@ -137,7 +138,11 @@ export async function getDashboardStats(req, res) {
  */
 export async function listStaff(req, res) {
   try {
-    const staffMembers = await User.find({ role: 'staff' }).select('-password').sort({ createdAt: -1 });
+    const staffMembers = await User.find({
+      role: 'staff',
+      status: { $ne: 'deleted' },
+      isDeleted: { $ne: true }
+    }).select('-password').sort({ createdAt: -1 });
 
     // Fetch case counts per staff
     const staffWithMetrics = await Promise.all(
@@ -340,6 +345,62 @@ export async function reviewStaffRegistration(req, res) {
       success: true,
       message: `Staff member ${staff.name} has been ${action === 'APPROVE' ? 'approved and activated' : 'declined'}.`,
       staff,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+export async function deleteStaff(req, res) {
+  try {
+    const { id } = req.params;
+
+    const targetStaff = await User.findById(id);
+    if (!targetStaff) {
+      return res.status(404).json({ success: false, message: 'Staff member not found.' });
+    }
+
+    if (targetStaff.role !== 'staff') {
+      return res.status(400).json({ success: false, message: 'Only field staff accounts can be deleted through this endpoint.' });
+    }
+
+    // 1. Soft-delete staff so historical Visit records and references remain intact in database
+    targetStaff.status = 'deleted';
+    targetStaff.isDeleted = true;
+    await targetStaff.save();
+
+    // 2. Terminate active sessions so they cannot access mobile app
+    await Session.deleteMany({ userId: id });
+
+    // 3. Unassign unvisited/pending cases so they can be reassigned to active officers
+    await Case.updateMany(
+      { assignedStaff: id, status: { $in: ['pending', 'unassigned'] } },
+      { $set: { assignedStaff: null, assignmentStatus: 'unassigned' } }
+    );
+    await Customer.updateMany(
+      { assignedStaff: id, status: { $in: ['pending', 'unassigned'] } },
+      { $set: { assignedStaff: null } }
+    );
+
+    // 4. Create audit log
+    await AuditLog.create({
+      actorId: req.user._id,
+      actorName: req.user.name,
+      actorRole: req.user.role,
+      action: 'DELETE_STAFF_ACCOUNT',
+      entityType: 'User',
+      entityId: id,
+      details: {
+        staffName: targetStaff.name,
+        phone: targetStaff.phone,
+        note: 'Staff removed from admin directory. All past visits and payment records preserved in database.'
+      },
+    }).catch(() => {});
+
+    return res.json({
+      success: true,
+      message: `Staff account "${targetStaff.name}" deleted successfully. All past field visit history and recovery logs have been safely preserved in the database.`,
+      staffId: id,
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

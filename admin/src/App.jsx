@@ -111,6 +111,8 @@ export default function App() {
   const [addDataStaffTarget, setAddDataStaffTarget] = useState(null);
   const [statusConfirmStaff, setStatusConfirmStaff] = useState(null);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
+  const [deleteConfirmStaff, setDeleteConfirmStaff] = useState(null);
+  const [isDeletingStaff, setIsDeletingStaff] = useState(false);
   const [settingsSubTab, setSettingsSubTab] = useState('admins'); // 'admins' | 'policies'
 
   // Dashboard Data
@@ -1622,6 +1624,23 @@ export default function App() {
       setErrorMsg(err.message);
     } finally {
       setIsTogglingStatus(false);
+    }
+  };
+
+  const handleDeleteStaff = async (staffId) => {
+    setIsDeletingStaff(true);
+    try {
+      const data = await apiFetch(`/api/admin/staff/${staffId}`, {
+        method: 'DELETE',
+      });
+      setSuccessMsg(data.message || 'Staff account deleted successfully. Historical visit records preserved.');
+      loadData();
+      setStaffList((prev) => prev.filter((s) => s._id !== staffId));
+      setDeleteConfirmStaff(null);
+    } catch (err) {
+      setErrorMsg(err.message);
+    } finally {
+      setIsDeletingStaff(false);
     }
   };
 
@@ -3996,6 +4015,20 @@ export default function App() {
                                     >
                                       {stf.status === 'active' ? 'Deactivate' : 'Activate'}
                                     </button>
+                                    <button
+                                      className="btn btn-sm btn-secondary"
+                                      style={{ justifyContent: 'center', color: 'var(--danger-text)', borderColor: 'var(--danger-border)' }}
+                                      onClick={() =>
+                                        setDeleteConfirmStaff({
+                                          staffId: stf._id,
+                                          name: stf.name,
+                                          employeeId: stf.employeeId,
+                                        })
+                                      }
+                                      title="Delete staff account"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
                                   </>
                                 )}
                               </div>
@@ -4141,6 +4174,20 @@ export default function App() {
                                         }
                                       >
                                         {stf.status === 'active' ? 'Deactivate' : 'Activate'}
+                                      </button>
+                                      <button
+                                        className="btn btn-sm btn-secondary"
+                                        style={{ color: 'var(--danger-text)', borderColor: 'var(--danger-border)', gap: '4px' }}
+                                        onClick={() =>
+                                          setDeleteConfirmStaff({
+                                            staffId: stf._id,
+                                            name: stf.name,
+                                            employeeId: stf.employeeId,
+                                          })
+                                        }
+                                        title="Delete staff account"
+                                      >
+                                        <Trash2 size={12} /> Delete
                                       </button>
                                     </>
                                   )}
@@ -7081,6 +7128,112 @@ export default function App() {
                     : statusConfirmStaff.targetStatus === 'inactive'
                     ? 'Yes, Deactivate'
                     : 'Yes, Activate'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE STAFF CONFIRMATION MODAL */}
+      {deleteConfirmStaff && (
+        <div
+          className="modal-backdrop"
+          style={{ zIndex: 10001 }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isDeletingStaff) setDeleteConfirmStaff(null);
+          }}
+        >
+          <div className="modal-card" style={{ maxWidth: '460px', width: '92%' }}>
+            <div className="modal-header" style={{ borderBottom: '1px solid var(--border)' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  color: 'var(--danger-text)',
+                }}
+              >
+                <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'var(--danger-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Trash2 size={17} color="var(--danger-text)" />
+                </div>
+                <h3
+                  className="modal-title"
+                  style={{
+                    color: 'var(--danger-text)',
+                    fontSize: '16px',
+                  }}
+                >
+                  Delete Staff Account
+                </h3>
+              </div>
+              <button
+                onClick={() => !isDeletingStaff && setDeleteConfirmStaff(null)}
+                className="modal-close-btn"
+                disabled={isDeletingStaff}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ padding: '20px' }}>
+              <p style={{ fontSize: '14px', color: 'var(--text-main)', marginBottom: '14px', lineHeight: '1.5' }}>
+                Are you sure you want to delete staff account{' '}
+                <strong>{deleteConfirmStaff.name}</strong> ({deleteConfirmStaff.employeeId || 'STF-101'})?
+              </p>
+
+              <div
+                style={{
+                  padding: '12px 14px',
+                  background: '#FEF3C7',
+                  border: '1px solid #F59E0B',
+                  borderRadius: '10px',
+                  color: '#92400E',
+                  fontSize: '12.5px',
+                  marginBottom: '14px',
+                  lineHeight: '1.45',
+                }}
+              >
+                <strong>✓ Visit Data Preserved:</strong> All past customer visits, GPS coordinate tags, recovery amounts, and audit logs recorded by this staff will remain <strong>permanently preserved in the database</strong>.
+              </div>
+
+              <div
+                style={{
+                  padding: '12px 14px',
+                  background: 'var(--danger-light)',
+                  border: '1px solid var(--danger-border)',
+                  borderRadius: '10px',
+                  color: 'var(--danger-text)',
+                  fontSize: '12.5px',
+                  marginBottom: '20px',
+                  lineHeight: '1.45',
+                }}
+              >
+                ⚠️ <strong>Notice:</strong> This staff member will be removed from the Admin Staff Directory, any pending unvisited cases will be unassigned for reallocation, and their mobile app login session will be revoked immediately.
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmStaff(null)}
+                  className="btn btn-secondary"
+                  disabled={isDeletingStaff}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteStaff(deleteConfirmStaff.staffId)}
+                  className="btn btn-danger"
+                  disabled={isDeletingStaff}
+                  style={{ gap: '6px' }}
+                >
+                  {isDeletingStaff ? (
+                    <RefreshCw size={13} className="animate-spin" />
+                  ) : (
+                    <Trash2 size={14} />
+                  )}
+                  {isDeletingStaff ? 'Deleting...' : 'Yes, Delete Staff'}
                 </button>
               </div>
             </div>

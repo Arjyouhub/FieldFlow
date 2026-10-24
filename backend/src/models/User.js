@@ -38,8 +38,13 @@ const userSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['active', 'inactive', 'suspended', 'pending_activation', 'pending_approval'],
+      enum: ['active', 'inactive', 'suspended', 'pending_activation', 'pending_approval', 'deleted'],
       default: 'active',
+      index: true,
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
       index: true,
     },
     assignedArea: {

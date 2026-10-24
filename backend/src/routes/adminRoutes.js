@@ -6,6 +6,7 @@ import {
   updateStaff,
   updateStaffStatus,
   reviewStaffRegistration,
+  deleteStaff,
   reassignCases,
   listCustomers,
   createCustomer,
@@ -42,6 +43,7 @@ router.post('/staff', createStaff);
 router.put('/staff/:id', updateStaff);
 router.put('/staff/:id/status', updateStaffStatus);
 router.put('/staff/:id/review', reviewStaffRegistration);
+router.delete('/staff/:id', deleteStaff);
 router.post('/staff/reassign', reassignCases);
 
 router.get('/customers', listCustomers);

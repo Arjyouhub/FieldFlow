@@ -3050,6 +3050,9 @@ export default function App() {
                           padding: '3px',
                           borderRadius: 'var(--radius-md)',
                           border: '1px solid var(--border)',
+                          maxWidth: '100%',
+                          overflowX: 'auto',
+                          WebkitOverflowScrolling: 'touch',
                         }}
                       >
                         <button
@@ -3230,7 +3233,7 @@ export default function App() {
                           </button>
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))', gap: '16px', marginTop: '16px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))', gap: '16px', marginTop: '16px' }}>
                           {pendingStaff.map((stf) => {
                             const rawPhoto = stf.profilePhoto || stf.selfiePhoto;
                             const fullPhotoUrl = getPhotoUrl ? getPhotoUrl(rawPhoto) : rawPhoto;
@@ -3335,33 +3338,33 @@ export default function App() {
 
                                 {/* Action Buttons */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: 'auto' }}>
-                                  <div style={{ display: 'flex', gap: '8px' }}>
+                                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                     <button
                                       className="btn btn-sm btn-secondary"
-                                      style={{ flex: 1, justifyContent: 'center', fontSize: '12px' }}
+                                      style={{ flex: '1 1 110px', justifyContent: 'center', fontSize: '12px' }}
                                       onClick={() => setSelectedStaffDetails(stf)}
                                     >
                                       <Eye size={13} /> Check Details
                                     </button>
                                     <button
                                       className="btn btn-sm btn-secondary"
-                                      style={{ flex: 1, justifyContent: 'center', fontSize: '12px' }}
+                                      style={{ flex: '1 1 80px', justifyContent: 'center', fontSize: '12px' }}
                                       onClick={() => setEditingStaff(stf)}
                                     >
                                       <Edit3 size={13} /> Edit
                                     </button>
                                   </div>
-                                  <div style={{ display: 'flex', gap: '8px' }}>
+                                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                     <button
                                       className="btn btn-sm btn-primary"
-                                      style={{ flex: 1, justifyContent: 'center' }}
+                                      style={{ flex: '1 1 140px', justifyContent: 'center' }}
                                       onClick={() => handleReviewStaff(stf._id, 'APPROVE', currentArea)}
                                     >
                                       <CheckCircle size={14} /> Approve Staff Account
                                     </button>
                                     <button
                                       className="btn btn-sm btn-secondary"
-                                      style={{ color: 'var(--danger-text)', borderColor: 'var(--danger-border)', justifyContent: 'center' }}
+                                      style={{ flex: '1 1 80px', color: 'var(--danger-text)', borderColor: 'var(--danger-border)', justifyContent: 'center' }}
                                       onClick={() => setStaffRejectionModal({ staffId: stf._id, name: stf.name, phone: stf.phone })}
                                     >
                                       <XCircle size={14} /> Decline

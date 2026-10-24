@@ -363,7 +363,7 @@ export default function BulkImportModal({
                 {importResult.message}
               </p>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', marginBottom: '24px' }}>
                 <div style={{ padding: '14px', background: 'var(--bg-card-subtle)', borderRadius: '10px' }}>
                   <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Created Cases</div>
                   <div style={{ fontSize: '20px', fontWeight: '800', color: 'var(--success-text)' }}>
@@ -868,8 +868,8 @@ export default function BulkImportModal({
                   </div>
 
                   {/* Action Buttons */}
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                    <button type="button" onClick={onClose} className="btn btn-secondary">
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
+                    <button type="button" onClick={onClose} className="btn btn-secondary" style={{ flex: '0 1 auto' }}>
                       Cancel
                     </button>
                     <button

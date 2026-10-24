@@ -2361,6 +2361,136 @@ h1, .topbar-title {
   }
 }
 
+/* ==========================================================================
+   Comprehensive Mobile & Tablet Responsive System for FieldFlow Admin
+   ========================================================================== */
+
+/* Sub-Tab Navigation Pill Switcher */
+.subtab-pill-container {
+  display: inline-flex;
+  background: var(--bg-card-subtle);
+  padding: 3px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.subtab-pill-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* Modal Responsive Enhancements */
+@media (max-width: 768px) {
+  .modal-backdrop,
+  .modal-overlay {
+    padding: 8px !important;
+  }
+
+  .modal-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 92vh !important;
+    border-radius: 14px !important;
+    margin: auto !important;
+  }
+
+  .modal-header {
+    padding: 12px 14px !important;
+  }
+
+  .modal-title {
+    font-size: 15px !important;
+  }
+
+  .modal-body {
+    padding: 14px 12px !important;
+  }
+
+  /* Filter Toolbar on Mobile */
+  .filter-pill-row {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+
+  .filter-pill-row button {
+    padding: 6px 10px !important;
+    font-size: 12px !important;
+  }
+
+  /* Search Bar full width on mobile */
+  .search-wrapper-mobile {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 1 1 100% !important;
+  }
+
+  /* Approval Cards on Mobile */
+  .approval-card-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  /* Form Grids on Mobile */
+  .form-grid-responsive {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  /* Action Buttons inside cards wrap cleanly */
+  .card-action-buttons {
+    flex-direction: column !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+
+  .card-action-buttons .btn {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  /* Auto-detected column pills */
+  .auto-detected-pill-container {
+    padding: 8px 10px !important;
+  }
+
+  .auto-detected-pill-container .badge {
+    font-size: 11px !important;
+    padding: 3px 6px !important;
+  }
+
+  /* Data Table Horizontal Scroll Hint */
+  .table-responsive {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Extra Small Phone Tuning */
+  .page-title {
+    font-size: 14px !important;
+    max-width: 140px !important;
+  }
+
+  .topbar {
+    padding: 0 8px !important;
+  }
+
+  .content-body {
+    padding: 10px 8px 72px 8px !important;
+  }
+
+  .approval-kpi-card {
+    padding: 10px 12px !important;
+  }
+}
+
+
 
 
 

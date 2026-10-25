@@ -17,7 +17,10 @@ router.use(protect);
  */
 router.get('/assigned', async (req, res) => {
   try {
-    const filter = req.user.role === 'staff' ? { assignedStaff: req.user._id } : {};
+    const filter = {
+      isDeleted: { $ne: true },
+      ...(req.user.role === 'staff' ? { assignedStaff: req.user._id } : {}),
+    };
 
     // 1. Check if records exist in Case model
     const cases = await Case.find(filter)

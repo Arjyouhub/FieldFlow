@@ -129,6 +129,24 @@ const caseSchema = new mongoose.Schema(
         details: { type: mongoose.Schema.Types.Mixed },
       },
     ],
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    deleteReason: {
+      type: String,
+      default: '',
+    },
   },
   {
     timestamps: true,

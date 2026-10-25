@@ -56,6 +56,7 @@ import {
   MessageCircle,
   Image,
   Camera,
+  RotateCcw,
 } from 'lucide-react';
 
 import PortfoliosView from './components/PortfoliosView';
@@ -137,6 +138,10 @@ export default function App() {
 
   // Data lists
   const [customers, setCustomers] = useState([]);
+  const [customerTrashView, setCustomerTrashView] = useState(false);
+  const [deleteConfirmCustomer, setDeleteConfirmCustomer] = useState(null);
+  const [customerDeleteReason, setCustomerDeleteReason] = useState('Account closed or customer requested deletion');
+  const [isDeletingCustomer, setIsDeletingCustomer] = useState(false);
   const [staffList, setStaffList] = useState([]);
   const [locations, setLocations] = useState([]);
   const [suspiciousEvents, setSuspiciousEvents] = useState([]);
@@ -445,7 +450,10 @@ export default function App() {
         setStats(data.stats);
         setRecentVisits(data.recentVisits || []);
       } else if (activeTab === 'customers') {
-        const data = await apiFetch(`/api/admin/customers${searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : ''}`);
+        const queryParams = new URLSearchParams();
+        if (searchQuery) queryParams.set('search', searchQuery);
+        if (customerTrashView) queryParams.set('isDeleted', 'true');
+        const data = await apiFetch(`/api/admin/customers?${queryParams.toString()}`);
         setCustomers(data.customers || []);
         if (!staffList.length) {
           apiFetch('/api/admin/staff').then((d) => setStaffList(d.staff || [])).catch(() => {});
@@ -493,7 +501,50 @@ export default function App() {
 
   useEffect(() => {
     loadData();
-  }, [token, activeTab, selectedGlobalPortfolio]);
+  }, [token, activeTab, selectedGlobalPortfolio, customerTrashView]);
+
+  const fetchCustomers = async (isTrash = customerTrashView) => {
+    try {
+      const queryParams = new URLSearchParams();
+      if (searchQuery) queryParams.set('search', searchQuery);
+      if (isTrash) queryParams.set('isDeleted', 'true');
+      const data = await apiFetch(`/api/admin/customers?${queryParams.toString()}`);
+      setCustomers(data.customers || []);
+    } catch (err) {
+      toast.error(err.message || 'Failed to fetch customers');
+    }
+  };
+
+  const handleDeleteCustomer = async () => {
+    if (!deleteConfirmCustomer) return;
+    setIsDeletingCustomer(true);
+    try {
+      const res = await apiFetch(`/api/admin/customers/${deleteConfirmCustomer._id}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ reason: customerDeleteReason }),
+      });
+      toast.success(res.message || 'Customer moved to Trash.');
+      setDeleteConfirmCustomer(null);
+      setCustomerDeleteReason('Account closed or customer requested deletion');
+      fetchCustomers();
+    } catch (err) {
+      toast.error(err.message || 'Failed to delete customer');
+    } finally {
+      setIsDeletingCustomer(false);
+    }
+  };
+
+  const handleRestoreCustomer = async (cust) => {
+    try {
+      const res = await apiFetch(`/api/admin/customers/${cust._id}/restore`, {
+        method: 'POST',
+      });
+      toast.success(res.message || 'Customer restored successfully.');
+      fetchCustomers();
+    } catch (err) {
+      toast.error(err.message || 'Failed to restore customer');
+    }
+  };
 
   // Handle report date preset changes
   const handleDatePresetChange = (preset) => {
@@ -2541,6 +2592,42 @@ export default function App() {
           {/* ================================================================ */}
           {activeTab === 'customers' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {/* Customer Active vs Trash sub-tabs */}
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${!customerTrashView ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => {
+                    setCustomerTrashView(false);
+                    fetchCustomers(false);
+                  }}
+                  style={{ gap: '6px' }}
+                >
+                  <Users size={14} /> Active Customers
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${customerTrashView ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => {
+                    setCustomerTrashView(true);
+                    fetchCustomers(true);
+                  }}
+                  style={{
+                    gap: '6px',
+                    background: customerTrashView ? 'var(--danger-text)' : undefined,
+                    borderColor: customerTrashView ? 'var(--danger-text)' : undefined,
+                    color: customerTrashView ? '#fff' : undefined,
+                  }}
+                >
+                  <Trash2 size={14} /> Deleted / Trash Customers
+                </button>
+                {customerTrashView && (
+                  <span style={{ fontSize: '12.5px', color: 'var(--text-muted)', marginLeft: '6px' }}>
+                    ⚠️ Deleted customers and their cases are removed from staff phones and active analytics. You can restore them anytime.
+                  </span>
+                )}
+              </div>
+
               <div className="card cases-filter-card">
                 <div className="cases-filter-top-row">
                   <div className="cases-search-box">
@@ -2677,9 +2764,9 @@ export default function App() {
 
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', fontSize: '12px', borderTop: '1px dashed var(--border)', paddingTop: '8px' }}>
                           <div style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <span className="case-card-label">Staff:</span>
-                            <strong style={{ color: c.assignedStaff ? 'var(--text-main)' : 'var(--warning-text, #d97706)' }}>
-                              {c.assignedStaff?.name || 'Unassigned'}
+                            <span className="case-card-label">{customerTrashView ? 'Reason:' : 'Staff:'}</span>
+                            <strong style={{ color: customerTrashView ? 'var(--danger-text)' : c.assignedStaff ? 'var(--text-main)' : 'var(--warning-text, #d97706)' }}>
+                              {customerTrashView ? (c.deleteReason || 'Moved to Trash') : (c.assignedStaff?.name || 'Unassigned')}
                             </strong>
                           </div>
                           <div>
@@ -2692,25 +2779,50 @@ export default function App() {
                         </div>
 
                         <div className="case-card-actions">
-                          <button
-                            type="button"
-                            className="btn btn-secondary btn-sm"
-                            style={{ flex: 1, justifyContent: 'center', gap: '5px' }}
-                            onClick={() => {
-                              handleClearSelectedDoc();
-                              setSelectedCustomerForDoc(c);
-                            }}
-                          >
-                            <Image size={13} /> Files & Photos {c.documents?.length > 0 ? `(${c.documents.length})` : ''}
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-primary btn-sm"
-                            style={{ flex: 1, justifyContent: 'center' }}
-                            onClick={() => setReassignModal(c)}
-                          >
-                            Reassign Staff
-                          </button>
+                          {customerTrashView ? (
+                            <button
+                              type="button"
+                              className="btn btn-sm"
+                              style={{ flex: 1, justifyContent: 'center', background: '#16a34a', color: '#fff', gap: '5px', padding: '7px 12px' }}
+                              onClick={() => handleRestoreCustomer(c)}
+                            >
+                              <RotateCcw size={13} /> Restore Customer & Cases
+                            </button>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                style={{ flex: 1, justifyContent: 'center', gap: '5px' }}
+                                onClick={() => {
+                                  handleClearSelectedDoc();
+                                  setSelectedCustomerForDoc(c);
+                                }}
+                              >
+                                <Image size={13} /> Files & Photos {c.documents?.length > 0 ? `(${c.documents.length})` : ''}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-primary btn-sm"
+                                style={{ flex: 1, justifyContent: 'center' }}
+                                onClick={() => setReassignModal(c)}
+                              >
+                                Reassign Staff
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                style={{ justifyContent: 'center', color: 'var(--danger-text)' }}
+                                title="Move Customer to Trash"
+                                onClick={() => {
+                                  setDeleteConfirmCustomer(c);
+                                  setCustomerDeleteReason('Account closed or customer requested deletion');
+                                }}
+                              >
+                                <Trash2 size={13} /> Delete
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     ))
@@ -2730,7 +2842,7 @@ export default function App() {
                         <th>Outstanding Balance</th>
                         <th>Due EMI</th>
                         <th>Status</th>
-                        <th>Assigned Staff</th>
+                        <th>{customerTrashView ? 'Deletion Info' : 'Assigned Staff'}</th>
                         <th>Actions</th>
                       </tr>
                     </thead>
@@ -2738,7 +2850,7 @@ export default function App() {
                       {filteredCustomers.length === 0 ? (
                         <tr>
                           <td colSpan={8} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
-                            No customer cases match the current filter.
+                            {customerTrashView ? 'Trash is empty. No deleted customers found.' : 'No customer cases match the current filter.'}
                           </td>
                         </tr>
                       ) : (
@@ -2767,34 +2879,73 @@ export default function App() {
                               </span>
                             </td>
                             <td>
-                              <div style={{ fontSize: '13px' }}>{c.assignedStaff?.name || 'Unassigned'}</div>
+                              {customerTrashView ? (
+                                <div>
+                                  <div style={{ fontSize: '12px', color: 'var(--danger-text)', fontWeight: '600' }}>
+                                    {c.deleteReason || 'Moved to Trash'}
+                                  </div>
+                                  {c.deletedAt && (
+                                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                      {new Date(c.deletedAt).toLocaleDateString('en-IN')}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <div style={{ fontSize: '13px' }}>{c.assignedStaff?.name || 'Unassigned'}</div>
+                              )}
                             </td>
                             <td>
                               <div style={{ display: 'flex', gap: '6px' }}>
-                                <button
-                                  type="button"
-                                  className="btn btn-secondary btn-sm"
-                                  onClick={() => {
-                                    handleClearSelectedDoc();
-                                    setSelectedCustomerForDoc(c);
-                                  }}
-                                  title="Upload & View Customer Files and Photos"
-                                  style={{ gap: '4px' }}
-                                >
-                                  <Image size={13} /> Files & Photos
-                                  {c.documents && c.documents.length > 0 && (
-                                    <span style={{ background: '#DCFCE7', color: '#166534', fontSize: '10px', padding: '1px 5px', borderRadius: '10px', fontWeight: 700 }}>
-                                      {c.documents.length}
-                                    </span>
-                                  )}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn btn-secondary btn-sm"
-                                  onClick={() => setReassignModal(c)}
-                                >
-                                  Reassign
-                                </button>
+                                {customerTrashView ? (
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm"
+                                    style={{ background: '#16a34a', color: '#fff', gap: '4px', fontSize: '11.5px', padding: '3px 9px' }}
+                                    onClick={() => handleRestoreCustomer(c)}
+                                    title="Restore Customer & Associated Cases"
+                                  >
+                                    <RotateCcw size={12} /> Restore
+                                  </button>
+                                ) : (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="btn btn-secondary btn-sm"
+                                      onClick={() => {
+                                        handleClearSelectedDoc();
+                                        setSelectedCustomerForDoc(c);
+                                      }}
+                                      title="Upload & View Customer Files and Photos"
+                                      style={{ gap: '4px' }}
+                                    >
+                                      <Image size={13} /> Files & Photos
+                                      {c.documents && c.documents.length > 0 && (
+                                        <span style={{ background: '#DCFCE7', color: '#166534', fontSize: '10px', padding: '1px 5px', borderRadius: '10px', fontWeight: 700 }}>
+                                          {c.documents.length}
+                                        </span>
+                                      )}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="btn btn-secondary btn-sm"
+                                      onClick={() => setReassignModal(c)}
+                                    >
+                                      Reassign
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="btn btn-secondary btn-sm"
+                                      title="Move Customer to Trash"
+                                      style={{ color: 'var(--danger-text)' }}
+                                      onClick={() => {
+                                        setDeleteConfirmCustomer(c);
+                                        setCustomerDeleteReason('Account closed or customer requested deletion');
+                                      }}
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -6805,6 +6956,124 @@ export default function App() {
                     <Trash2 size={14} />
                   )}
                   {isDeletingStaff ? 'Deleting...' : 'Yes, Delete Staff'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CUSTOMER CONFIRMATION MODAL */}
+      {deleteConfirmCustomer && (
+        <div
+          className="modal-backdrop"
+          style={{ zIndex: 10001 }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isDeletingCustomer) setDeleteConfirmCustomer(null);
+          }}
+        >
+          <div className="modal-card" style={{ maxWidth: '460px', width: '92%' }}>
+            <div className="modal-header" style={{ borderBottom: '1px solid var(--border)' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  color: 'var(--danger-text)',
+                }}
+              >
+                <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'var(--danger-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Trash2 size={17} color="var(--danger-text)" />
+                </div>
+                <h3
+                  className="modal-title"
+                  style={{
+                    color: 'var(--danger-text)',
+                    fontSize: '16px',
+                  }}
+                >
+                  Move Customer to Trash
+                </h3>
+              </div>
+              <button
+                onClick={() => !isDeletingCustomer && setDeleteConfirmCustomer(null)}
+                className="modal-close-btn"
+                disabled={isDeletingCustomer}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ padding: '20px' }}>
+              <p style={{ fontSize: '14px', color: 'var(--text-main)', marginBottom: '10px', lineHeight: '1.5' }}>
+                Are you sure you want to move customer <strong>{deleteConfirmCustomer.name}</strong> ({deleteConfirmCustomer.loanAccountNo}) to Trash?
+              </p>
+
+              <div
+                style={{
+                  padding: '12px 14px',
+                  background: 'var(--danger-light)',
+                  border: '1px solid var(--danger-border)',
+                  borderRadius: '10px',
+                  color: 'var(--danger-text)',
+                  fontSize: '12.5px',
+                  marginBottom: '16px',
+                  lineHeight: '1.45',
+                }}
+              >
+                ⚠️ <strong>Notice:</strong> Moving this customer to Trash will also move their active field collection cases to Trash. They will be removed from field staff mobile applications and daily operational metrics. You can restore this customer and their cases anytime from <strong>Deleted / Trash Customers</strong>.
+              </div>
+
+              <div style={{ marginBottom: '18px' }}>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '600', marginBottom: '6px' }}>
+                  Reason for Deletion
+                </label>
+                <select
+                  className="input-field"
+                  value={customerDeleteReason}
+                  onChange={(e) => setCustomerDeleteReason(e.target.value)}
+                  style={{ marginBottom: '8px', width: '100%' }}
+                >
+                  <option value="Account closed or customer requested deletion">Account closed or customer requested deletion</option>
+                  <option value="Duplicate customer record">Duplicate customer record</option>
+                  <option value="Loan settled / paid outside">Loan settled / paid outside</option>
+                  <option value="Legal hold or external recovery agency transfer">Legal hold or external agency transfer</option>
+                  <option value="Incorrect entry / wrong batch">Incorrect entry / wrong batch</option>
+                  <option value="Other">Other reason</option>
+                </select>
+                {customerDeleteReason === 'Other' && (
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="Enter specific reason..."
+                    style={{ width: '100%' }}
+                    onChange={(e) => setCustomerDeleteReason(e.target.value)}
+                  />
+                )}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmCustomer(null)}
+                  className="btn btn-secondary"
+                  disabled={isDeletingCustomer}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteCustomer}
+                  className="btn btn-danger"
+                  disabled={isDeletingCustomer}
+                  style={{ gap: '6px' }}
+                >
+                  {isDeletingCustomer ? (
+                    <RefreshCw size={13} className="animate-spin" />
+                  ) : (
+                    <Trash2 size={14} />
+                  )}
+                  {isDeletingCustomer ? 'Moving to Trash...' : 'Yes, Move to Trash'}
                 </button>
               </div>
             </div>

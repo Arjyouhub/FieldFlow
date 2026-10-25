@@ -11,6 +11,8 @@ import {
   listCustomers,
   createCustomer,
   getCustomerDetails,
+  deleteCustomer,
+  restoreCustomer,
   importMonthlyCases,
   addCustomerDocument,
   deleteCustomerDocument,
@@ -50,6 +52,8 @@ router.post('/staff/reassign', reassignCases);
 router.get('/customers', listCustomers);
 router.get('/customers/:id', getCustomerDetails);
 router.post('/customers', createCustomer);
+router.delete('/customers/:id', deleteCustomer);
+router.post('/customers/:id/restore', restoreCustomer);
 router.post('/customers/:id/documents', addCustomerDocument);
 router.delete('/customers/:id/documents/:docId', deleteCustomerDocument);
 router.post('/cases/import', importMonthlyCases);

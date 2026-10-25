@@ -465,12 +465,18 @@ export async function reassignCases(req, res) {
  */
 export async function listCustomers(req, res) {
   try {
-    const { search, status, area, staffId } = req.query;
+    const { search, status, area, staffId, isDeleted } = req.query;
     const query = {};
 
-    if (status) query.status = status;
-    if (area) query.area = area;
-    if (staffId) query.assignedStaff = staffId;
+    if (isDeleted === 'true') {
+      query.isDeleted = true;
+    } else {
+      query.isDeleted = { $ne: true };
+    }
+
+    if (status && status !== 'ALL') query.status = status;
+    if (area && area !== 'ALL') query.area = area;
+    if (staffId && staffId !== 'ALL') query.assignedStaff = staffId;
     if (search) {
       query.$or = [
         { name: { $regex: search, $options: 'i' } },
@@ -482,9 +488,126 @@ export async function listCustomers(req, res) {
 
     const customers = await Customer.find(query)
       .populate('assignedStaff', 'name phone assignedArea')
-      .sort({ createdAt: -1 });
+      .populate('deletedBy', 'name phone role')
+      .sort(isDeleted === 'true' ? { deletedAt: -1 } : { createdAt: -1 });
 
     return res.json({ success: true, count: customers.length, customers });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+export async function deleteCustomer(req, res) {
+  try {
+    const { id } = req.params;
+    const { reason = 'Deleted by administrator' } = req.body;
+
+    const customer = await Customer.findById(id);
+    if (!customer) {
+      return res.status(404).json({ success: false, message: 'Customer not found.' });
+    }
+
+    if (customer.isDeleted) {
+      return res.status(400).json({ success: false, message: 'Customer is already in trash.' });
+    }
+
+    customer.isDeleted = true;
+    customer.deletedAt = new Date();
+    customer.deletedBy = req.user._id;
+    customer.deleteReason = reason;
+    await customer.save();
+
+    // Cascade soft delete to associated cases
+    const caseResult = await Case.updateMany(
+      { customerId: customer._id, isDeleted: { $ne: true } },
+      {
+        $set: {
+          isDeleted: true,
+          deletedAt: new Date(),
+          deletedBy: req.user._id,
+          deleteReason: `Cascaded: Customer "${customer.name}" moved to trash (${reason})`,
+        },
+      }
+    );
+
+    // Audit log
+    await AuditLog.create({
+      actorId: req.user._id,
+      actorName: req.user.name,
+      actorRole: req.user.role,
+      action: 'DELETE_CUSTOMER',
+      entityType: 'Customer',
+      entityId: id,
+      details: {
+        customerName: customer.name,
+        loanAccountNo: customer.loanAccountNo,
+        reason,
+        casesSoftDeleted: caseResult.modifiedCount,
+      },
+    }).catch(() => {});
+
+    return res.json({
+      success: true,
+      message: `Customer "${customer.name}" and ${caseResult.modifiedCount} associated case(s) moved to Trash.`,
+      customerId: id,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+export async function restoreCustomer(req, res) {
+  try {
+    const { id } = req.params;
+
+    const customer = await Customer.findById(id);
+    if (!customer) {
+      return res.status(404).json({ success: false, message: 'Customer not found.' });
+    }
+
+    if (!customer.isDeleted) {
+      return res.status(400).json({ success: false, message: 'Customer is not in trash.' });
+    }
+
+    customer.isDeleted = false;
+    customer.deletedAt = null;
+    customer.deletedBy = null;
+    customer.deleteReason = '';
+    await customer.save();
+
+    // Restore associated cases that were deleted as cascade
+    const caseResult = await Case.updateMany(
+      { customerId: customer._id, isDeleted: true },
+      {
+        $set: {
+          isDeleted: false,
+          deletedAt: null,
+          deletedBy: null,
+          deleteReason: '',
+        },
+      }
+    );
+
+    // Audit log
+    await AuditLog.create({
+      actorId: req.user._id,
+      actorName: req.user.name,
+      actorRole: req.user.role,
+      action: 'RESTORE_CUSTOMER',
+      entityType: 'Customer',
+      entityId: id,
+      details: {
+        customerName: customer.name,
+        loanAccountNo: customer.loanAccountNo,
+        casesRestored: caseResult.modifiedCount,
+      },
+    }).catch(() => {});
+
+    return res.json({
+      success: true,
+      message: `Customer "${customer.name}" and ${caseResult.modifiedCount} associated case(s) successfully restored.`,
+      customer,
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }

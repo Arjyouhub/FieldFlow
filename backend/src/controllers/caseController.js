@@ -21,13 +21,21 @@ export async function listCases(req, res) {
       search,
       page = 1,
       limit = 100,
+      isDeleted,
     } = req.query;
 
     const query = {};
 
-    // Staff access boundary: Staff can only access their own assigned cases
+    if (isDeleted === 'true') {
+      query.isDeleted = true;
+    } else {
+      query.isDeleted = { $ne: true };
+    }
+
+    // Staff access boundary: Staff can only access their own assigned cases (and non-deleted)
     if (req.user.role === 'staff') {
       query.assignedStaff = req.user._id;
+      query.isDeleted = { $ne: true };
     } else if (assignedStaff && assignedStaff !== 'ALL') {
       query.assignedStaff = assignedStaff;
     }
@@ -67,7 +75,8 @@ export async function listCases(req, res) {
       .populate('customerId')
       .populate('portfolioId', 'name code defaultRadiusMetres')
       .populate('assignedStaff', 'name phone employeeId team assignedArea')
-      .sort({ createdAt: -1 })
+      .populate('deletedBy', 'name phone role')
+      .sort(isDeleted === 'true' ? { deletedAt: -1 } : { createdAt: -1 })
       .skip((Number(page) - 1) * Number(limit))
       .limit(Number(limit));
 
@@ -556,3 +565,198 @@ export async function createSingleCase(req, res) {
     return res.status(500).json({ success: false, message: error.message });
   }
 }
+
+/**
+ * 6. Soft delete a single case
+ */
+export async function deleteCase(req, res) {
+  try {
+    const { id } = req.params;
+    const { reason = 'Deleted by administrator' } = req.body;
+
+    const caseItem = await Case.findById(id);
+    if (!caseItem) {
+      return res.status(404).json({ success: false, message: 'Case not found' });
+    }
+
+    if (caseItem.isDeleted) {
+      return res.status(400).json({ success: false, message: 'Case is already in trash' });
+    }
+
+    caseItem.isDeleted = true;
+    caseItem.deletedAt = new Date();
+    caseItem.deletedBy = req.user._id;
+    caseItem.deleteReason = reason;
+    await caseItem.save();
+
+    await AuditLog.create({
+      actorId: req.user._id,
+      actorName: req.user.name,
+      actorRole: req.user.role,
+      action: 'DELETE_CASE',
+      entityType: 'Case',
+      entityId: caseItem._id,
+      details: {
+        caseId: caseItem.caseId,
+        loanAccountNo: caseItem.loanAccountNo,
+        reason,
+      },
+    }).catch(() => {});
+
+    return res.json({
+      success: true,
+      message: `Case "${caseItem.loanAccountNo}" moved to Trash.`,
+      caseId: id,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+/**
+ * 7. Restore a soft-deleted case
+ */
+export async function restoreCase(req, res) {
+  try {
+    const { id } = req.params;
+
+    const caseItem = await Case.findById(id);
+    if (!caseItem) {
+      return res.status(404).json({ success: false, message: 'Case not found' });
+    }
+
+    if (!caseItem.isDeleted) {
+      return res.status(400).json({ success: false, message: 'Case is not in trash' });
+    }
+
+    caseItem.isDeleted = false;
+    caseItem.deletedAt = null;
+    caseItem.deletedBy = null;
+    caseItem.deleteReason = '';
+    await caseItem.save();
+
+    // If parent customer was soft-deleted, restore customer too
+    if (caseItem.customerId) {
+      await Customer.updateOne(
+        { _id: caseItem.customerId, isDeleted: true },
+        {
+          $set: {
+            isDeleted: false,
+            deletedAt: null,
+            deletedBy: null,
+            deleteReason: '',
+          },
+        }
+      );
+    }
+
+    await AuditLog.create({
+      actorId: req.user._id,
+      actorName: req.user.name,
+      actorRole: req.user.role,
+      action: 'RESTORE_CASE',
+      entityType: 'Case',
+      entityId: caseItem._id,
+      details: {
+        caseId: caseItem.caseId,
+        loanAccountNo: caseItem.loanAccountNo,
+      },
+    }).catch(() => {});
+
+    return res.json({
+      success: true,
+      message: `Case "${caseItem.loanAccountNo}" successfully restored.`,
+      case: caseItem,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+/**
+ * 8. Bulk delete cases
+ */
+export async function bulkDeleteCases(req, res) {
+  try {
+    const { caseIds, reason = 'Bulk delete by administrator' } = req.body;
+    if (!caseIds || !Array.isArray(caseIds) || caseIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'caseIds array is required' });
+    }
+
+    const result = await Case.updateMany(
+      { _id: { $in: caseIds }, isDeleted: { $ne: true } },
+      {
+        $set: {
+          isDeleted: true,
+          deletedAt: new Date(),
+          deletedBy: req.user._id,
+          deleteReason: reason,
+        },
+      }
+    );
+
+    await AuditLog.create({
+      actorId: req.user._id,
+      actorName: req.user.name,
+      actorRole: req.user.role,
+      action: 'BULK_DELETE_CASES',
+      entityType: 'Case',
+      details: {
+        count: result.modifiedCount,
+        reason,
+      },
+    }).catch(() => {});
+
+    return res.json({
+      success: true,
+      message: `${result.modifiedCount} case(s) moved to Trash.`,
+      count: result.modifiedCount,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+/**
+ * 9. Bulk restore cases
+ */
+export async function bulkRestoreCases(req, res) {
+  try {
+    const { caseIds } = req.body;
+    if (!caseIds || !Array.isArray(caseIds) || caseIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'caseIds array is required' });
+    }
+
+    const result = await Case.updateMany(
+      { _id: { $in: caseIds }, isDeleted: true },
+      {
+        $set: {
+          isDeleted: false,
+          deletedAt: null,
+          deletedBy: null,
+          deleteReason: '',
+        },
+      }
+    );
+
+    await AuditLog.create({
+      actorId: req.user._id,
+      actorName: req.user.name,
+      actorRole: req.user.role,
+      action: 'BULK_RESTORE_CASES',
+      entityType: 'Case',
+      details: {
+        count: result.modifiedCount,
+      },
+    }).catch(() => {});
+
+    return res.json({
+      success: true,
+      message: `${result.modifiedCount} case(s) restored successfully.`,
+      count: result.modifiedCount,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+

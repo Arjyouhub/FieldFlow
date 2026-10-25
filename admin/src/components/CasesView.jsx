@@ -17,6 +17,8 @@ import {
   ArrowRight,
   CheckCircle,
   XCircle,
+  Trash2,
+  RotateCcw,
 } from 'lucide-react';
 import { toast } from './ModernToast';
 
@@ -56,11 +58,24 @@ export default function CasesView({ apiFetch, staffList = [], portfolios = [], o
   // View mode: 'auto' (Mobile Cards / Laptop Page Model), 'cards', or 'table'
   const [viewMode, setViewMode] = useState('auto');
 
+  // Delete / Trash & Recovery state
+  const [isTrashView, setIsTrashView] = useState(false);
+  const [deleteConfirmCase, setDeleteConfirmCase] = useState(null);
+  const [caseDeleteReason, setCaseDeleteReason] = useState('Duplicate or invalid account');
+  const [isDeletingCase, setIsDeletingCase] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkRestoring, setBulkRestoring] = useState(false);
+
   const loadCases = async () => {
     setLoading(true);
     setErrorMsg('');
     try {
       const params = new URLSearchParams();
+      if (isTrashView) {
+        params.set('isDeleted', 'true');
+      } else {
+        params.set('isDeleted', 'false');
+      }
       if (portfolioFilter !== 'ALL') params.set('portfolioId', portfolioFilter);
       if (batchFilter !== 'ALL') params.set('batchMonth', batchFilter);
       if (staffFilter !== 'ALL') params.set('assignedStaff', staffFilter);
@@ -81,7 +96,75 @@ export default function CasesView({ apiFetch, staffList = [], portfolios = [], o
 
   useEffect(() => {
     loadCases();
-  }, [portfolioFilter, batchFilter, staffFilter, statusFilter]);
+  }, [portfolioFilter, batchFilter, staffFilter, statusFilter, isTrashView]);
+
+  const handleDeleteCase = async () => {
+    if (!deleteConfirmCase) return;
+    setIsDeletingCase(true);
+    try {
+      const res = await apiFetch(`/api/cases/${deleteConfirmCase._id}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ reason: caseDeleteReason }),
+      });
+      setSuccessMsg(res.message || 'Case moved to Trash.');
+      setDeleteConfirmCase(null);
+      setCaseDeleteReason('Duplicate or invalid account');
+      loadCases();
+    } catch (err) {
+      setErrorMsg(err.message);
+    } finally {
+      setIsDeletingCase(false);
+    }
+  };
+
+  const handleRestoreCase = async (c) => {
+    try {
+      const res = await apiFetch(`/api/cases/${c._id}/restore`, {
+        method: 'POST',
+      });
+      setSuccessMsg(res.message || 'Case restored successfully.');
+      loadCases();
+    } catch (err) {
+      setErrorMsg(err.message);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!selectedCaseIds.length) return;
+    if (!window.confirm(`Move ${selectedCaseIds.length} selected case(s) to Trash?`)) return;
+    setBulkDeleting(true);
+    try {
+      const res = await apiFetch('/api/cases/bulk-delete', {
+        method: 'POST',
+        body: JSON.stringify({ caseIds: selectedCaseIds, reason: bulkReason || 'Bulk deletion' }),
+      });
+      setSuccessMsg(res.message || 'Selected cases moved to Trash.');
+      setSelectedCaseIds([]);
+      loadCases();
+    } catch (err) {
+      setErrorMsg(err.message);
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  const handleBulkRestore = async () => {
+    if (!selectedCaseIds.length) return;
+    setBulkRestoring(true);
+    try {
+      const res = await apiFetch('/api/cases/bulk-restore', {
+        method: 'POST',
+        body: JSON.stringify({ caseIds: selectedCaseIds }),
+      });
+      setSuccessMsg(res.message || 'Selected cases restored successfully.');
+      setSelectedCaseIds([]);
+      loadCases();
+    } catch (err) {
+      setErrorMsg(err.message);
+    } finally {
+      setBulkRestoring(false);
+    }
+  };
 
   const handleSelectAll = (e) => {
     if (e.target.checked) {
@@ -238,6 +321,42 @@ export default function CasesView({ apiFetch, staffList = [], portfolios = [], o
         </div>
       )}
 
+      {/* Sub-tab: Active Cases vs Deleted / Trash */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          className={`btn btn-sm ${!isTrashView ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => {
+            setIsTrashView(false);
+            setSelectedCaseIds([]);
+          }}
+          style={{ gap: '6px' }}
+        >
+          <Briefcase size={14} /> Active Cases
+        </button>
+        <button
+          type="button"
+          className={`btn btn-sm ${isTrashView ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => {
+            setIsTrashView(true);
+            setSelectedCaseIds([]);
+          }}
+          style={{
+            gap: '6px',
+            background: isTrashView ? 'var(--danger-text)' : undefined,
+            borderColor: isTrashView ? 'var(--danger-text)' : undefined,
+            color: isTrashView ? '#fff' : undefined,
+          }}
+        >
+          <Trash2 size={14} /> Deleted / Trash Cases
+        </button>
+        {isTrashView && (
+          <span style={{ fontSize: '12.5px', color: 'var(--text-muted)', marginLeft: '6px' }}>
+            ⚠️ Cases in Trash are removed from staff phones and active analytics. You can restore them anytime.
+          </span>
+        )}
+      </div>
+
       {/* Compact Sleek Filter Toolbar */}
       <div className="card" style={{ padding: '12px 16px', marginBottom: '16px' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -344,8 +463,8 @@ export default function CasesView({ apiFetch, staffList = [], portfolios = [], o
             style={{
               marginTop: '16px',
               padding: '12px 16px',
-              background: 'var(--primary-light)',
-              border: '1px solid var(--primary-border)',
+              background: isTrashView ? 'var(--danger-light)' : 'var(--primary-light)',
+              border: `1px solid ${isTrashView ? 'var(--danger-border)' : 'var(--primary-border)'}`,
               borderRadius: '8px',
               display: 'flex',
               alignItems: 'center',
@@ -354,44 +473,74 @@ export default function CasesView({ apiFetch, staffList = [], portfolios = [], o
               gap: '12px',
             }}
           >
-            <div style={{ fontWeight: '700', color: 'var(--primary-dark)', fontSize: '13px' }}>
+            <div style={{ fontWeight: '700', color: isTrashView ? 'var(--danger-text)' : 'var(--primary-dark)', fontSize: '13px' }}>
               ✓ {selectedCaseIds.length} case(s) selected
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <select
-                className="input-field"
-                value={bulkStaffId}
-                onChange={(e) => setBulkStaffId(e.target.value)}
-                style={{ background: '#fff', fontSize: '12.5px', minWidth: '180px' }}
-              >
-                <option value="">Choose Staff to Reassign...</option>
-                {staffList.map((s) => (
-                  <option key={s._id} value={s._id}>
-                    {s.name} ({s.assignedArea || 'Field'})
-                  </option>
-                ))}
-              </select>
-              <input
-                type="text"
-                className="input-field"
-                placeholder="Reason..."
-                value={bulkReason}
-                onChange={(e) => setBulkReason(e.target.value)}
-                style={{ background: '#fff', fontSize: '12.5px', width: '160px' }}
-              />
-              <button
-                onClick={handleBulkReassign}
-                disabled={reassigning}
-                className="btn btn-primary btn-sm"
-              >
-                {reassigning ? 'Reassigning...' : 'Reassign Selected'}
-              </button>
-              <button
-                onClick={() => setSelectedCaseIds([])}
-                className="btn btn-secondary btn-sm"
-              >
-                Clear
-              </button>
+              {isTrashView ? (
+                <>
+                  <button
+                    onClick={handleBulkRestore}
+                    disabled={bulkRestoring}
+                    className="btn btn-primary btn-sm"
+                    style={{ background: '#16a34a', borderColor: '#16a34a', color: '#fff', gap: '5px' }}
+                  >
+                    <RotateCcw size={13} /> {bulkRestoring ? 'Restoring...' : 'Restore Selected Cases'}
+                  </button>
+                  <button
+                    onClick={() => setSelectedCaseIds([])}
+                    className="btn btn-secondary btn-sm"
+                  >
+                    Clear
+                  </button>
+                </>
+              ) : (
+                <>
+                  <select
+                    className="input-field"
+                    value={bulkStaffId}
+                    onChange={(e) => setBulkStaffId(e.target.value)}
+                    style={{ background: '#fff', fontSize: '12.5px', minWidth: '180px' }}
+                  >
+                    <option value="">Choose Staff to Reassign...</option>
+                    {staffList.map((s) => (
+                      <option key={s._id} value={s._id}>
+                        {s.name} ({s.assignedArea || 'Field'})
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="Reason..."
+                    value={bulkReason}
+                    onChange={(e) => setBulkReason(e.target.value)}
+                    style={{ background: '#fff', fontSize: '12.5px', width: '160px' }}
+                  />
+                  <button
+                    onClick={handleBulkReassign}
+                    disabled={reassigning}
+                    className="btn btn-primary btn-sm"
+                  >
+                    {reassigning ? 'Reassigning...' : 'Reassign Selected'}
+                  </button>
+                  <button
+                    onClick={handleBulkDelete}
+                    disabled={bulkDeleting}
+                    className="btn btn-danger btn-sm"
+                    style={{ gap: '5px' }}
+                    title="Move selected cases to Trash"
+                  >
+                    <Trash2 size={13} /> {bulkDeleting ? 'Deleting...' : 'Move to Trash'}
+                  </button>
+                  <button
+                    onClick={() => setSelectedCaseIds([])}
+                    className="btn btn-secondary btn-sm"
+                  >
+                    Clear
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -492,24 +641,48 @@ export default function CasesView({ apiFetch, staffList = [], portfolios = [], o
                       </div>
 
                       <div style={{ display: 'flex', gap: '6px' }}>
-                        <button
-                          onClick={() => setActiveCaseDetails(c)}
-                          className="btn btn-secondary btn-xs"
-                          title="View Case Details & History"
-                        >
-                          <Eye size={12} /> Details
-                        </button>
-                        <button
-                          onClick={() => {
-                            setSingleReassignCase(c);
-                            setSingleStaffId(c.assignedStaff?._id || '');
-                            setSingleReason('');
-                          }}
-                          className="btn btn-secondary btn-xs"
-                          title="Reassign Staff"
-                        >
-                          <UserCheck size={12} /> Reassign
-                        </button>
+                        {isTrashView ? (
+                          <button
+                            onClick={() => handleRestoreCase(c)}
+                            className="btn btn-sm"
+                            style={{ background: '#16a34a', color: '#fff', gap: '4px', fontSize: '11.5px', padding: '4px 10px' }}
+                            title="Restore this case to active list"
+                          >
+                            <RotateCcw size={12} /> Restore Case
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => setActiveCaseDetails(c)}
+                              className="btn btn-secondary btn-xs"
+                              title="View Case Details & History"
+                            >
+                              <Eye size={12} /> Details
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSingleReassignCase(c);
+                                setSingleStaffId(c.assignedStaff?._id || '');
+                                setSingleReason('');
+                              }}
+                              className="btn btn-secondary btn-xs"
+                              title="Reassign Staff"
+                            >
+                              <UserCheck size={12} /> Reassign
+                            </button>
+                            <button
+                              onClick={() => {
+                                setDeleteConfirmCase(c);
+                                setCaseDeleteReason('Duplicate or invalid account');
+                              }}
+                              className="btn btn-secondary btn-xs"
+                              title="Move Case to Trash"
+                              style={{ color: 'var(--danger-text)' }}
+                            >
+                              <Trash2 size={12} /> Delete
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -540,7 +713,7 @@ export default function CasesView({ apiFetch, staffList = [], portfolios = [], o
                   <th>Outstanding (₹)</th>
                   <th>Due (₹)</th>
                   <th>Status</th>
-                  <th>Assigned Staff</th>
+                  <th>{isTrashView ? 'Deletion Info' : 'Assigned Staff'}</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -548,7 +721,7 @@ export default function CasesView({ apiFetch, staffList = [], portfolios = [], o
                 {cases.length === 0 ? (
                   <tr>
                     <td colSpan={10} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                      {loading ? 'Loading cases...' : 'No cases match the selected filters.'}
+                      {loading ? 'Loading cases...' : isTrashView ? 'Trash is empty. No deleted cases found.' : 'No cases match the selected filters.'}
                     </td>
                   </tr>
                 ) : (
@@ -611,7 +784,18 @@ export default function CasesView({ apiFetch, staffList = [], portfolios = [], o
                         </td>
                         <td>{getStatusBadge(c.status)}</td>
                         <td>
-                          {c.assignedStaff ? (
+                          {isTrashView ? (
+                            <div>
+                              <div style={{ fontSize: '12px', color: 'var(--danger-text)', fontWeight: '600' }}>
+                                {c.deleteReason || 'Moved to Trash'}
+                              </div>
+                              {c.deletedAt && (
+                                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                  {new Date(c.deletedAt).toLocaleDateString('en-IN')}
+                                </div>
+                              )}
+                            </div>
+                          ) : c.assignedStaff ? (
                             <div>
                               <div style={{ fontSize: '12.5px', fontWeight: '600', color: 'var(--text-main)' }}>
                                 {c.assignedStaff.name}
@@ -626,24 +810,48 @@ export default function CasesView({ apiFetch, staffList = [], portfolios = [], o
                         </td>
                         <td>
                           <div style={{ display: 'flex', gap: '6px' }}>
-                            <button
-                              onClick={() => setActiveCaseDetails(c)}
-                              className="btn btn-secondary btn-xs"
-                              title="View Case Details & History"
-                            >
-                              <Eye size={12} /> View
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSingleReassignCase(c);
-                                setSingleStaffId(c.assignedStaff?._id || '');
-                                setSingleReason('');
-                              }}
-                              className="btn btn-secondary btn-xs"
-                              title="Reassign Staff"
-                            >
-                              <UserCheck size={12} /> Reassign
-                            </button>
+                            {isTrashView ? (
+                              <button
+                                onClick={() => handleRestoreCase(c)}
+                                className="btn btn-sm"
+                                style={{ background: '#16a34a', color: '#fff', gap: '4px', fontSize: '11.5px', padding: '3px 8px' }}
+                                title="Restore this case to active list"
+                              >
+                                <RotateCcw size={12} /> Restore
+                              </button>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => setActiveCaseDetails(c)}
+                                  className="btn btn-secondary btn-xs"
+                                  title="View Case Details & History"
+                                >
+                                  <Eye size={12} /> View
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setSingleReassignCase(c);
+                                    setSingleStaffId(c.assignedStaff?._id || '');
+                                    setSingleReason('');
+                                  }}
+                                  className="btn btn-secondary btn-xs"
+                                  title="Reassign Staff"
+                                >
+                                  <UserCheck size={12} /> Reassign
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setDeleteConfirmCase(c);
+                                    setCaseDeleteReason('Duplicate or invalid account');
+                                  }}
+                                  className="btn btn-secondary btn-xs"
+                                  title="Move to Trash"
+                                  style={{ color: 'var(--danger-text)' }}
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -808,6 +1016,80 @@ export default function CasesView({ apiFetch, staffList = [], portfolios = [], o
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {deleteConfirmCase && (
+        <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget && !isDeletingCase) setDeleteConfirmCase(null); }}>
+          <div className="modal-card" style={{ maxWidth: '440px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ color: 'var(--danger-text)' }}>
+                Move Case to Trash
+              </h3>
+              <button
+                onClick={() => !isDeletingCase && setDeleteConfirmCase(null)}
+                className="modal-close-btn"
+                disabled={isDeletingCase}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ padding: '20px' }}>
+              <p style={{ fontSize: '13.5px', color: 'var(--text-main)', marginBottom: '10px' }}>
+                Are you sure you want to move case <strong>{deleteConfirmCase.loanAccountNo}</strong> ({deleteConfirmCase.customerId?.name || 'Customer'}) to Trash?
+              </p>
+              <div style={{ padding: '10px 12px', background: 'var(--bg-card-subtle)', borderRadius: '8px', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+                ℹ️ This case will be removed from field staff mobile applications and daily operational metrics. You can restore it anytime from <strong>Deleted / Trash Cases</strong>.
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '600', marginBottom: '6px' }}>
+                  Reason for Deletion
+                </label>
+                <select
+                  className="input-field"
+                  value={caseDeleteReason}
+                  onChange={(e) => setCaseDeleteReason(e.target.value)}
+                  style={{ marginBottom: '8px' }}
+                >
+                  <option value="Duplicate or invalid account">Duplicate or invalid account</option>
+                  <option value="Customer loan closed / settled">Customer loan closed / settled</option>
+                  <option value="Uploaded under wrong batch or portfolio">Uploaded under wrong batch or portfolio</option>
+                  <option value="Legal dispute or hold">Legal dispute or hold</option>
+                  <option value="Customer requested cancellation">Customer requested cancellation</option>
+                  <option value="Other">Other reason</option>
+                </select>
+                {caseDeleteReason === 'Other' && (
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="Enter specific reason..."
+                    onChange={(e) => setCaseDeleteReason(e.target.value)}
+                  />
+                )}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmCase(null)}
+                  disabled={isDeletingCase}
+                  className="btn btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteCase}
+                  disabled={isDeletingCase}
+                  className="btn btn-danger"
+                >
+                  {isDeletingCase ? 'Moving to Trash...' : 'Yes, Move to Trash'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

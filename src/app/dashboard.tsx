@@ -39,6 +39,7 @@ export default function DashboardScreen() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [adminPortfolios, setAdminPortfolios] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [caseError, setCaseError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [portfolioFilter, setPortfolioFilter] = useState("ALL");
@@ -73,6 +74,7 @@ export default function DashboardScreen() {
     }
     setToken(session.token);
     setUser(session.user);
+    setCaseError(null);
     fetchAdminPortfolios(session.token);
     fetchAssignedCases(session.token);
   };
@@ -99,6 +101,7 @@ export default function DashboardScreen() {
   const fetchAssignedCases = async (authToken: string) => {
     try {
       setLoading(true);
+      setCaseError(null);
       const res = await fetch(`${API_BASE_URL}/customers/assigned`, {
         headers: { Authorization: `Bearer ${authToken}` },
       });
@@ -109,12 +112,15 @@ export default function DashboardScreen() {
         return;
       }
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
+      if (!res.ok) throw new Error(data.message || `Server error (${res.status})`);
 
       setCustomers(data.customers || []);
+      setCaseError(null);
     } catch (err: any) {
+      const msg = err.message || "Failed to load assigned field cases.";
+      setCaseError(msg);
       if (err.message && !err.message.includes("token")) {
-        Alert.alert("Network Notice", err.message || "Failed to load assigned field cases.");
+        Alert.alert("Connection Notice", msg);
       }
     } finally {
       setLoading(false);
@@ -792,6 +798,19 @@ export default function DashboardScreen() {
       {/* CASES PREVIEW LIST */}
       {loading ? (
         <ActivityIndicator color={Colors.light.primary} size="large" style={{ marginVertical: 30 }} />
+      ) : caseError ? (
+        <View style={[styles.emptyCard, { borderColor: "#FCA5A5", backgroundColor: "#FEF2F2" }]}>
+          <Ionicons name="cloud-offline-outline" size={38} color="#DC2626" style={{ marginBottom: 8 }} />
+          <Text style={[styles.emptyTitle, { color: "#991B1B" }]}>Unable to Load Cases</Text>
+          <Text style={[styles.emptySubtitle, { color: "#B91C1C", marginHorizontal: 16 }]}>{caseError}</Text>
+          <Pressable
+            style={[styles.gpsRetryBtn, { marginTop: 12, backgroundColor: Colors.light.primary }]}
+            onPress={() => fetchAssignedCases(token)}
+          >
+            <Ionicons name="refresh" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+            <Text style={styles.gpsRetryText}>Retry Connection</Text>
+          </Pressable>
+        </View>
       ) : filteredCustomers.length === 0 ? (
         <View style={styles.emptyCard}>
           <Ionicons name="folder-open-outline" size={38} color={Colors.light.textMuted} style={{ marginBottom: 8 }} />
@@ -874,6 +893,8 @@ export default function DashboardScreen() {
               refreshing={refreshing}
               onRefresh={() => {
                 setRefreshing(true);
+                setCaseError(null);
+                fetchAdminPortfolios(token);
                 fetchAssignedCases(token);
               }}
               colors={[Colors.light.primary]}
@@ -1175,6 +1196,24 @@ export default function DashboardScreen() {
           <View style={{ paddingHorizontal: 16 }}>
             {loading ? (
               <ActivityIndicator color={Colors.light.primary} size="large" style={{ marginVertical: 40 }} />
+            ) : caseError ? (
+              <View style={[styles.emptyCard, { borderColor: "#FCA5A5", backgroundColor: "#FEF2F2" }]}>
+                <Ionicons name="cloud-offline-outline" size={42} color="#DC2626" style={{ marginBottom: 10 }} />
+                <Text style={[styles.emptyTitle, { color: "#991B1B" }]}>Connection Error</Text>
+                <Text style={[styles.emptySubtitle, { color: "#B91C1C", marginHorizontal: 12 }]}>
+                  {caseError}
+                </Text>
+                <Pressable
+                  style={[styles.gpsRetryBtn, { marginTop: 14, backgroundColor: Colors.light.primary, paddingHorizontal: 20 }]}
+                  onPress={() => {
+                    setCaseError(null);
+                    fetchAssignedCases(token);
+                  }}
+                >
+                  <Ionicons name="refresh" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.gpsRetryText}>Retry Connection</Text>
+                </Pressable>
+              </View>
             ) : filteredCustomers.length === 0 ? (
               <View style={styles.emptyCard}>
                 <Ionicons name="search-outline" size={36} color="#94A3B8" style={{ marginBottom: 8 }} />

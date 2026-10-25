@@ -220,7 +220,7 @@ export default function LoginScreen() {
       } catch {
         throw new Error(
           res.status === 504 || res.status === 502
-            ? "FieldFlow backend server is offline. Please ensure backend is running on port 5000."
+            ? "FieldFlow server is temporarily unavailable. Please try again shortly."
             : `Server returned HTTP ${res.status}.`
         );
       }
@@ -233,7 +233,7 @@ export default function LoginScreen() {
       router.replace("/dashboard");
     } catch (err: any) {
       if (err.name === "AbortError") {
-        setErrorText("Connection timed out. Please check that FieldFlow backend is running on port 5000.");
+        setErrorText("Connection timed out. Please check your internet connection and try again.");
       } else {
         setErrorText(err.message || "Unable to reach FieldFlow server. Please check network.");
       }

@@ -23,6 +23,7 @@ export default function ExploreActivityScreen() {
   const [user, setUser] = useState<any>(null);
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -32,6 +33,7 @@ export default function ExploreActivityScreen() {
   const loadData = async () => {
     try {
       setLoading(true);
+      setError(null);
       const session = await getAuthSession();
       if (!session.token) {
         router.replace("/");
@@ -44,11 +46,11 @@ export default function ExploreActivityScreen() {
         headers: { Authorization: `Bearer ${session.token}` },
       });
       const data = await res.json();
-      if (res.ok) {
-        setCustomers(data.customers || []);
-      }
-    } catch {
-      // Ignore network warning
+      if (!res.ok) throw new Error(data.message || `Server error (${res.status})`);
+      setCustomers(data.customers || []);
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || "Failed to load assigned field cases.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -138,6 +140,17 @@ export default function ExploreActivityScreen() {
 
           {loading ? (
             <ActivityIndicator color={theme.primary} style={{ marginVertical: Spacing.four }} />
+          ) : error ? (
+            <View style={[styles.emptyBox, { borderColor: "#FCA5A5", backgroundColor: "#FEF2F2", padding: 16 }]}>
+              <Text style={[styles.emptyText, { color: "#991B1B", fontWeight: "700", marginBottom: 6 }]}>Connection Notice</Text>
+              <Text style={[styles.emptyText, { color: "#B91C1C", marginBottom: 12 }]}>{error}</Text>
+              <Pressable
+                style={{ backgroundColor: theme.primary, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, alignSelf: "center" }}
+                onPress={() => loadData()}
+              >
+                <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 13 }}>Retry Connection</Text>
+              </Pressable>
+            </View>
           ) : visitedCases.length === 0 ? (
             <View style={styles.emptyBox}>
               <Text style={styles.emptyText}>No customer actions logged in this session yet.</Text>

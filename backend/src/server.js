@@ -75,6 +75,7 @@ app.use((req, res, next) => {
 });
 
 // Routes
+app.use('/health', healthRoutes);
 app.use('/api', healthRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/locations', locationRoutes);
@@ -133,8 +134,7 @@ async function startServer() {
   serverInstance = app.listen(PORT, '0.0.0.0', () => {
     console.log(`===============================================`);
     console.log(`🚀 FieldFlow Backend Server running on port ${PORT} (0.0.0.0)`);
-    console.log(`📡 Local Health Check: http://localhost:${PORT}/api/health`);
-    console.log(`📡 LAN Health Check: http://192.168.31.239:${PORT}/api/health`);
+    console.log(`📡 Health Check: http://localhost:${PORT}/api/health`);
     console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`===============================================`);
   });

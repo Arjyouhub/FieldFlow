@@ -45,7 +45,8 @@
       "router": {},
       "eas": {
         "projectId": "9837820c-721c-4538-b880-f6480ff79a9b"
-      }
+      },
+      "apiUrl": "https://fieldflow-bmg2.onrender.com/api"
     },
     "runtimeVersion": {
       "policy": "appVersion"

@@ -13,6 +13,7 @@ import {
   Modal,
   Platform,
   Image,
+  BackHandler,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -346,6 +347,30 @@ export default function DashboardScreen() {
     return result;
   }, [customers, portfolioFilter, batchFilter, statusFilter, searchQuery, sortBy, userCoords]);
 
+  // Handle Android Back Button on Dashboard to avoid unauthenticated pop back to login
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+
+    const onBackPress = () => {
+      Alert.alert("Exit FieldFlow", "Do you want to exit the app or log out?", [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Logout",
+          style: "destructive",
+          onPress: handleLogout,
+        },
+        {
+          text: "Exit App",
+          onPress: () => BackHandler.exitApp(),
+        },
+      ]);
+      return true;
+    };
+
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+    return () => sub.remove();
+  }, [token]);
+
   const handleLogout = () => {
     Alert.alert("Confirm Logout", "Are you sure you want to log out of FieldFlow?", [
       { text: "Cancel", style: "cancel" },
@@ -353,6 +378,14 @@ export default function DashboardScreen() {
         text: "Logout",
         style: "destructive",
         onPress: async () => {
+          try {
+            if (token) {
+              fetch(`${API_BASE_URL}/auth/logout`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}` },
+              }).catch(() => {});
+            }
+          } catch {}
           await clearAuthSession();
           router.replace("/");
         },

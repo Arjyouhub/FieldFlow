@@ -11,7 +11,11 @@ export async function setItem(key: string, value: string): Promise<void> {
     } catch {}
     return;
   }
-  await SecureStore.setItemAsync(key, value);
+  try {
+    await SecureStore.setItemAsync(key, value);
+  } catch (err) {
+    console.warn(`[Storage] setItemAsync failed for ${key}:`, err);
+  }
 }
 
 export async function getItem(key: string): Promise<string | null> {
@@ -22,7 +26,12 @@ export async function getItem(key: string): Promise<string | null> {
       return null;
     }
   }
-  return await SecureStore.getItemAsync(key);
+  try {
+    return await SecureStore.getItemAsync(key);
+  } catch (err) {
+    console.warn(`[Storage] getItemAsync failed for ${key}:`, err);
+    return null;
+  }
 }
 
 export async function removeItem(key: string): Promise<void> {
@@ -32,7 +41,11 @@ export async function removeItem(key: string): Promise<void> {
     } catch {}
     return;
   }
-  await SecureStore.deleteItemAsync(key);
+  try {
+    await SecureStore.deleteItemAsync(key);
+  } catch (err) {
+    console.warn(`[Storage] deleteItemAsync failed for ${key}:`, err);
+  }
 }
 
 export async function saveAuthSession(token: string, user: any) {

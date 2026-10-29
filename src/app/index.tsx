@@ -116,6 +116,7 @@ export default function LoginScreen() {
 
   // View state: 'splash' | 'login' | 'otp' | 'register'
   const [currentView, setCurrentView] = useState<"login" | "splash" | "otp" | "register">("login");
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [rememberMe, setRememberMe] = useState(true);
 
   // Login form state
@@ -153,27 +154,49 @@ export default function LoginScreen() {
   const [regError, setRegError] = useState("");
   const [regSuccessMsg, setRegSuccessMsg] = useState("");
 
-  // Check existing session
+  // Check existing session on startup
   useEffect(() => {
+    let isMounted = true;
+
     (async () => {
-      const { token } = await getAuthSession();
-      if (token) {
-        try {
-          const res = await fetch(`${API_BASE_URL}/customers/assigned`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (res.status === 401) {
-            // Expired or invalid token detected, clear it immediately
-            await clearAuthSession();
-            return;
-          }
-          router.replace("/dashboard");
-        } catch {
-          // If offline, still allow proceeding to dashboard
-          router.replace("/dashboard");
+      try {
+        const { token, user } = await getAuthSession();
+        if (!token) {
+          if (isMounted) setIsCheckingAuth(false);
+          return;
         }
+
+        // Validate active token with backend
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+        const res = await fetch(`${API_BASE_URL}/customers/assigned`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          if (isMounted) {
+            router.replace("/dashboard");
+          }
+          return;
+        }
+
+        // Token expired, invalid or account inactive/deleted (401 / 403)
+        console.warn(`[FieldFlow Auth] Saved session invalid (HTTP ${res.status}). Clearing local auth.`);
+        await clearAuthSession();
+        if (isMounted) setIsCheckingAuth(false);
+      } catch (err: any) {
+        // If network timed out or unverified on startup, do not auto-login to prevent stale session bypass
+        console.warn("[FieldFlow Auth] Active session verification check failed:", err.message);
+        if (isMounted) setIsCheckingAuth(false);
       }
     })();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // OTP Countdown timer
@@ -189,13 +212,18 @@ export default function LoginScreen() {
   // LOGIN WITH MOBILE & PASSWORD
   // -------------------------------------------------------------
   const handleLogin = async () => {
-    if (!phone.trim() || !password) {
+    const cleanPhone = phone.trim();
+    if (!cleanPhone || !password) {
       setErrorText("Please enter your mobile number or email ID and password.");
+      Alert.alert("Required Fields", "Please enter your mobile number or email ID and password.");
       return;
     }
 
     setLoading(true);
     setErrorText("");
+
+    // Step 1: Wipe any existing session before attempting fresh authentication
+    await clearAuthSession();
 
     try {
       const controller = new AbortController();
@@ -205,8 +233,8 @@ export default function LoginScreen() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          phoneOrEmail: phone.trim(),
-          password,
+          phoneOrEmail: cleanPhone,
+          password: password,
           deviceType: "Field Staff Android App",
         }),
         signal: controller.signal,
@@ -225,18 +253,27 @@ export default function LoginScreen() {
         );
       }
 
-      if (!res.ok) {
+      // Step 2: Strictly verify HTTP status, success flag, token, and user payload
+      if (!res.ok || data.success === false || !data.token || !data.user) {
         throw new Error(data.message || "Invalid mobile number or password.");
+      }
+
+      // Step 3: Verify staff status
+      if (data.user.status && data.user.status !== "active") {
+        throw new Error(`Account is ${data.user.status}. Please contact administrator.`);
       }
 
       await saveAuthSession(data.token, data.user);
       router.replace("/dashboard");
     } catch (err: any) {
-      if (err.name === "AbortError") {
-        setErrorText("Connection timed out. Please check your internet connection and try again.");
-      } else {
-        setErrorText(err.message || "Unable to reach FieldFlow server. Please check network.");
-      }
+      // Step 4: Ensure no residual token exists on login failure
+      await clearAuthSession();
+      const msg =
+        err.name === "AbortError"
+          ? "Connection timed out. Please check your internet connection and try again."
+          : (err.message || "Unable to reach FieldFlow server. Please check network.");
+      setErrorText(msg);
+      Alert.alert("Login Failed", msg);
     } finally {
       setLoading(false);
     }
@@ -330,7 +367,7 @@ export default function LoginScreen() {
         });
 
         const data = await res.json();
-        if (!res.ok) throw new Error(data.message || "Incorrect verification code.");
+        if (!res.ok || !data.token || !data.user) throw new Error(data.message || "Incorrect verification code.");
 
         await saveAuthSession(data.token, data.user);
         router.replace("/dashboard");
@@ -516,6 +553,27 @@ export default function LoginScreen() {
       setSubmittingReg(false);
     }
   };
+
+  // =============================================================
+  // SCREEN 0: SECURE AUTH VERIFICATION SPLASH
+  // =============================================================
+  if (isCheckingAuth) {
+    return (
+      <View style={{ flex: 1, backgroundColor: BRAND_DARK_GREEN, justifyContent: "center", alignItems: "center" }}>
+        <DualLeafLogo size={56} light />
+        <Text style={{ fontSize: 24, fontWeight: "800", color: "#FFFFFF", marginTop: 16, letterSpacing: 0.5 }}>
+          FieldFlow
+        </Text>
+        <Text style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", fontWeight: "600", marginTop: 4 }}>
+          Field Operations Platform
+        </Text>
+        <ActivityIndicator size="large" color="#FFFFFF" style={{ marginTop: 28 }} />
+        <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginTop: 12 }}>
+          Verifying secure session...
+        </Text>
+      </View>
+    );
+  }
 
   // =============================================================
   // SCREEN 1: SPLASH / ONBOARDING VIEW (Reference Screen 1)

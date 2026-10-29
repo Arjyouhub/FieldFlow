@@ -112,7 +112,25 @@ userSchema.pre('save', async function (next) {
 });
 
 userSchema.methods.comparePassword = async function (enteredPassword) {
-  return await bcrypt.compare(enteredPassword, this.password);
+  if (!enteredPassword || !this.password) return false;
+  try {
+    const rawEntered = String(enteredPassword).trim();
+    if (!rawEntered) return false;
+    const storedHash = String(this.password);
+    const isBcryptHash =
+      storedHash.startsWith('$2a$') ||
+      storedHash.startsWith('$2b$') ||
+      storedHash.startsWith('$2y$');
+
+    if (isBcryptHash) {
+      return await bcrypt.compare(rawEntered, storedHash);
+    }
+    // Fallback: If unhashed plaintext was saved in development/legacy, require strict exact match
+    return rawEntered === storedHash;
+  } catch (err) {
+    console.error('[User Auth] Error comparing passwords:', err);
+    return false;
+  }
 };
 
 export const User = mongoose.model('User', userSchema);

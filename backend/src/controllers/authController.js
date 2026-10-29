@@ -29,8 +29,13 @@ export async function login(req, res) {
       });
     }
 
+    const cleanedDigits = identifier.replace(/[^\d]/g, '');
     const user = await User.findOne({
-      $or: [{ phone: identifier }, { email: identifier.toLowerCase() }],
+      $or: [
+        { phone: identifier },
+        ...(cleanedDigits ? [{ phone: cleanedDigits }, { phone: cleanedDigits.slice(-10) }] : []),
+        { email: identifier.toLowerCase() },
+      ],
     });
 
     if (!user) {

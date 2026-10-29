@@ -13,6 +13,7 @@ import {
   ScrollView,
   Image,
   Dimensions,
+  Keyboard,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -136,6 +137,8 @@ export default function LoginScreen() {
   const [resendTimer, setResendTimer] = useState(28);
 
   const otpInputRefs = useRef<Array<any>>([]);
+  const regScrollRef = useRef<ScrollView>(null);
+  const loginScrollRef = useRef<ScrollView>(null);
 
   // Field Staff Registration State
   const [regName, setRegName] = useState("");
@@ -144,7 +147,7 @@ export default function LoginScreen() {
   const [regConfirmPassword, setRegConfirmPassword] = useState("");
   const [showRegPassword, setShowRegPassword] = useState(false);
   const [showRegConfirmPassword, setShowRegConfirmPassword] = useState(false);
-  const [regArea, setRegArea] = useState("Kozhikode Central");
+  const [regArea, setRegArea] = useState("");
   const [regEmployeeId, setRegEmployeeId] = useState("");
   const [regSelfieUri, setRegSelfieUri] = useState<string | null>(null);
   const [regSelfieBase64, setRegSelfieBase64] = useState<string | null>(null);
@@ -153,6 +156,23 @@ export default function LoginScreen() {
   const [submittingReg, setSubmittingReg] = useState(false);
   const [regError, setRegError] = useState("");
   const [regSuccessMsg, setRegSuccessMsg] = useState("");
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  // Track keyboard show/hide to eliminate permanent bottom blank white space
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      () => setIsKeyboardVisible(true)
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setIsKeyboardVisible(false)
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // Check existing session on startup
   useEffect(() => {
@@ -412,9 +432,8 @@ export default function LoginScreen() {
 
       const result = await ImagePicker.launchCameraAsync({
         cameraType: ImagePicker.CameraType.front,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.6,
+        allowsEditing: false,
+        quality: 0.7,
         base64: true,
       });
 
@@ -450,36 +469,144 @@ export default function LoginScreen() {
     }
   };
 
-  const handleCaptureLocation = async () => {
+  const handleCaptureLocation = async (showAlert = true) => {
     try {
       setCapturingLocation(true);
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        setRegLocation({ lat: 11.2588, lng: 75.7804, address: regArea || "Kozhikode, Kerala" });
+
+      // 1. Verify device GPS/Location service is enabled
+      const isEnabled = await Location.hasServicesEnabledAsync();
+      if (!isEnabled) {
+        if (showAlert) {
+          Alert.alert(
+            "GPS Turned Off",
+            "Please turn ON GPS/Location in your phone settings to detect your coordinates."
+          );
+        }
         return;
       }
 
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      let addressStr = `${regArea || "Kozhikode"}, Kerala`;
+      // 2. Verify foreground permission
+      let { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== "granted") {
+        const req = await Location.requestForegroundPermissionsAsync();
+        status = req.status;
+      }
+      if (status !== "granted") {
+        if (showAlert) {
+          Alert.alert(
+            "Location Permission Required",
+            "Please allow Location permission so FieldFlow can verify your operational location."
+          );
+        }
+        return;
+      }
 
+      // 3. Fast lock with last known position, then high accuracy current position
+      let loc = await Location.getLastKnownPositionAsync({});
+      try {
+        const freshLoc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+        if (freshLoc && freshLoc.coords) {
+          loc = freshLoc;
+        }
+      } catch {
+        if (!loc) {
+          loc = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+        }
+      }
+
+      if (!loc || !loc.coords) {
+        throw new Error("Unable to obtain GPS fix. Please ensure you have network & GPS signal.");
+      }
+
+      const lat = Number(loc.coords.latitude.toFixed(6));
+      const lng = Number(loc.coords.longitude.toFixed(6));
+
+      let addressStr = "";
+      let detectedArea = "";
+
+      // 4A. Native Expo reverse geocoding
       try {
         const reverse = await Location.reverseGeocodeAsync({
-          latitude: loc.coords.latitude,
-          longitude: loc.coords.longitude,
+          latitude: lat,
+          longitude: lng,
         });
-        if (reverse && reverse[0]) {
+        if (reverse && reverse.length > 0) {
           const r = reverse[0];
-          addressStr = [r.name || r.street, r.district || r.subregion, r.city || r.region].filter(Boolean).join(", ");
+          detectedArea = r.district || r.subregion || r.city || r.name || "";
+          const parts = [
+            r.name && r.name !== r.street ? r.name : null,
+            r.street,
+            r.subregion || r.district,
+            r.city || r.region,
+          ].filter(Boolean);
+          if (parts.length > 0) {
+            addressStr = parts.join(", ");
+          }
         }
-      } catch {}
+      } catch (geocodeErr) {
+        console.warn("Expo reverse geocode error:", geocodeErr);
+      }
+
+      // 4B. OpenStreetMap Nominatim reverse geocoding fallback
+      if (!addressStr) {
+        try {
+          const controller = new AbortController();
+          const tId = setTimeout(() => controller.abort(), 3500);
+          const osmRes = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`,
+            {
+              headers: { "User-Agent": "FieldFlowStaffApp/1.0" },
+              signal: controller.signal,
+            }
+          );
+          clearTimeout(tId);
+          if (osmRes.ok) {
+            const osmData = await osmRes.json();
+            if (osmData && osmData.address) {
+              const a = osmData.address;
+              detectedArea = a.city || a.town || a.suburb || a.village || a.county || a.state_district || "";
+              const parts = [
+                a.road || a.pedestrian || a.suburb,
+                a.city || a.town || a.village || a.county,
+                a.state_district || a.state,
+              ].filter(Boolean);
+              if (parts.length > 0) {
+                addressStr = parts.join(", ");
+              } else if (osmData.display_name) {
+                addressStr = osmData.display_name.split(",").slice(0, 3).join(",").trim();
+              }
+            }
+          }
+        } catch (osmErr) {
+          console.warn("OSM reverse geocode error:", osmErr);
+        }
+      }
+
+      if (!addressStr) {
+        addressStr = `GPS Verified (${lat}, ${lng})`;
+      }
 
       setRegLocation({
-        lat: Number(loc.coords.latitude.toFixed(6)),
-        lng: Number(loc.coords.longitude.toFixed(6)),
-        address: addressStr || "Current GPS Location",
+        lat,
+        lng,
+        address: addressStr,
       });
-    } catch {
-      setRegLocation({ lat: 11.2588, lng: 75.7804, address: "Kozhikode Central, Kerala" });
+
+      // Auto-fill Operating Area if not manually typed
+      if (detectedArea && (!regArea || regArea.trim() === "Kozhikode Central")) {
+        setRegArea(detectedArea);
+      }
+    } catch (err: any) {
+      if (showAlert) {
+        Alert.alert(
+          "GPS Location Detection",
+          err.message || "Failed to detect current location. Please verify device GPS is active and tap Refresh."
+        );
+      }
     } finally {
       setCapturingLocation(false);
     }
@@ -488,7 +615,7 @@ export default function LoginScreen() {
   // Automatically capture device GPS coordinates when opening Create Account
   useEffect(() => {
     if (currentView === "register" && !regLocation && !capturingLocation) {
-      handleCaptureLocation();
+      handleCaptureLocation(false);
     }
   }, [currentView]);
 
@@ -532,7 +659,7 @@ export default function LoginScreen() {
           assignedArea: regArea.trim(),
           employeeId: regEmployeeId.trim() || undefined,
           profilePhoto: regSelfieBase64 || regSelfieUri || "",
-          location: regLocation || { lat: 11.2588, lng: 75.7804, address: regArea || "Kozhikode" },
+          location: regLocation || undefined,
         }),
       });
 
@@ -851,7 +978,11 @@ export default function LoginScreen() {
             behavior={Platform.OS === "ios" ? "padding" : undefined}
           >
             <ScrollView
-              contentContainerStyle={styles.modernRegScrollContent}
+              ref={regScrollRef}
+              contentContainerStyle={[
+                styles.modernRegScrollContent,
+                isKeyboardVisible && { paddingBottom: 140 },
+              ]}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
@@ -887,6 +1018,7 @@ export default function LoginScreen() {
               ) : (
                 <>
                   {/* Step Progress Indicator Bar */}
+                  {/* Step Progress Indicator Bar */}
                   <View style={styles.modernStepPillsRow}>
                     <View style={[styles.modernStepPill, regSelfieUri ? styles.modernStepPillActive : null]}>
                       <Ionicons name={regSelfieUri ? "checkmark-circle" : "camera-outline"} size={14} color={regSelfieUri ? "#059669" : "#64748B"} />
@@ -895,7 +1027,7 @@ export default function LoginScreen() {
                     <View style={styles.modernStepPillDivider} />
                     <View style={[styles.modernStepPill, regLocation ? styles.modernStepPillActive : null]}>
                       <Ionicons name={regLocation ? "checkmark-circle" : "location-outline"} size={14} color={regLocation ? "#059669" : "#64748B"} />
-                      <Text style={[styles.modernStepPillText, regLocation ? styles.modernStepPillTextActive : null]}>Territory</Text>
+                      <Text style={[styles.modernStepPillText, regLocation ? styles.modernStepPillTextActive : null]}>Location</Text>
                     </View>
                     <View style={styles.modernStepPillDivider} />
                     <View style={[styles.modernStepPill, regPhone && regPassword ? styles.modernStepPillActive : null]}>
@@ -917,51 +1049,59 @@ export default function LoginScreen() {
                     </View>
 
                     {regSelfieUri ? (
-                      <View style={styles.modernSelfieContainer}>
-                        <View style={styles.modernSelfieRing}>
-                          <Image source={{ uri: regSelfieUri }} style={styles.modernSelfieImg} />
-                          <View style={styles.modernSelfieBadge}>
+                      <View style={styles.modernRoundSelfieWrap}>
+                        {/* Round selfie with verified ring */}
+                        <View style={styles.modernRoundRing}>
+                          <Image source={{ uri: regSelfieUri }} style={styles.modernRoundImg} />
+                          <View style={styles.modernRoundBadge}>
                             <Ionicons name="checkmark-circle" size={14} color="#FFFFFF" />
-                            <Text style={styles.modernSelfieBadgeText}>Verified</Text>
+                            <Text style={styles.modernRoundBadgeText}>Verified</Text>
                           </View>
                         </View>
-                        <View style={styles.modernSelfieBtnRow}>
-                          <Pressable style={styles.modernSelfieActionBtn} onPress={handleCaptureSelfie}>
-                            <Ionicons name="camera-reverse-outline" size={16} color={BRAND_DARK_GREEN} />
-                            <Text style={styles.modernSelfieActionBtnText}>Retake</Text>
-                          </Pressable>
-                          <Pressable style={styles.modernSelfieActionBtn} onPress={handlePickFromGallery}>
-                            <Ionicons name="images-outline" size={16} color={BRAND_DARK_GREEN} />
-                            <Text style={styles.modernSelfieActionBtnText}>Gallery</Text>
-                          </Pressable>
-                        </View>
+                        <Text style={styles.modernRoundTitle}>Selfie Captured</Text>
+                        <Pressable
+                          style={({ pressed }) => [
+                            styles.modernRoundRetakeBtn,
+                            pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
+                          ]}
+                          onPress={handleCaptureSelfie}
+                        >
+                          <Ionicons name="camera-reverse" size={15} color="#059669" />
+                          <Text style={styles.modernRoundRetakeText}>Retake Selfie</Text>
+                        </Pressable>
                       </View>
                     ) : (
-                      <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
-                        <Pressable style={styles.modernTakeSelfieBtn} onPress={handleCaptureSelfie}>
-                          <View style={styles.modernCameraCircle}>
-                            <Ionicons name="camera" size={20} color="#FFFFFF" />
+                      <View style={styles.modernRoundSelfieWrap}>
+                        {/* Round selfie button */}
+                        <Pressable
+                          style={({ pressed }) => [
+                            styles.modernRoundBtn,
+                            pressed && styles.modernRoundBtnPressed,
+                          ]}
+                          onPress={handleCaptureSelfie}
+                        >
+                          <View style={styles.modernRoundInnerCircle}>
+                            <Ionicons name="camera" size={32} color="#059669" />
                           </View>
-                          <Text style={styles.modernTakeSelfieTitle}>Take Front Selfie</Text>
-                          <Text style={styles.modernTakeSelfieSub}>Opens Device Camera</Text>
+                          <View style={styles.modernRoundPlusBadge}>
+                            <Ionicons name="add" size={14} color="#FFFFFF" />
+                          </View>
                         </Pressable>
-                        <Pressable style={styles.modernGalleryBtn} onPress={handlePickFromGallery}>
-                          <Ionicons name="images-outline" size={20} color={BRAND_DARK_GREEN} />
-                          <Text style={styles.modernGalleryText}>Choose from Gallery</Text>
-                        </Pressable>
+                        <Text style={styles.modernRoundTitle}>Take Front Selfie</Text>
+                        <Text style={styles.modernRoundSub}>Tap circle to open device camera</Text>
                       </View>
                     )}
                   </View>
 
-                  {/* 2. OPERATIONAL TERRITORY & LOCATION */}
+                  {/* 2. OPERATIONAL LOCATION & GPS */}
                   <View style={styles.modernRegCard}>
                     <View style={styles.modernCardHeaderRow}>
                       <View style={[styles.modernCardIconBox, { backgroundColor: "#E0F2FE" }]}>
                         <Ionicons name="location" size={18} color="#0284C7" />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.modernCardTitle}>Operating Territory & GPS</Text>
-                        <Text style={styles.modernCardSub}>Tag sign-up coordinates & recovery hub</Text>
+                        <Text style={styles.modernCardTitle}>Operating Location & GPS</Text>
+                        <Text style={styles.modernCardSub}>Tag sign-up coordinates & recovery location</Text>
                       </View>
                     </View>
 
@@ -970,14 +1110,17 @@ export default function LoginScreen() {
                       <View style={styles.modernGpsBox}>
                         <View style={styles.modernGpsDot} />
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.modernGpsCoords}>
-                            GPS: {regLocation.lat}, {regLocation.lng}
-                          </Text>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                            <Ionicons name="navigate-circle" size={14} color="#059669" />
+                            <Text style={styles.modernGpsCoords}>
+                              {regLocation.lat}, {regLocation.lng}
+                            </Text>
+                          </View>
                           <Text style={styles.modernGpsAddress}>
-                            {regLocation.address || "Kozhikode, Kerala"}
+                            {regLocation.address}
                           </Text>
                         </View>
-                        <Pressable onPress={handleCaptureLocation} hitSlop={6} style={styles.modernGpsRefreshBtn}>
+                        <Pressable onPress={() => handleCaptureLocation(true)} hitSlop={6} style={styles.modernGpsRefreshBtn}>
                           <Ionicons name="refresh" size={14} color={BRAND_DARK_GREEN} />
                           <Text style={styles.modernGpsRefreshText}>
                             {capturingLocation ? "..." : "Refresh"}
@@ -985,21 +1128,21 @@ export default function LoginScreen() {
                         </Pressable>
                       </View>
                     ) : (
-                      <Pressable style={styles.modernGpsTagBtn} onPress={handleCaptureLocation}>
+                      <Pressable style={styles.modernGpsTagBtn} onPress={() => handleCaptureLocation(true)}>
                         <Ionicons name="navigate-circle-outline" size={20} color={BRAND_DARK_GREEN} />
                         <Text style={styles.modernGpsTagText}>
-                          {capturingLocation ? "Locating device coordinates..." : "Tap to Tag My Current Location"}
+                          {capturingLocation ? "Detecting high-precision GPS..." : "Tap to Tag My Current Location"}
                         </Text>
                       </Pressable>
                     )}
 
                     {/* Operating Area Input with Icon Prefix */}
-                    <Text style={styles.modernInputLabel}>Assigned Operational Area / Territory *</Text>
+                    <Text style={styles.modernInputLabel}>Assigned Operational Area / Location *</Text>
                     <View style={styles.regModernInputWrapper}>
                       <Ionicons name="map-outline" size={18} color="#64748B" style={{ marginRight: 10 }} />
                       <TextInput
                         style={styles.modernInputFlex}
-                        placeholder="e.g. Kozhikode Central, Vadakara, Koyilandy"
+                        placeholder="e.g. Kozhikode, Ernakulam, Thrissur"
                         placeholderTextColor={theme.textMuted}
                         value={regArea}
                         onChangeText={setRegArea}
@@ -1072,6 +1215,11 @@ export default function LoginScreen() {
                         value={regPassword}
                         onChangeText={setRegPassword}
                         secureTextEntry={!showRegPassword}
+                        onFocus={() => {
+                          setTimeout(() => {
+                            regScrollRef.current?.scrollToEnd({ animated: true });
+                          }, 150);
+                        }}
                       />
                       <Pressable
                         onPress={() => setShowRegPassword(!showRegPassword)}
@@ -1097,6 +1245,11 @@ export default function LoginScreen() {
                         value={regConfirmPassword}
                         onChangeText={setRegConfirmPassword}
                         secureTextEntry={!showRegConfirmPassword}
+                        onFocus={() => {
+                          setTimeout(() => {
+                            regScrollRef.current?.scrollToEnd({ animated: true });
+                          }, 150);
+                        }}
                       />
                       <Pressable
                         onPress={() => setShowRegConfirmPassword(!showRegConfirmPassword)}
@@ -1113,7 +1266,7 @@ export default function LoginScreen() {
                   </View>
 
                   {/* SUBMIT BUTTON */}
-                  <View style={{ marginTop: 10, marginBottom: 28 }}>
+                  <View style={{ marginTop: 10, marginBottom: 10 }}>
                     <Pressable
                       style={({ pressed }) => [
                         styles.modernSubmitBtn,
@@ -1152,7 +1305,11 @@ export default function LoginScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView
-          contentContainerStyle={styles.exactScrollContent}
+          ref={loginScrollRef}
+          contentContainerStyle={[
+            styles.exactScrollContent,
+            isKeyboardVisible && { paddingBottom: 100 },
+          ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           bounces={false}
@@ -1279,6 +1436,11 @@ export default function LoginScreen() {
                   setPassword(val);
                   if (errorText) setErrorText("");
                 }}
+                onFocus={() => {
+                  setTimeout(() => {
+                    loginScrollRef.current?.scrollToEnd({ animated: true });
+                  }, 150);
+                }}
                 autoComplete="off"
                 textContentType="none"
                 importantForAutofill="no"
@@ -1377,7 +1539,7 @@ export default function LoginScreen() {
                 onPress={() => {
                   Alert.alert(
                     "Contact FieldFlow Admin",
-                    "For account assistance, territory changes, or supervisor approvals:\n\nEmail: admin@fieldflow.local\nSupport: +91 9876543210"
+                    "For account assistance, location changes, or supervisor approvals:\n\nEmail: admin@fieldflow.local\nSupport: +91 9876543210"
                   );
                 }}
                 hitSlop={8}
@@ -2665,7 +2827,7 @@ const styles = StyleSheet.create({
   modernRegScrollContent: {
     paddingHorizontal: scale(16),
     paddingTop: verticalScale(14),
-    paddingBottom: verticalScale(36),
+    paddingBottom: verticalScale(16),
   },
   modernRegErrorBox: {
     flexDirection: "row",
@@ -2832,23 +2994,75 @@ const styles = StyleSheet.create({
     color: "#64748B",
     marginTop: 1,
   },
-  modernSelfieContainer: {
+  modernRoundSelfieWrap: {
     alignItems: "center",
-    paddingVertical: verticalScale(8),
+    justifyContent: "center",
+    paddingVertical: verticalScale(14),
   },
-  modernSelfieRing: {
+  modernRoundBtn: {
+    width: scale(116),
+    height: scale(116),
+    borderRadius: scale(58),
+    backgroundColor: "#F0FDF4",
+    borderWidth: 2,
+    borderStyle: "dashed",
+    borderColor: "#10B981",
+    alignItems: "center",
+    justifyContent: "center",
     position: "relative",
-    padding: 3,
-    borderRadius: scale(55),
+    shadowColor: "#059669",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  modernRoundBtnPressed: {
+    backgroundColor: "#DCFCE7",
+    transform: [{ scale: 0.96 }],
+  },
+  modernRoundInnerCircle: {
+    width: scale(56),
+    height: scale(56),
+    borderRadius: scale(28),
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modernRoundPlusBadge: {
+    position: "absolute",
+    bottom: 2,
+    right: 2,
+    width: scale(28),
+    height: scale(28),
+    borderRadius: scale(14),
+    backgroundColor: "#059669",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2.5,
+    borderColor: "#FFFFFF",
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  modernRoundRing: {
+    position: "relative",
+    width: scale(116),
+    height: scale(116),
+    borderRadius: scale(58),
     borderWidth: 2.5,
     borderColor: "#10B981",
+    padding: 3,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  modernSelfieImg: {
-    width: scale(96),
-    height: scale(96),
-    borderRadius: scale(48),
+  modernRoundImg: {
+    width: scale(106),
+    height: scale(106),
+    borderRadius: scale(53),
   },
-  modernSelfieBadge: {
+  modernRoundBadge: {
     position: "absolute",
     bottom: -4,
     alignSelf: "center",
@@ -2857,88 +3071,49 @@ const styles = StyleSheet.create({
     gap: 4,
     backgroundColor: "#059669",
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 2.5,
     borderRadius: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-    elevation: 2,
+    borderWidth: 1.5,
+    borderColor: "#FFFFFF",
+    elevation: 3,
   },
-  modernSelfieBadgeText: {
+  modernRoundBadgeText: {
     fontSize: fontScale(10.5),
     fontWeight: "700",
     color: "#FFFFFF",
   },
-  modernSelfieBtnRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: verticalScale(14),
+  modernRoundTitle: {
+    fontSize: fontScale(14),
+    fontWeight: "800",
+    color: "#0F172A",
+    marginTop: verticalScale(10),
   },
-  modernSelfieActionBtn: {
+  modernRoundSub: {
+    fontSize: fontScale(11.5),
+    color: "#64748B",
+    marginTop: 2,
+  },
+  modernRoundRetakeBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#F0FDF4",
-    borderWidth: 1,
-    borderColor: "#A7F3D0",
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 12,
-  },
-  modernSelfieActionBtnText: {
-    fontSize: fontScale(12.5),
-    fontWeight: "700",
-    color: BRAND_DARK_GREEN,
-  },
-  modernTakeSelfieBtn: {
-    flex: 1.2,
-    backgroundColor: "#F0FDF4",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1.5,
-    borderStyle: "dashed",
     borderColor: "#10B981",
-    borderRadius: 16,
-    paddingVertical: verticalScale(14),
-    paddingHorizontal: scale(10),
-    alignItems: "center",
-    justifyContent: "center",
+    paddingHorizontal: scale(16),
+    paddingVertical: verticalScale(6),
+    borderRadius: 14,
+    marginTop: verticalScale(10),
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 1,
   },
-  modernCameraCircle: {
-    width: scale(36),
-    height: scale(36),
-    borderRadius: scale(18),
-    backgroundColor: "#059669",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 6,
-  },
-  modernTakeSelfieTitle: {
-    fontSize: fontScale(13),
-    fontWeight: "700",
-    color: "#065F46",
-  },
-  modernTakeSelfieSub: {
-    fontSize: fontScale(10.5),
-    color: "#059669",
-    marginTop: 2,
-  },
-  modernGalleryBtn: {
-    flex: 1,
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1,
-    borderColor: "#CBD5E1",
-    borderRadius: 16,
-    paddingVertical: verticalScale(14),
-    paddingHorizontal: scale(10),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modernGalleryText: {
+  modernRoundRetakeText: {
     fontSize: fontScale(12),
-    fontWeight: "600",
-    color: BRAND_DARK_GREEN,
-    textAlign: "center",
-    marginTop: 6,
+    fontWeight: "700",
+    color: "#059669",
   },
   modernGpsBox: {
     flexDirection: "row",

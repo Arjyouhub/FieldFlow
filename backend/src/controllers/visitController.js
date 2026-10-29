@@ -140,14 +140,18 @@ export async function submitVisit(req, res) {
       photoUrl: photoUrl || '',
     });
 
-    // Ensure customer has a verified CustomerLocation saved in database for future visits
+    // Ensure customer has a verified CustomerLocation saved in database for future visits ONLY on first completed visit with real GPS
+    const numLat = Number(lat);
+    const numLng = Number(lng);
+    const isValidGps = !isNaN(numLat) && !isNaN(numLng) && numLat !== 0 && numLng !== 0;
+
     const existingLocCount = await CustomerLocation.countDocuments({ customerId, isActive: true });
-    if (existingLocCount === 0 && Number(lat) && Number(lng)) {
+    if (existingLocCount === 0 && isValidGps) {
       await CustomerLocation.create({
         customerId,
         label: customerDoc?.area || customerDoc?.city ? `${customerDoc.area || customerDoc.city} Verified Location` : 'Primary Residence',
         type: 'Home',
-        coordinates: { lat: Number(lat), lng: Number(lng) },
+        coordinates: { lat: numLat, lng: numLng },
         accuracy: Number(accuracy || 0),
         capturedBy: req.user._id,
         isDefault: true,
@@ -166,7 +170,7 @@ export async function submitVisit(req, res) {
         distanceMetres: check.nearestDistance,
         radiusMetres,
         accuracy: Number(accuracy || 0),
-        actualCoordinates: { lat: Number(lat), lng: Number(lng) },
+        actualCoordinates: { lat: numLat, lng: numLng },
         reason: check.reason,
         reviewStatus: 'PENDING_REVIEW',
       });
@@ -190,14 +194,16 @@ export async function submitVisit(req, res) {
       updatedStatus = 'non_workable';
     }
 
-    // Update customer case status
+    // Update customer case status and reset isPlanned
     await Customer.findByIdAndUpdate(customerId, {
       status: updatedStatus === 'pending_verification' ? 'pending' : updatedStatus,
+      isPlanned: false,
     });
 
     // Update Case if exists
     if (targetCase) {
       targetCase.status = updatedStatus;
+      targetCase.isPlanned = false;
       targetCase.lastVisitDate = new Date();
       targetCase.lastVisitId = visit._id;
       if (outcome === 'Promise to Pay (PTP)') {

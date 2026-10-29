@@ -51,9 +51,26 @@ const caseSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    pos: {
+      type: Number,
+      default: 0,
+    },
+    tos: {
+      type: Number,
+      default: 0,
+    },
     dpd: {
       type: Number,
       default: 0,
+    },
+    isPlanned: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    plannedVisitDate: {
+      type: Date,
+      default: null,
     },
     assignedStaff: {
       type: mongoose.Schema.Types.ObjectId,

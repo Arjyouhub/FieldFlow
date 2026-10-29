@@ -99,7 +99,9 @@ export async function getCaseById(req, res) {
     const singleCase = await Case.findById(req.params.id)
       .populate('customerId')
       .populate('portfolioId')
-      .populate('assignedStaff', 'name phone employeeId team assignedArea');
+      .populate('assignedStaff', 'name phone employeeId team assignedArea')
+      .populate('assignmentHistory.staffId', 'name phone employeeId')
+      .populate('assignmentHistory.assignedBy', 'name phone role');
 
     if (!singleCase) {
       return res.status(404).json({ success: false, message: 'Case record not found' });
@@ -116,18 +118,28 @@ export async function getCaseById(req, res) {
       });
     }
 
-    const locations = await CustomerLocation.find({
-      customerId: singleCase.customerId._id,
-      isActive: true,
-    });
+    const custId = singleCase.customerId?._id || singleCase.customerId;
 
-    const visits = await Visit.find({ customerId: singleCase.customerId._id })
+    const locations = custId
+      ? await CustomerLocation.find({
+          customerId: custId,
+          isActive: true,
+        }).sort({ isDefault: -1, createdAt: -1 })
+      : [];
+
+    const visitsQuery = [];
+    if (custId) visitsQuery.push({ customerId: custId });
+    visitsQuery.push({ caseId: singleCase._id });
+
+    const visits = await Visit.find({ $or: visitsQuery })
       .populate('staffId', 'name phone employeeId')
       .sort({ createdAt: -1 });
 
-    const calls = await CallLog.find({ customerId: singleCase.customerId._id })
-      .populate('staffId', 'name phone')
-      .sort({ createdAt: -1 });
+    const calls = custId
+      ? await CallLog.find({ customerId: custId })
+          .populate('staffId', 'name phone')
+          .sort({ createdAt: -1 })
+      : [];
 
     const formattedVisits = visits.map((v) => {
       const vObj = v.toObject();
@@ -302,9 +314,18 @@ export async function importBulkCases(req, res) {
         mobile = mobile.slice(1);
       }
 
-      const outstanding = Number(
-        String(row.outstandingAmount || row.outstanding || row.pos || row.tos || row.loan_amount || 0).replace(/[^0-9.-]/g, '')
-      ) || 0;
+      const rawPos = row.pos !== undefined ? row.pos : (row.BOM_POS || row.bompos || row.principalOutstanding || 0);
+      const pos = Number(String(rawPos).replace(/[^0-9.-]/g, '')) || 0;
+
+      const rawTos = row.tos !== undefined ? row.tos : (row.totalOutstanding || row.outstandingAmount || row.outstanding || 0);
+      const tos = Number(String(rawTos).replace(/[^0-9.-]/g, '')) || 0;
+
+      const rawDpd = row.dpd !== undefined ? row.dpd : (row.daysPastDue || row.dpdCount || row.bucket || 0);
+      const dpd = Number(String(rawDpd).replace(/[^0-9.-]/g, '')) || 0;
+
+      const outstanding = tos || Number(
+        String(row.outstandingAmount || row.outstanding || pos || row.loan_amount || 0).replace(/[^0-9.-]/g, '')
+      ) || pos || 0;
 
       const due = Number(
         String(row.dueAmount || row.emiAmount || row.due || outstanding).replace(/[^0-9.-]/g, '')
@@ -314,7 +335,8 @@ export async function importBulkCases(req, res) {
       const address = (row.address || row.ADDRESS || 'Address on file').toString().trim();
       const city = (row.city || row.permanent_city || 'Kozhikode').toString().trim();
       const area = (row.area || row.permanent_city || row.permanent_pincode || '').toString().trim();
-      const rowStaff = row.assignedStaffId || row.staffId || row.assignedStaff || defaultStaffId || null;
+      const targetDefaultStaff = defaultStaffId || req.body.assignedStaff || req.body.assignedStaffId || null;
+      const rowStaff = row.assignedStaffId || row.staffId || row.assignedStaff || targetDefaultStaff || null;
 
       // Validation
       if (!customerName) {
@@ -334,9 +356,27 @@ export async function importBulkCases(req, res) {
         if (rowStaff) {
           existingCase.assignedStaff = rowStaff;
           existingCase.status = 'assigned';
-          await existingCase.save();
-          await Customer.findByIdAndUpdate(existingCase.customerId, { assignedStaff: rowStaff });
         }
+        if (pos) existingCase.pos = pos;
+        if (tos || outstanding) {
+          existingCase.tos = tos || outstanding;
+          existingCase.outstandingAmount = tos || outstanding;
+        }
+        if (due) existingCase.dueAmount = due;
+        if (dpd !== undefined) existingCase.dpd = dpd;
+        await existingCase.save();
+
+        const custUpdate = {};
+        if (rowStaff) custUpdate.assignedStaff = rowStaff;
+        if (pos) custUpdate.pos = pos;
+        if (tos || outstanding) {
+          custUpdate.tos = tos || outstanding;
+          custUpdate.outstandingAmount = tos || outstanding;
+        }
+        if (due) custUpdate.emiAmount = due;
+        if (dpd !== undefined) custUpdate.dpd = dpd;
+        await Customer.findByIdAndUpdate(existingCase.customerId, custUpdate);
+
         duplicateCount++;
         continue; // Safe retry without creating duplicates
       }
@@ -354,13 +394,24 @@ export async function importBulkCases(req, res) {
           loanAccountNo: accountNo,
           outstandingAmount: outstanding,
           emiAmount: due,
+          pos: pos || 0,
+          tos: tos || outstanding,
+          dpd: dpd || 0,
           portfolioId,
           assignedStaff: rowStaff || null,
           batchMonth: batchName,
         });
-      } else if (rowStaff) {
-        customer.assignedStaff = rowStaff;
-        await customer.save();
+      } else {
+        const custUpdate = {};
+        if (rowStaff) custUpdate.assignedStaff = rowStaff;
+        if (pos) custUpdate.pos = pos;
+        if (tos || outstanding) {
+          custUpdate.tos = tos || outstanding;
+          custUpdate.outstandingAmount = tos || outstanding;
+        }
+        if (due) custUpdate.emiAmount = due;
+        if (dpd !== undefined) custUpdate.dpd = dpd;
+        await Customer.findByIdAndUpdate(customer._id, custUpdate);
       }
 
       // Create unique internal case ID
@@ -376,6 +427,9 @@ export async function importBulkCases(req, res) {
         referenceNumber: refNo,
         outstandingAmount: outstanding,
         dueAmount: due,
+        pos: pos || 0,
+        tos: tos || outstanding,
+        dpd: dpd || 0,
         assignedStaff: rowStaff || null,
         status: rowStaff ? 'assigned' : 'pending',
       });

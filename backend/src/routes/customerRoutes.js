@@ -36,6 +36,13 @@ router.get('/assigned', async (req, res) => {
             ? await CustomerLocation.find({ customerId: cust._id, isActive: true })
             : [];
 
+          const resolvedPos = (c.pos !== undefined && c.pos !== null && c.pos > 0) ? c.pos : (cust.pos || 0);
+          const resolvedTos = (c.tos !== undefined && c.tos !== null && c.tos > 0) ? c.tos : (cust.tos || c.outstandingAmount || cust.outstandingAmount || 0);
+          const resolvedDpd = (c.dpd !== undefined && c.dpd !== null) ? c.dpd : (cust.dpd || 0);
+          const resolvedLoanAmt = cust.loanAmount || c.outstandingAmount || cust.outstandingAmount || 0;
+          const resolvedIsPlanned = c.isPlanned !== undefined ? Boolean(c.isPlanned) : Boolean(cust.isPlanned);
+          const resolvedPlannedDate = c.plannedVisitDate || cust.plannedVisitDate || null;
+
           return {
             ...cust,
             _id: cust._id || c._id,
@@ -45,6 +52,12 @@ router.get('/assigned', async (req, res) => {
             loanAccountNo: c.loanAccountNo || cust.loanAccountNo,
             outstandingAmount: c.outstandingAmount !== undefined ? c.outstandingAmount : cust.outstandingAmount,
             dueAmount: c.dueAmount !== undefined ? c.dueAmount : cust.emiAmount,
+            pos: resolvedPos,
+            tos: resolvedTos,
+            dpd: resolvedDpd,
+            loanAmount: resolvedLoanAmt,
+            isPlanned: resolvedIsPlanned,
+            plannedVisitDate: resolvedPlannedDate,
             status: c.status || cust.status,
             portfolioId: c.portfolioId?._id || cust.portfolioId,
             portfolioName: c.portfolioId?.name || cust.portfolioName || 'General',
@@ -70,8 +83,15 @@ router.get('/assigned', async (req, res) => {
     const enrichedCustomers = await Promise.all(
       rawCustomers.map(async (cust) => {
         const locations = await CustomerLocation.find({ customerId: cust._id, isActive: true });
+        const custObj = cust.toObject();
         return {
-          ...cust.toObject(),
+          ...custObj,
+          pos: custObj.pos || 0,
+          tos: custObj.tos || custObj.outstandingAmount || 0,
+          dpd: custObj.dpd || 0,
+          loanAmount: custObj.loanAmount || custObj.outstandingAmount || 0,
+          isPlanned: Boolean(custObj.isPlanned),
+          plannedVisitDate: custObj.plannedVisitDate || null,
           portfolioName: cust.portfolioId?.name || cust.portfolioName || 'General',
           portfolioCode: cust.portfolioId?.code || cust.portfolioCode || 'GENERAL',
           locations,
@@ -94,18 +114,38 @@ router.get('/assigned', async (req, res) => {
  */
 router.get('/:id', async (req, res) => {
   try {
-    const customer = await Customer.findById(req.params.id);
-    if (!customer) {
+    let customerDoc = await Customer.findById(req.params.id);
+    let associatedCase = null;
+
+    if (!customerDoc) {
+      associatedCase = await Case.findById(req.params.id).populate('portfolioId', 'name code');
+      if (associatedCase && associatedCase.customerId) {
+        customerDoc = await Customer.findById(associatedCase.customerId);
+      }
+    } else {
+      associatedCase = await Case.findOne({ customerId: customerDoc._id }).populate('portfolioId', 'name code');
+    }
+
+    if (!customerDoc && !associatedCase) {
       return res.status(404).json({ success: false, message: 'Customer not found' });
     }
 
-    const locations = await CustomerLocation.find({ customerId: customer._id, isActive: true });
-    const visits = await Visit.find({ customerId: customer._id })
-      .populate('staffId', 'name phone employeeId')
-      .sort({ createdAt: -1 });
-    const calls = await CallLog.find({ customerId: customer._id })
-      .populate('staffId', 'name phone')
-      .sort({ createdAt: -1 });
+    const customerObj = customerDoc ? customerDoc.toObject() : {};
+    const locations = customerDoc?._id
+      ? await CustomerLocation.find({ customerId: customerDoc._id, isActive: true })
+      : [];
+
+    const visits = customerDoc?._id
+      ? await Visit.find({ customerId: customerDoc._id })
+          .populate('staffId', 'name phone employeeId')
+          .sort({ createdAt: -1 })
+      : [];
+
+    const calls = customerDoc?._id
+      ? await CallLog.find({ customerId: customerDoc._id })
+          .populate('staffId', 'name phone')
+          .sort({ createdAt: -1 })
+      : [];
 
     const formattedVisits = visits.map((v) => {
       const vObj = v.toObject();
@@ -117,12 +157,83 @@ router.get('/:id', async (req, res) => {
       };
     });
 
+    const enrichedCustomer = {
+      ...customerObj,
+      _id: customerDoc?._id || associatedCase?.customerId || associatedCase?._id,
+      caseDbId: associatedCase?._id || null,
+      caseId: associatedCase?.caseId || '',
+      referenceNumber: associatedCase?.referenceNumber || '',
+      loanAccountNo: associatedCase?.loanAccountNo || customerObj.loanAccountNo || '',
+      pos: (associatedCase?.pos !== undefined && associatedCase?.pos !== null && associatedCase.pos > 0)
+        ? associatedCase.pos
+        : (customerObj.pos || 0),
+      tos: (associatedCase?.tos !== undefined && associatedCase?.tos !== null && associatedCase.tos > 0)
+        ? associatedCase.tos
+        : (customerObj.tos || customerObj.outstandingAmount || associatedCase?.outstandingAmount || 0),
+      dpd: (associatedCase?.dpd !== undefined && associatedCase?.dpd !== null)
+        ? associatedCase.dpd
+        : (customerObj.dpd || 0),
+      loanAmount: customerObj.loanAmount || associatedCase?.outstandingAmount || customerObj.outstandingAmount || 0,
+      outstandingAmount: associatedCase?.outstandingAmount !== undefined ? associatedCase.outstandingAmount : customerObj.outstandingAmount,
+      dueAmount: associatedCase?.dueAmount !== undefined ? associatedCase.dueAmount : (customerObj.emiAmount || 0),
+      isPlanned: associatedCase?.isPlanned !== undefined ? Boolean(associatedCase.isPlanned) : Boolean(customerObj.isPlanned),
+      plannedVisitDate: associatedCase?.plannedVisitDate || customerObj.plannedVisitDate || null,
+    };
+
     return res.json({
       success: true,
-      customer,
+      customer: enrichedCustomer,
       locations,
       visits: formattedVisits,
       calls,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * Toggle or set planned visit status for a customer/case
+ */
+router.post('/:id/plan-visit', async (req, res) => {
+  try {
+    const { isPlanned, plannedVisitDate } = req.body;
+    let customer = await Customer.findById(req.params.id);
+    let targetCase = null;
+
+    if (!customer) {
+      targetCase = await Case.findById(req.params.id);
+      if (targetCase && targetCase.customerId) {
+        customer = await Customer.findById(targetCase.customerId);
+      }
+    } else {
+      targetCase = await Case.findOne({ customerId: customer._id });
+    }
+
+    if (!customer && !targetCase) {
+      return res.status(404).json({ success: false, message: 'Customer or case not found.' });
+    }
+
+    const nextIsPlanned = isPlanned !== undefined ? Boolean(isPlanned) : !(customer?.isPlanned || targetCase?.isPlanned);
+    const nextDate = plannedVisitDate ? new Date(plannedVisitDate) : (nextIsPlanned ? new Date() : null);
+
+    if (customer) {
+      customer.isPlanned = nextIsPlanned;
+      customer.plannedVisitDate = nextDate;
+      await customer.save();
+    }
+
+    if (targetCase) {
+      targetCase.isPlanned = nextIsPlanned;
+      targetCase.plannedVisitDate = nextDate;
+      await targetCase.save();
+    }
+
+    return res.json({
+      success: true,
+      message: nextIsPlanned ? 'Visit planned successfully' : 'Visit plan cancelled',
+      isPlanned: nextIsPlanned,
+      plannedVisitDate: nextDate,
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -183,22 +294,9 @@ router.post('/seed-demo', async (req, res) => {
 
     const inserted = await Customer.insertMany(demoCustomers);
 
-    // Also seed a verified location for Mohammed Shafi (Near Calicut Beach: 11.2588, 75.7725)
-    await CustomerLocation.create({
-      customerId: inserted[0]._id,
-      label: 'Customer Home',
-      type: 'Home',
-      coordinates: { lat: 11.2588, lng: 75.7725 },
-      accuracy: 10,
-      capturedBy: req.user._id,
-      status: 'VERIFIED',
-      isDefault: true,
-      remarks: 'White two-story house near beach gate',
-    });
-
     return res.status(201).json({
       success: true,
-      message: 'Demo customers and initial location seeded successfully',
+      message: 'Demo customers seeded successfully',
       customers: inserted,
     });
   } catch (error) {

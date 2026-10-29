@@ -60,7 +60,11 @@ export default function DashboardScreen() {
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showMapModal, setShowMapModal] = useState(false);
   const [showNotifModal, setShowNotifModal] = useState(false);
-  const [showQuickActionModal, setShowQuickActionModal] = useState(false);
+  const [showVisitPlanModal, setShowVisitPlanModal] = useState(false);
+  const [visitModalTab, setVisitModalTab] = useState<"PLAN" | "ACTIONS">("PLAN");
+  const [visitPlanSearch, setVisitPlanSearch] = useState("");
+  const [visitPlanFilter, setVisitPlanFilter] = useState<"ALL" | "PLANNED" | "UNPLANNED">("ALL");
+  const [togglingPlanId, setTogglingPlanId] = useState<string | null>(null);
   const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
 
   useEffect(() => {
@@ -150,6 +154,50 @@ export default function DashboardScreen() {
       setGpsNotice("Unable to acquire live GPS position. Check location services.");
     } finally {
       setGpsLoading(false);
+    }
+  };
+
+  const handleTogglePlanCase = async (targetCust: any) => {
+    const targetId = String(targetCust.caseDbId || targetCust._id);
+    const nextPlanned = !targetCust.isPlanned;
+    try {
+      setTogglingPlanId(targetId);
+      // Optimistic update for instant UI feedback
+      setCustomers((prev) =>
+        prev.map((c) =>
+          String(c._id) === String(targetCust._id) ||
+          (c.caseDbId && String(c.caseDbId) === String(targetCust.caseDbId)) ||
+          (targetCust.loanAccountNo && c.loanAccountNo === targetCust.loanAccountNo)
+            ? { ...c, isPlanned: nextPlanned }
+            : c
+        )
+      );
+
+      const session = await getAuthSession();
+      const res = await fetch(`${API_BASE_URL}/customers/${targetId}/plan-visit`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.token}`,
+        },
+        body: JSON.stringify({ isPlanned: nextPlanned }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+    } catch (err: any) {
+      // Revert optimistic update on failure
+      setCustomers((prev) =>
+        prev.map((c) =>
+          String(c._id) === String(targetCust._id) ||
+          (c.caseDbId && String(c.caseDbId) === String(targetCust.caseDbId)) ||
+          (targetCust.loanAccountNo && c.loanAccountNo === targetCust.loanAccountNo)
+            ? { ...c, isPlanned: targetCust.isPlanned }
+            : c
+        )
+      );
+      Alert.alert("Error", err.message || "Failed to update visit plan.");
+    } finally {
+      setTogglingPlanId(null);
     }
   };
 
@@ -281,6 +329,8 @@ export default function DashboardScreen() {
       result = result.filter((c) => c.status === "rtp" || c.status === "refusal_to_pay");
     } else if (statusFilter === "PENDING") {
       result = result.filter((c) => c.status === "pending" || c.status === "assigned");
+    } else if (statusFilter === "PLANNED") {
+      result = result.filter((c) => Boolean(c.isPlanned));
     } else if (statusFilter === "NON_WORKABLE") {
       result = result.filter((c) => c.status === "non_workable");
     } else if (statusFilter === "SUSPICIOUS") {
@@ -306,11 +356,11 @@ export default function DashboardScreen() {
       );
     }
 
-    // 5. Attach distance
-    const refLat = userCoords ? userCoords.lat : 11.2588;
-    const refLng = userCoords ? userCoords.lng : 75.7725;
+    // 5. Attach distance (ONLY when valid user GPS is available, no fake fallback)
+    const refLat = userCoords?.lat;
+    const refLng = userCoords?.lng;
     result = result.map((c) => {
-      if (c.locations && c.locations.length > 0) {
+      if (refLat && refLng && c.locations && c.locations.length > 0) {
         const { nearestDistance, nearestLocation } = getCustomerNearestDistance(
           refLat,
           refLng,
@@ -544,7 +594,7 @@ export default function DashboardScreen() {
             <View style={styles.customerMetaRow}>
               <Ionicons name="location" size={11} color="#64748B" />
               <Text style={styles.customerAddress} numberOfLines={1}>
-                {cust.address || cust.area || "Kozhikode, Kerala"}
+                {cust.address || cust.area || "Address not provided"}
               </Text>
             </View>
           </View>
@@ -567,7 +617,7 @@ export default function DashboardScreen() {
 
         {/* STRUCTURED DETAIL BOX (High-contrast inner card) */}
         <View style={styles.cardDetailBox}>
-          {/* Sub-row 1: Loan Account & Status */}
+          {/* Sub-row 1: Loan Account & Status & Plan Badge */}
           <View style={styles.detailBoxHeaderRow}>
             <View style={styles.loanAccTag}>
               <Text style={styles.loanAccPrefix}>A/C</Text>
@@ -576,43 +626,58 @@ export default function DashboardScreen() {
               </Text>
             </View>
 
-            <View style={[styles.caseStatusBadge, { backgroundColor: badge.bg }]}>
-              <Ionicons name={badge.icon as any} size={11} color={badge.text} style={{ marginRight: 4 }} />
-              <Text style={[styles.caseStatusText, { color: badge.text }]}>
-                {badge.label}
-              </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              {cust.isPlanned ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "#E0F2FE", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                  <Ionicons name="calendar" size={11} color="#0284C7" />
+                  <Text style={{ fontSize: fontScale(10), color: "#0369A1", fontWeight: "800" }}>PLANNED</Text>
+                </View>
+              ) : null}
+
+              <View style={[styles.caseStatusBadge, { backgroundColor: badge.bg }]}>
+                <Ionicons name={badge.icon as any} size={11} color={badge.text} style={{ marginRight: 4 }} />
+                <Text style={[styles.caseStatusText, { color: badge.text }]}>
+                  {badge.label}
+                </Text>
+              </View>
             </View>
           </View>
 
-          {/* Sub-row 2: Financial Split */}
+          {/* Sub-row 2: Financial Split - POS, TOS, LOAN AMT, DPD */}
           <View style={styles.detailBoxFinanceRow}>
             <View style={styles.financeCol}>
-              <Text style={styles.financeLabel}>OUTSTANDING</Text>
+              <Text style={styles.financeLabel}>POS</Text>
               <Text style={styles.financeValueOutstanding}>
-                ₹{(cust.outstandingAmount || 0).toLocaleString("en-IN")}
+                ₹{(cust.pos !== undefined && cust.pos !== null ? cust.pos : (cust.outstandingAmount || 0)).toLocaleString("en-IN")}
               </Text>
             </View>
 
             <View style={styles.financeColDivider} />
 
             <View style={styles.financeCol}>
-              <Text style={styles.financeLabel}>DUE AMOUNT</Text>
+              <Text style={styles.financeLabel}>TOS</Text>
               <Text style={styles.financeValueDue}>
-                ₹{(cust.dueAmount || cust.emiAmount || 0).toLocaleString("en-IN")}
+                ₹{(cust.tos !== undefined && cust.tos !== null ? cust.tos : (cust.outstandingAmount || 0)).toLocaleString("en-IN")}
               </Text>
             </View>
 
-            {cust.referenceNumber ? (
-              <>
-                <View style={styles.financeColDivider} />
-                <View style={styles.financeCol}>
-                  <Text style={styles.financeLabel}>REF</Text>
-                  <Text style={styles.financeValueRef} numberOfLines={1}>
-                    {cust.referenceNumber}
-                  </Text>
-                </View>
-              </>
-            ) : null}
+            <View style={styles.financeColDivider} />
+
+            <View style={styles.financeCol}>
+              <Text style={styles.financeLabel}>LOAN AMT</Text>
+              <Text style={[styles.financeValueOutstanding, { color: "#0F172A" }]}>
+                ₹{(cust.loanAmount || cust.outstandingAmount || 0).toLocaleString("en-IN")}
+              </Text>
+            </View>
+
+            <View style={styles.financeColDivider} />
+
+            <View style={styles.financeCol}>
+              <Text style={[styles.financeLabel, (cust.dpd ?? 0) > 90 && { color: "#DC2626" }]}>DPD</Text>
+              <Text style={[styles.financeValueDue, (cust.dpd ?? 0) > 90 ? { color: "#DC2626" } : { color: "#D97706" }]}>
+                {cust.dpd ?? 0}d
+              </Text>
+            </View>
           </View>
         </View>
 
@@ -624,6 +689,7 @@ export default function DashboardScreen() {
           </View>
 
           <View style={styles.actionsRow}>
+            {/* Call Button */}
             <Pressable
               style={styles.cardActionBtnCall}
               onPress={() => Linking.openURL(`tel:${cust.phone}`)}
@@ -633,12 +699,19 @@ export default function DashboardScreen() {
               <Text style={styles.cardActionBtnCallText}>Call</Text>
             </Pressable>
 
+            {/* Directions Button (uses verified coords or street address, never fake Kozhikode beach coords) */}
             <Pressable
               style={styles.cardActionBtnNav}
               onPress={() => {
-                const lat = cust.locations?.[0]?.coordinates?.lat || 11.2588;
-                const lng = cust.locations?.[0]?.coordinates?.lng || 75.7725;
-                Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
+                const hasCoords = cust.locations?.[0]?.coordinates?.lat && cust.locations?.[0]?.coordinates?.lng;
+                if (hasCoords) {
+                  const lat = cust.locations[0].coordinates.lat;
+                  const lng = cust.locations[0].coordinates.lng;
+                  Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
+                } else {
+                  const queryAddr = encodeURIComponent(`${cust.address || ""}, ${cust.area || cust.city || ""}`);
+                  Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${queryAddr}`);
+                }
               }}
               hitSlop={8}
             >
@@ -1096,6 +1169,7 @@ export default function DashboardScreen() {
           >
             {[
               { key: "ALL", label: "All", icon: "checkmark" },
+              { key: "PLANNED", label: "Planned", icon: "calendar" },
               { key: "NEAREST", label: "Nearest", icon: "location-sharp" },
               { key: "UNVISITED", label: "Unvisited", icon: "time-outline" },
               { key: "VISITED", label: "Visited", icon: "checkmark-circle-outline" },
@@ -1288,7 +1362,7 @@ export default function DashboardScreen() {
       {/* Summary Card */}
       <View style={styles.reportSummaryCard}>
         <Text style={styles.reportSummaryTitle}>Monthly Operations Summary</Text>
-        <Text style={styles.reportSummarySub}>Assigned Territory: {user?.assignedArea || "Kozhikode Central"}</Text>
+        <Text style={styles.reportSummarySub}>Assigned Location: {user?.assignedArea || "Kozhikode Central"}</Text>
 
         <View style={styles.reportStatsRow}>
           <View style={styles.reportStatItem}>
@@ -1336,7 +1410,7 @@ export default function DashboardScreen() {
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
           <Text style={{ fontSize: fontScale(13), color: "#64748B" }}>Total Amount Collected</Text>
           <Text style={{ fontSize: fontScale(20), fontWeight: "900", color: "#15803D" }}>
-            ₹{(kpis.totalCollectedAmt || 124500).toLocaleString("en-IN")}
+            ₹{(kpis.totalCollectedAmt || 0).toLocaleString("en-IN")}
           </Text>
         </View>
       </View>
@@ -1496,16 +1570,22 @@ export default function DashboardScreen() {
           </Text>
         </Pressable>
 
-        {/* 3. Center Floating (+) Action Button with 'Visit' text below */}
+        {/* 3. Center Floating Action Button with 'Visit Plan' */}
         <View style={styles.floatingCenterBtnWrapper}>
           <Pressable
             style={styles.floatingCenterBtn}
-            onPress={() => setShowQuickActionModal(true)}
+            onPress={() => {
+              if (customers.length === 0 && token) {
+                fetchAssignedCases(token);
+              }
+              setVisitModalTab("PLAN");
+              setShowVisitPlanModal(true);
+            }}
             hitSlop={8}
           >
-            <Ionicons name="add" size={26} color="#FFFFFF" />
+            <Ionicons name="calendar" size={24} color="#FFFFFF" />
           </Pressable>
-          <Text style={styles.centerBtnLabel}>Visit</Text>
+          <Text style={styles.centerBtnLabel}>Visit Plan</Text>
         </View>
 
         {/* 4. Reports */}
@@ -1543,44 +1623,586 @@ export default function DashboardScreen() {
         </Pressable>
       </View>
 
-      {/* QUICK ACTION MODAL FOR CENTER (+) BUTTON */}
-      <Modal visible={showQuickActionModal} transparent animationType="slide">
+      {/* VISIT PLAN & FIELD ACTIONS MODAL (SINGLE UNIFIED MODAL) */}
+      <Modal
+        visible={showVisitPlanModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowVisitPlanModal(false)}
+      >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
+          <View
+            style={[
+              styles.modalCard,
+              {
+                height: "88%",
+                maxHeight: "92%",
+                display: "flex",
+                flexDirection: "column",
+                paddingBottom: Math.max(insets.bottom, 14),
+              },
+            ]}
+          >
+            {/* Modal Header */}
             <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>Quick Field Actions</Text>
-              <Pressable onPress={() => setShowQuickActionModal(false)} hitSlop={8}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 10,
+                    backgroundColor: "#DCFCE7",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Ionicons
+                    name={visitModalTab === "PLAN" ? "calendar" : "flash"}
+                    size={22}
+                    color="#059669"
+                  />
+                </View>
+                <View>
+                  <Text style={styles.modalTitle}>
+                    {visitModalTab === "PLAN" ? "Daily Visit Plan" : "Field Actions"}
+                  </Text>
+                  <Text style={{ fontSize: fontScale(12), color: "#64748B" }}>
+                    {visitModalTab === "PLAN"
+                      ? "Select & organize target visits for today"
+                      : "Quick actions and sync tools"}
+                  </Text>
+                </View>
+              </View>
+              <Pressable
+                onPress={() => {
+                  setShowVisitPlanModal(false);
+                  setVisitPlanSearch("");
+                }}
+                hitSlop={8}
+              >
                 <Ionicons name="close" size={22} color={Colors.light.text} />
               </Pressable>
             </View>
 
-            <Pressable
-              style={styles.quickActionOption}
-              onPress={() => {
-                setShowQuickActionModal(false);
-                setActiveTab("cases");
+            {/* Top Switcher Segment: Visit Plan vs Quick Actions */}
+            <View
+              style={{
+                flexDirection: "row",
+                backgroundColor: "#F1F5F9",
+                borderRadius: Radii.md,
+                padding: 3,
+                marginBottom: 12,
               }}
             >
-              <Ionicons name="navigate-outline" size={24} color={Colors.light.primary} />
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.quickActionTitle}>Start Geotagged Visit</Text>
-                <Text style={styles.quickActionSub}>Choose from assigned customers to start GPS visit</Text>
-              </View>
-            </Pressable>
+              <Pressable
+                style={{
+                  flex: 1,
+                  paddingVertical: 7,
+                  borderRadius: Radii.sm,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexDirection: "row",
+                  gap: 6,
+                  backgroundColor: visitModalTab === "PLAN" ? "#FFFFFF" : "transparent",
+                  ...((visitModalTab === "PLAN" ? Shadows.sm : {}) as any),
+                }}
+                onPress={() => setVisitModalTab("PLAN")}
+              >
+                <Ionicons
+                  name="calendar"
+                  size={15}
+                  color={visitModalTab === "PLAN" ? "#059669" : "#64748B"}
+                />
+                <Text
+                  style={{
+                    fontSize: fontScale(12),
+                    fontWeight: "700",
+                    color: visitModalTab === "PLAN" ? "#059669" : "#64748B",
+                  }}
+                >
+                  Visit Plan
+                </Text>
+                <View
+                  style={{
+                    backgroundColor: visitModalTab === "PLAN" ? "#DCFCE7" : "#E2E8F0",
+                    paddingHorizontal: 6,
+                    paddingVertical: 1,
+                    borderRadius: 10,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: fontScale(10),
+                      fontWeight: "800",
+                      color: visitModalTab === "PLAN" ? "#059669" : "#64748B",
+                    }}
+                  >
+                    {customers.filter((c) => c.isPlanned).length}
+                  </Text>
+                </View>
+              </Pressable>
 
-            <Pressable
-              style={styles.quickActionOption}
-              onPress={() => {
-                setShowQuickActionModal(false);
-                fetchAssignedCases(token);
-              }}
-            >
-              <Ionicons name="sync-outline" size={24} color={Colors.light.primary} />
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.quickActionTitle}>Sync Cases & Locations</Text>
-                <Text style={styles.quickActionSub}>Refresh latest server assignments and status</Text>
+              <Pressable
+                style={{
+                  flex: 1,
+                  paddingVertical: 7,
+                  borderRadius: Radii.sm,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexDirection: "row",
+                  gap: 6,
+                  backgroundColor: visitModalTab === "ACTIONS" ? "#FFFFFF" : "transparent",
+                  ...((visitModalTab === "ACTIONS" ? Shadows.sm : {}) as any),
+                }}
+                onPress={() => setVisitModalTab("ACTIONS")}
+              >
+                <Ionicons
+                  name="flash-outline"
+                  size={15}
+                  color={visitModalTab === "ACTIONS" ? "#059669" : "#64748B"}
+                />
+                <Text
+                  style={{
+                    fontSize: fontScale(12),
+                    fontWeight: "700",
+                    color: visitModalTab === "ACTIONS" ? "#059669" : "#64748B",
+                  }}
+                >
+                  Quick Actions
+                </Text>
+              </Pressable>
+            </View>
+
+            {visitModalTab === "PLAN" ? (
+              <>
+                {/* Summary Stat Card */}
+                <View
+                  style={{
+                    backgroundColor: "#F0FDF4",
+                    borderWidth: 1,
+                    borderColor: "#A7F3D0",
+                    borderRadius: Radii.lg,
+                    padding: 12,
+                    marginBottom: 10,
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <View>
+                    <Text style={{ fontSize: fontScale(10.5), color: "#065F46", fontWeight: "700" }}>
+                      TODAY'S PLANNED ROUTE
+                    </Text>
+                    <Text style={{ fontSize: fontScale(16), fontWeight: "900", color: "#065F46", marginTop: 2 }}>
+                      {customers.filter((c) => c.isPlanned).length} of {customers.length} Cases
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Text style={{ fontSize: fontScale(10.5), color: "#065F46", fontWeight: "700" }}>
+                      TOTAL TARGET DUE
+                    </Text>
+                    <Text style={{ fontSize: fontScale(15), fontWeight: "900", color: "#047857", marginTop: 2 }}>
+                      ₹
+                      {customers
+                        .filter((c) => c.isPlanned)
+                        .reduce((sum, c) => sum + (c.tos ?? c.outstandingAmount ?? 0), 0)
+                        .toLocaleString("en-IN")}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Quick Search */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    backgroundColor: "#F8FAFC",
+                    borderRadius: Radii.md,
+                    paddingHorizontal: 10,
+                    height: 38,
+                    borderWidth: 1,
+                    borderColor: "#E2E8F0",
+                    marginBottom: 10,
+                  }}
+                >
+                  <Ionicons name="search" size={15} color="#94A3B8" style={{ marginRight: 6 }} />
+                  <TextInput
+                    value={visitPlanSearch}
+                    onChangeText={setVisitPlanSearch}
+                    placeholder="Search by name, phone, loan ID, area..."
+                    placeholderTextColor="#94A3B8"
+                    style={{ flex: 1, fontSize: fontScale(12), color: "#0F172A", paddingVertical: 0 }}
+                  />
+                  {visitPlanSearch.trim().length > 0 && (
+                    <Pressable onPress={() => setVisitPlanSearch("")} hitSlop={6}>
+                      <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                    </Pressable>
+                  )}
+                </View>
+
+                {/* Filter Tabs (All / Planned / Unplanned) */}
+                <View style={{ flexDirection: "row", gap: 8, marginBottom: 10 }}>
+                  <Pressable
+                    style={[
+                      styles.filterPill,
+                      visitPlanFilter === "ALL" && styles.filterPillActive,
+                    ]}
+                    onPress={() => setVisitPlanFilter("ALL")}
+                  >
+                    <Text
+                      style={[
+                        styles.filterPillText,
+                        visitPlanFilter === "ALL" && styles.filterPillTextActive,
+                      ]}
+                    >
+                      All ({customers.length})
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={[
+                      styles.filterPill,
+                      visitPlanFilter === "PLANNED" && styles.filterPillActive,
+                    ]}
+                    onPress={() => setVisitPlanFilter("PLANNED")}
+                  >
+                    <Text
+                      style={[
+                        styles.filterPillText,
+                        visitPlanFilter === "PLANNED" && styles.filterPillTextActive,
+                      ]}
+                    >
+                      Planned ({customers.filter((c) => c.isPlanned).length})
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={[
+                      styles.filterPill,
+                      visitPlanFilter === "UNPLANNED" && styles.filterPillActive,
+                    ]}
+                    onPress={() => setVisitPlanFilter("UNPLANNED")}
+                  >
+                    <Text
+                      style={[
+                        styles.filterPillText,
+                        visitPlanFilter === "UNPLANNED" && styles.filterPillTextActive,
+                      ]}
+                    >
+                      Not Planned ({customers.filter((c) => !c.isPlanned).length})
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {/* Customer List Container with definite flex and minHeight */}
+                <View style={{ flex: 1, minHeight: 280, marginVertical: 4 }}>
+                  <ScrollView
+                    style={{ flex: 1 }}
+                    contentContainerStyle={{ paddingBottom: 24, flexGrow: 1 }}
+                    showsVerticalScrollIndicator={true}
+                    nestedScrollEnabled={true}
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    {(() => {
+                      let filtered = customers;
+                      if (visitPlanFilter === "PLANNED") {
+                        filtered = filtered.filter((c) => Boolean(c.isPlanned));
+                      } else if (visitPlanFilter === "UNPLANNED") {
+                        filtered = filtered.filter((c) => !c.isPlanned);
+                      }
+                      if (visitPlanSearch.trim()) {
+                        const q = visitPlanSearch.toLowerCase().trim();
+                        filtered = filtered.filter((c) => {
+                          const name = String(c.name || "").toLowerCase();
+                          const phone = String(c.phone || "");
+                          const loanAcc = String(c.loanAccountNo || c.caseId || "").toLowerCase();
+                          const area = String(c.area || "").toLowerCase();
+                          const addr = String(c.address || "").toLowerCase();
+                          return (
+                            name.includes(q) ||
+                            phone.includes(q) ||
+                            loanAcc.includes(q) ||
+                            area.includes(q) ||
+                            addr.includes(q)
+                          );
+                        });
+                      }
+
+                      if (filtered.length === 0) {
+                        return (
+                          <View style={{ padding: 32, alignItems: "center", justifyContent: "center" }}>
+                            <Ionicons name="calendar-outline" size={42} color="#94A3B8" />
+                            <Text style={{ fontSize: fontScale(15), fontWeight: "800", color: "#475569", marginTop: 10 }}>
+                              {customers.length === 0 ? "No assigned cases found" : "No matching cases"}
+                            </Text>
+                            <Text style={{ fontSize: fontScale(12), color: "#94A3B8", marginTop: 4, textAlign: "center", lineHeight: 18 }}>
+                              {customers.length === 0
+                                ? "There are currently no assigned customer cases for this account. Check back after cases are assigned in Admin portal."
+                                : visitPlanFilter === "PLANNED"
+                                ? "No cases added to your visit plan yet. Switch to 'All' or 'Not Planned' and tap '+ Add Plan'."
+                                : "No cases match your search query."}
+                            </Text>
+                            {customers.length === 0 && (
+                              <Pressable
+                                style={{
+                                  marginTop: 14,
+                                  backgroundColor: Colors.light.primary,
+                                  paddingHorizontal: 16,
+                                  paddingVertical: 8,
+                                  borderRadius: 8,
+                                  flexDirection: "row",
+                                  alignItems: "center",
+                                  gap: 6,
+                                }}
+                                onPress={() => fetchAssignedCases(token)}
+                              >
+                                <Ionicons name="refresh" size={14} color="#FFFFFF" />
+                                <Text style={{ color: "#FFFFFF", fontSize: fontScale(12), fontWeight: "700" }}>Refresh Cases</Text>
+                              </Pressable>
+                            )}
+                          </View>
+                        );
+                      }
+
+                      return filtered.map((c, idx) => {
+                        const targetId = String(c.caseDbId || c._id);
+                        const isBusy = togglingPlanId === targetId;
+                        const isPlanned = Boolean(c.isPlanned);
+                        const custName = c.name || "Customer";
+                        const phone = String(c.phone || "");
+                        const accNo = c.loanAccountNo || c.caseId || "KB" + String(c._id).slice(-8).toUpperCase();
+                        const area = c.area || c.address || "Area not specified";
+                        const tosAmount = c.tos !== undefined && c.tos !== null ? c.tos : (c.outstandingAmount || 0);
+                        const dpd = c.dpd ?? 0;
+
+                        return (
+                          <View
+                            key={`plan-item-${targetId}-${idx}`}
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              padding: 12,
+                              backgroundColor: isPlanned ? "#F0FDF4" : "#FFFFFF",
+                              borderWidth: 1.5,
+                              borderColor: isPlanned ? "#059669" : "#E2E8F0",
+                              borderRadius: Radii.lg,
+                              marginBottom: 8,
+                              ...Shadows.sm,
+                            }}
+                          >
+                            <View style={{ flex: 1, marginRight: 10 }}>
+                              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                                <Text
+                                  style={{
+                                    fontSize: fontScale(14),
+                                    fontWeight: "800",
+                                    color: "#0F172A",
+                                    flex: 1,
+                                  }}
+                                  numberOfLines={1}
+                                >
+                                  {custName}
+                                </Text>
+                                {isPlanned && (
+                                  <View style={{ backgroundColor: "#059669", paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                                    <Text style={{ fontSize: fontScale(9.5), fontWeight: "800", color: "#FFFFFF" }}>PLANNED</Text>
+                                  </View>
+                                )}
+                              </View>
+
+                              <Text style={{ fontSize: fontScale(11), color: "#64748B", marginTop: 2 }} numberOfLines={1}>
+                                A/C: {accNo} • {area}
+                              </Text>
+
+                              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 4 }}>
+                                <Text style={{ fontSize: fontScale(11.5), fontWeight: "700", color: "#059669" }}>
+                                  TOS: ₹{tosAmount.toLocaleString("en-IN")}
+                                </Text>
+                                {dpd > 0 && (
+                                  <Text style={{ fontSize: fontScale(11), fontWeight: "700", color: dpd > 90 ? "#DC2626" : "#D97706" }}>
+                                    DPD: {dpd}d
+                                  </Text>
+                                )}
+                              </View>
+                            </View>
+
+                            <Pressable
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                gap: 5,
+                                paddingHorizontal: 12,
+                                paddingVertical: 8,
+                                borderRadius: 8,
+                                backgroundColor: isPlanned ? "#059669" : "#EFF6FF",
+                                borderWidth: 1.5,
+                                borderColor: isPlanned ? "#059669" : "#3B82F6",
+                              }}
+                              onPress={() => handleTogglePlanCase(c)}
+                              disabled={isBusy}
+                              hitSlop={8}
+                            >
+                              {isBusy ? (
+                                <ActivityIndicator size="small" color={isPlanned ? "#FFFFFF" : "#0284C7"} />
+                              ) : (
+                                <>
+                                  <Ionicons
+                                    name={isPlanned ? "checkmark-circle" : "add"}
+                                    size={16}
+                                    color={isPlanned ? "#FFFFFF" : "#1D4ED8"}
+                                  />
+                                  <Text
+                                    style={{
+                                      fontSize: fontScale(11.5),
+                                      fontWeight: "800",
+                                      color: isPlanned ? "#FFFFFF" : "#1D4ED8",
+                                    }}
+                                  >
+                                    {isPlanned ? "Planned" : "Add Plan"}
+                                  </Text>
+                                </>
+                              )}
+                            </Pressable>
+                          </View>
+                        );
+                      });
+                    })()}
+                  </ScrollView>
+                </View>
+
+                {/* Bottom Complete Button */}
+                <View style={{ marginTop: 10 }}>
+                  <Pressable
+                    style={{
+                      backgroundColor: Colors.light.primary,
+                      borderRadius: Radii.lg,
+                      paddingVertical: 13,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexDirection: "row",
+                      gap: 8,
+                    }}
+                    onPress={() => {
+                      setShowVisitPlanModal(false);
+                      setStatusFilter("PLANNED");
+                      setActiveTab("cases");
+                    }}
+                  >
+                    <Ionicons name="calendar-outline" size={17} color="#FFFFFF" />
+                    <Text style={{ color: "#FFFFFF", fontSize: fontScale(14), fontWeight: "800" }}>
+                      View Planned Cases ({customers.filter((c) => c.isPlanned).length})
+                    </Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : (
+              /* QUICK ACTIONS TAB CONTENT */
+              <View style={{ paddingTop: 4 }}>
+                <Pressable
+                  style={styles.quickActionOption}
+                  onPress={() => {
+                    setShowVisitPlanModal(false);
+                    setActiveTab("cases");
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 12,
+                      backgroundColor: "#DCFCE7",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Ionicons name="navigate-outline" size={22} color={Colors.light.primary} />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={styles.quickActionTitle}>Start Geotagged Visit</Text>
+                    <Text style={styles.quickActionSub}>Choose from assigned customers to start GPS visit</Text>
+                  </View>
+                </Pressable>
+
+                <Pressable
+                  style={styles.quickActionOption}
+                  onPress={() => {
+                    setShowVisitPlanModal(false);
+                    setStatusFilter("PLANNED");
+                    setActiveTab("cases");
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 12,
+                      backgroundColor: "#E0F2FE",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Ionicons name="list-outline" size={22} color="#0284C7" />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={styles.quickActionTitle}>View Planned Cases</Text>
+                    <Text style={styles.quickActionSub}>
+                      Filter cases list to only your planned visits
+                    </Text>
+                  </View>
+                </Pressable>
+
+                <Pressable
+                  style={styles.quickActionOption}
+                  onPress={() => {
+                    setShowVisitPlanModal(false);
+                    setShowMapModal(true);
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 12,
+                      backgroundColor: "#FEF3C7",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Ionicons name="map-outline" size={22} color="#D97706" />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={styles.quickActionTitle}>Open Map View</Text>
+                    <Text style={styles.quickActionSub}>View all assigned customer pins on map</Text>
+                  </View>
+                </Pressable>
+
+                <Pressable
+                  style={styles.quickActionOption}
+                  onPress={() => {
+                    setShowVisitPlanModal(false);
+                    fetchAssignedCases(token);
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 12,
+                      backgroundColor: "#F1F5F9",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Ionicons name="sync-outline" size={22} color="#64748B" />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={styles.quickActionTitle}>Sync Cases & Locations</Text>
+                    <Text style={styles.quickActionSub}>Refresh latest server assignments and status</Text>
+                  </View>
+                </Pressable>
               </View>
-            </Pressable>
+            )}
           </View>
         </View>
       </Modal>
@@ -1801,14 +2423,15 @@ export default function DashboardScreen() {
 
             <ScrollView showsVerticalScrollIndicator={false}>
               {filteredCustomers.map((cust, idx) => {
-                const lat = cust.locations?.[0]?.coordinates?.lat || 11.2588;
-                const lng = cust.locations?.[0]?.coordinates?.lng || 75.7725;
+                const hasValidCoords = cust.locations?.[0]?.coordinates?.lat && cust.locations?.[0]?.coordinates?.lng;
+                const lat = cust.locations?.[0]?.coordinates?.lat;
+                const lng = cust.locations?.[0]?.coordinates?.lng;
                 const displayDistance =
                   cust.calculatedDistance != null
                     ? formatDistance(cust.calculatedDistance)
                     : cust.distance != null
                     ? `${cust.distance} km`
-                    : "Near Kozhikode";
+                    : (hasValidCoords ? "Mapped Location" : "Address on File");
 
                 return (
                   <View key={`map-cust-${cust.caseDbId || cust.loanAccountNo || cust._id || 'c'}-${idx}`} style={styles.mapCustomerRow}>
@@ -1820,7 +2443,7 @@ export default function DashboardScreen() {
                         {cust.name}
                       </Text>
                       <Text style={{ fontSize: fontScale(11), color: "#64748B" }} numberOfLines={1}>
-                        {cust.address || cust.area || "Kozhikode, Kerala"}
+                        {cust.address || cust.area || "Address not provided"}
                       </Text>
                       <Text style={{ fontSize: fontScale(11), color: "#00A86B", fontWeight: "700", marginTop: 2 }}>
                         {displayDistance}
@@ -1830,7 +2453,12 @@ export default function DashboardScreen() {
                       style={styles.mapDirBtn}
                       onPress={() => {
                         setShowMapModal(false);
-                        Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
+                        if (hasValidCoords) {
+                          Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
+                        } else {
+                          const q = encodeURIComponent(`${cust.address || ""}, ${cust.area || cust.city || ""}`);
+                          Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${q}`);
+                        }
                       }}
                     >
                       <Ionicons name="navigate" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
@@ -2381,6 +3009,29 @@ const styles = StyleSheet.create({
   actionsRow: {
     flexDirection: "row",
     gap: 8,
+  },
+  cardActionBtnPlan: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  cardActionBtnPlanActive: {
+    backgroundColor: "#0284C7",
+    borderColor: "#0284C7",
+  },
+  cardActionBtnPlanText: {
+    fontSize: fontScale(11.5),
+    fontWeight: "700",
+    color: "#0284C7",
+  },
+  cardActionBtnPlanTextActive: {
+    color: "#FFFFFF",
   },
   cardActionBtnCall: {
     flexDirection: "row",

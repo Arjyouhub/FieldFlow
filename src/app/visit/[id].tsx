@@ -218,9 +218,9 @@ export default function StartVisitScreen() {
       setGpsLoading(true);
       const { status } = await Location.requestForegroundPermissionsAsync();
 
-      let currentLat = 11.2588;
-      let currentLng = 75.7725;
-      let reportedAccuracy = 8;
+      let currentLat: number | null = null;
+      let currentLng: number | null = null;
+      let reportedAccuracy = 0;
 
       if (status === "granted") {
         try {
@@ -231,27 +231,31 @@ export default function StartVisitScreen() {
         } catch {}
       }
 
-      setCoords({ lat: currentLat, lng: currentLng });
-      setAccuracy(reportedAccuracy);
+      if (currentLat !== null && currentLng !== null) {
+        setCoords({ lat: currentLat, lng: currentLng });
+        setAccuracy(reportedAccuracy);
 
-      // Pre-check GPS against geofence
-      const precheckRes = await fetch(`${API_BASE_URL}/visits/precheck-gps`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${authToken}`,
-        },
-        body: JSON.stringify({
-          customerId: id,
-          lat: currentLat,
-          lng: currentLng,
-          accuracy: reportedAccuracy,
-        }),
-      });
+        // Pre-check GPS against geofence
+        const precheckRes = await fetch(`${API_BASE_URL}/visits/precheck-gps`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({
+            customerId: id,
+            lat: currentLat,
+            lng: currentLng,
+            accuracy: reportedAccuracy,
+          }),
+        });
 
-      const precheckData = await precheckRes.json();
-      if (precheckRes.ok) {
-        setVerification(precheckData.verification);
+        const precheckData = await precheckRes.json();
+        if (precheckRes.ok) {
+          setVerification(precheckData.verification);
+        }
+      } else {
+        setCoords(null);
       }
     } catch (err: any) {
       console.warn("GPS Precheck notice:", err.message);
@@ -318,12 +322,21 @@ export default function StartVisitScreen() {
 
     setSubmitting(true);
     try {
+      if (!coords?.lat || !coords?.lng) {
+        Alert.alert(
+          "Satellite GPS Required",
+          "Real device GPS coordinates must be acquired before completing this visit. Please enable your device GPS location."
+        );
+        setSubmitting(false);
+        return;
+      }
+
       const payload: any = {
         customerId: id,
         caseId: customer?.caseDbId || customer?.caseId || undefined,
         portfolioId: customer?.portfolioId || undefined,
-        lat: coords?.lat || 11.2588,
-        lng: coords?.lng || 75.7725,
+        lat: coords.lat,
+        lng: coords.lng,
         accuracy,
         outcome: outcomeToUse,
         photoUrl: photoUri || "",

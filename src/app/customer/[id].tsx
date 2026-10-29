@@ -41,6 +41,7 @@ export default function CustomerDetailScreen() {
   const [callOutcome, setCallOutcome] = useState("Connected");
   const [callRemarks, setCallRemarks] = useState("");
   const [callLogging, setCallLogging] = useState(false);
+  const [planningVisit, setPlanningVisit] = useState(false);
 
   useEffect(() => {
     loadCustomer();
@@ -70,6 +71,36 @@ export default function CustomerDetailScreen() {
       Alert.alert("Error", err.message || "Failed to load customer profile.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleTogglePlanVisit = async () => {
+    try {
+      setPlanningVisit(true);
+      const session = await getAuthSession();
+      const nextPlanned = !customer?.isPlanned;
+      const res = await fetch(`${API_BASE_URL}/customers/${id}/plan-visit`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.token}`,
+        },
+        body: JSON.stringify({ isPlanned: nextPlanned }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+
+      setCustomer((prev: any) => ({ ...prev, isPlanned: nextPlanned }));
+      Alert.alert(
+        nextPlanned ? "Visit Planned" : "Visit Plan Removed",
+        nextPlanned
+          ? "Case marked in your planned visit queue."
+          : "Case removed from planned visits."
+      );
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Could not update visit plan.");
+    } finally {
+      setPlanningVisit(false);
     }
   };
 
@@ -182,31 +213,48 @@ export default function CustomerDetailScreen() {
             </View>
           </View>
 
-          {/* 3 KPI PILL CARDS (Outstanding, Due Days, Risk Level) */}
-          <View style={styles.kpiPillsRow}>
-            {/* Outstanding */}
-            <View style={styles.kpiPillCard}>
-              <Text style={styles.kpiPillLabel}>Outstanding</Text>
-              <Text style={styles.kpiPillValue}>
-                ₹{(customer.outstandingAmount || customer.emiAmount || 12500).toLocaleString("en-IN")}
+          {/* 4 FINANCIAL KPI CARDS: POS | TOS | LOAN AMOUNT | DPD */}
+          <View style={styles.kpiGrid4}>
+            <View style={styles.kpiCard4}>
+              <Text style={styles.kpiLabel4}>POS</Text>
+              <Text style={styles.kpiValue4}>
+                ₹{(customer.pos !== undefined && customer.pos !== null ? customer.pos : (customer.outstandingAmount || 0)).toLocaleString("en-IN")}
               </Text>
             </View>
 
-            {/* Due Days */}
-            <View style={styles.kpiPillCard}>
-              <Text style={styles.kpiPillLabel}>Due Days</Text>
-              <Text style={[styles.kpiPillValue, { color: "#D97706" }]}>
-                {customer.dueDays || 45}
+            <View style={styles.kpiCard4}>
+              <Text style={styles.kpiLabel4}>TOS</Text>
+              <Text style={styles.kpiValue4}>
+                ₹{(customer.tos !== undefined && customer.tos !== null ? customer.tos : (customer.outstandingAmount || 0)).toLocaleString("en-IN")}
               </Text>
             </View>
 
-            {/* Risk Level */}
-            <View style={styles.kpiPillCard}>
-              <Text style={styles.kpiPillLabel}>Risk Level</Text>
-              <Text style={[styles.kpiPillValue, { color: "#EA580C" }]}>
-                {customer.riskLevel || (customer.dpdBucket ? `${customer.dpdBucket}` : "Medium")}
+            <View style={styles.kpiCard4}>
+              <Text style={styles.kpiLabel4}>LOAN AMOUNT</Text>
+              <Text style={styles.kpiValue4}>
+                ₹{(customer.loanAmount || customer.outstandingAmount || 0).toLocaleString("en-IN")}
               </Text>
             </View>
+
+            <View style={[styles.kpiCard4, (customer.dpd ?? 0) > 90 && { borderColor: "#FCA5A5", backgroundColor: "#FEF2F2" }]}>
+              <Text style={[styles.kpiLabel4, (customer.dpd ?? 0) > 90 && { color: "#DC2626" }]}>DPD</Text>
+              <Text style={[styles.kpiValue4, (customer.dpd ?? 0) > 90 ? { color: "#DC2626" } : { color: "#D97706" }]}>
+                {customer.dpd ?? 0} Days
+              </Text>
+            </View>
+          </View>
+
+          {/* Sub-pill for Due Amount / EMI & Plan Status */}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", width: "100%", marginTop: 8, paddingHorizontal: 4 }}>
+            <Text style={{ fontSize: fontScale(12), color: "#64748B", fontWeight: "600" }}>
+              Due: <Text style={{ color: "#0F172A", fontWeight: "800" }}>₹{(customer.dueAmount || customer.emiAmount || 0).toLocaleString("en-IN")}</Text>
+            </Text>
+            {customer.isPlanned ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#E0F2FE", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                <Ionicons name="calendar" size={12} color="#0284C7" />
+                <Text style={{ fontSize: fontScale(11), color: "#0369A1", fontWeight: "800" }}>PLANNED VISIT</Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -244,13 +292,15 @@ export default function CustomerDetailScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.detailLabel}>Address</Text>
                 <Text style={styles.detailValue}>
-                  {customer.address || "Edappally, Ernakulam, Kerala"}
+                  {customer.address || "Address not provided"}
                 </Text>
-                <Pressable onPress={handleOpenMaps} style={{ marginTop: 4 }}>
-                  <Text style={{ fontSize: fontScale(12), color: Colors.light.primary, fontWeight: "700" }}>
-                    Open in Google Maps →
-                  </Text>
-                </Pressable>
+                {customer.address ? (
+                  <Pressable onPress={handleOpenMaps} style={{ marginTop: 4 }}>
+                    <Text style={{ fontSize: fontScale(12), color: Colors.light.primary, fontWeight: "700" }}>
+                      Open in Google Maps →
+                    </Text>
+                  </Pressable>
+                ) : null}
               </View>
             </View>
 
@@ -262,33 +312,33 @@ export default function CustomerDetailScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.detailLabel}>Account No</Text>
                 <Text style={styles.detailValue}>
-                  {customer.loanAccountNo || "1234567890"}
+                  {customer.loanAccountNo || "—"}
                 </Text>
               </View>
             </View>
 
-            {/* Customer Type Row */}
+            {/* Portfolio / Loan Type Row */}
             <View style={styles.detailRow}>
               <View style={styles.detailIconWrapper}>
-                <Ionicons name="person-outline" size={18} color={Colors.light.primary} />
+                <Ionicons name="briefcase-outline" size={18} color={Colors.light.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.detailLabel}>Customer Type</Text>
+                <Text style={styles.detailLabel}>Portfolio Type</Text>
                 <Text style={styles.detailValue}>
-                  {customer.loanType || "Personal Loan"}
+                  {customer.portfolioName || customer.portfolioCode || "Standard Loan"}
                 </Text>
               </View>
             </View>
 
-            {/* Assigned Date Row */}
+            {/* Batch Month Row */}
             <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
               <View style={styles.detailIconWrapper}>
                 <Ionicons name="calendar-outline" size={18} color={Colors.light.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.detailLabel}>Assigned Date</Text>
+                <Text style={styles.detailLabel}>Batch Month</Text>
                 <Text style={styles.detailValue}>
-                  {customer.assignedDate || "12 Aug 2024"}
+                  {customer.batchMonth || "OCT-2026"}
                 </Text>
               </View>
             </View>
@@ -397,7 +447,7 @@ export default function CustomerDetailScreen() {
         )}
       </ScrollView>
 
-      {/* FIXED BOTTOM ACTION BAR: START VISIT (Reference Screen 6) */}
+      {/* FIXED BOTTOM ACTION BAR: START VISIT */}
       <View style={[styles.bottomActionBar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
         <Pressable
           style={styles.startVisitButton}
@@ -540,7 +590,38 @@ const styles = StyleSheet.create({
     borderColor: "#B4E3C9",
   },
 
-  // 3 KPI Pill Cards (Screen 6)
+  // 4 Financial KPI Cards (POS, TOS, LOAN AMOUNT, DPD)
+  kpiGrid4: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    width: "100%",
+    gap: 8,
+  },
+  kpiCard4: {
+    width: "48%",
+    backgroundColor: "#F8FAFC",
+    borderRadius: Radii.md,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+  },
+  kpiLabel4: {
+    fontSize: fontScale(10),
+    color: "#64748B",
+    fontWeight: "800",
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  kpiValue4: {
+    fontSize: fontScale(15),
+    fontWeight: "900",
+    color: "#0F172A",
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+  },
+
+  // Legacy 3 KPI Pill Cards (Screen 6)
   kpiPillsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -704,7 +785,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Fixed Bottom Action Bar: Start Visit (Screen 6)
+  // Fixed Bottom Action Bar: Plan Visit & Start Visit
   bottomActionBar: {
     position: "absolute",
     bottom: 0,
@@ -717,7 +798,37 @@ const styles = StyleSheet.create({
     borderTopColor: "#E5EAE7",
     ...Shadows.lg,
   },
+  bottomButtonsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  planVisitButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F0F9FF",
+    borderWidth: 1.5,
+    borderColor: "#BAE6FD",
+    height: 52,
+    borderRadius: Radii.lg,
+    gap: 6,
+  },
+  planVisitButtonActive: {
+    backgroundColor: "#0284C7",
+    borderColor: "#0284C7",
+  },
+  planVisitButtonText: {
+    fontSize: fontScale(14),
+    fontWeight: "800",
+    color: "#0284C7",
+  },
+  planVisitButtonTextActive: {
+    color: "#FFFFFF",
+  },
   startVisitButton: {
+    width: "100%",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -732,7 +843,7 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   startVisitButtonText: {
-    fontSize: fontScale(16),
+    fontSize: fontScale(15),
     fontWeight: "800",
     color: "#FFFFFF",
     letterSpacing: 0.3,

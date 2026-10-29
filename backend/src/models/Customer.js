@@ -65,9 +65,22 @@ const customerSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    tos: {
+      type: Number,
+      default: 0,
+    },
     pincode: {
       type: String,
       default: '',
+    },
+    isPlanned: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    plannedVisitDate: {
+      type: Date,
+      default: null,
     },
     assignedStaff: {
       type: mongoose.Schema.Types.ObjectId,

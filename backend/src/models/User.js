@@ -59,6 +59,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    monthlyTarget: {
+      type: Number,
+      default: 0,
+    },
     registrationLocation: {
       lat: { type: Number, default: null },
       lng: { type: Number, default: null },

@@ -44,6 +44,56 @@ export default function BulkImportModal({
     }
   }, [initialStaffId]);
 
+  useEffect(() => {
+    if (!selectedPortfolioId && portfolios && portfolios.length > 0) {
+      setSelectedPortfolioId(initialPortfolioId || portfolios[0]._id);
+    }
+  }, [portfolios, initialPortfolioId]);
+
+  // Self-fetch and keep staff updated
+  const [internalStaffList, setInternalStaffList] = useState(staffList || []);
+  const [isLoadingStaff, setIsLoadingStaff] = useState(false);
+
+  useEffect(() => {
+    if (staffList && staffList.length > 0) {
+      setInternalStaffList(staffList);
+    }
+  }, [staffList]);
+
+  useEffect(() => {
+    if (isOpen && apiFetch) {
+      setIsLoadingStaff(true);
+      apiFetch('/api/admin/staff')
+        .then((res) => {
+          if (res && res.staff && Array.isArray(res.staff)) {
+            setInternalStaffList(res.staff);
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to load staff list in BulkImportModal:', err);
+        })
+        .finally(() => {
+          setIsLoadingStaff(false);
+        });
+    }
+  }, [isOpen, apiFetch]);
+
+  // Filter for active staff only
+  const staffListToUse = internalStaffList && internalStaffList.length > 0 ? internalStaffList : (staffList || []);
+  const activeStaffList = staffListToUse.filter(
+    (s) =>
+      !s.isDeleted &&
+      s.status !== 'deleted' &&
+      s.status !== 'inactive' &&
+      s.status !== 'suspended' &&
+      s.status !== 'pending_approval' &&
+      s.status !== 'rejected' &&
+      (s.status === 'active' || s.status === 'approved' || !s.status)
+  );
+  const displayStaffList = activeStaffList.length > 0
+    ? activeStaffList
+    : staffListToUse.filter((s) => !s.isDeleted && s.status !== 'deleted');
+
   // Step 2: File & Parsing
   const [file, setFile] = useState(null);
   const [isParsing, setIsParsing] = useState(false);
@@ -59,6 +109,9 @@ export default function BulkImportModal({
     altPhone: '',
     address: '',
     area: '',
+    pos: '',
+    tos: '',
+    dpd: '',
     outstandingAmount: '',
     dueAmount: '',
     referenceNumber: '',
@@ -98,15 +151,31 @@ export default function BulkImportModal({
       const altPhone = mapping.altPhone ? cleanPhone(r[mapping.altPhone]) : '';
       const address = String(r[mapping.address] || '').trim();
       const area = String(r[mapping.area] || 'Kozhikode Central').trim();
-      const outstandingAmount = Number(String(r[mapping.outstandingAmount] || 0).replace(/[^0-9.-]/g, '')) || 0;
-      const dueAmount = Number(String(r[mapping.dueAmount] || outstandingAmount).replace(/[^0-9.-]/g, '')) || 0;
+
+      // Financial columns: POS, TOS, DPD, Outstanding & Due
+      const rawPos = mapping.pos ? r[mapping.pos] : (r['POS'] || r['pos'] || r['Bom Pos'] || r['BOM POS'] || r['Principal Outstanding'] || r['Principal']);
+      const pos = rawPos !== undefined && rawPos !== null ? (Number(String(rawPos).replace(/[^0-9.-]/g, '')) || 0) : 0;
+
+      const rawTos = mapping.tos ? r[mapping.tos] : (r['TOS'] || r['tos'] || r['Total Outstanding'] || r['TOTAL OUTSTANDING']);
+      const tos = rawTos !== undefined && rawTos !== null ? (Number(String(rawTos).replace(/[^0-9.-]/g, '')) || 0) : 0;
+
+      const rawDpd = mapping.dpd ? r[mapping.dpd] : (r['DPD'] || r['dpd'] || r['Days Past Due'] || r['DAYS PAST DUE'] || r['Bucket'] || r['Overdue Days']);
+      const dpd = rawDpd !== undefined && rawDpd !== null ? (Number(String(rawDpd).replace(/[^0-9.-]/g, '')) || 0) : 0;
+
+      const outstandingAmount = tos || Number(String(r[mapping.outstandingAmount] || 0).replace(/[^0-9.-]/g, '')) || pos || 0;
+      const dueAmount = Number(String(r[mapping.dueAmount] || 0).replace(/[^0-9.-]/g, '')) || 0;
       const referenceNumber = mapping.referenceNumber ? String(r[mapping.referenceNumber] || '').trim() : '';
 
       // Staff resolution
       let assignedStaffId = staffId || '';
       if (mapping.staff && r[mapping.staff]) {
         const staffVal = String(r[mapping.staff]).toLowerCase().trim();
-        const matched = staffList.find(
+        const matched = displayStaffList.find(
+          (s) =>
+            s.name?.toLowerCase().includes(staffVal) ||
+            s.phone?.includes(staffVal) ||
+            s.employeeId?.toLowerCase() === staffVal
+        ) || staffListToUse.find(
           (s) =>
             s.name?.toLowerCase().includes(staffVal) ||
             s.phone?.includes(staffVal) ||
@@ -130,7 +199,10 @@ export default function BulkImportModal({
         address: address || 'Address on file',
         area,
         city: 'Kozhikode',
-        outstandingAmount,
+        pos,
+        tos: tos || outstandingAmount,
+        dpd,
+        outstandingAmount: tos || outstandingAmount || pos,
         dueAmount,
         referenceNumber,
         assignedStaffId,
@@ -142,6 +214,19 @@ export default function BulkImportModal({
     setParsedRows(processed);
   };
 
+  const handleDefaultStaffChange = (newStaffId) => {
+    setDefaultStaffId(newStaffId);
+    if (rawSheetRows && rawSheetRows.length > 0) {
+      recomputeRows(rawSheetRows, columnMapping, newStaffId);
+    }
+  };
+
+  useEffect(() => {
+    if (rawSheetRows && rawSheetRows.length > 0) {
+      recomputeRows(rawSheetRows, columnMapping, defaultStaffId);
+    }
+  }, [internalStaffList]);
+
   const handleMappingChange = (field, newCol) => {
     const nextMapping = { ...columnMapping, [field]: newCol };
     setColumnMapping(nextMapping);
@@ -149,8 +234,11 @@ export default function BulkImportModal({
       loanAccount: nextMapping.loanAccountNo || 'Auto-generated or Missing',
       name: nextMapping.name || 'Required',
       phone: nextMapping.phone || 'Required',
+      pos: nextMapping.pos || 'POS',
+      tos: nextMapping.tos || nextMapping.outstandingAmount || 'TOS',
+      dpd: nextMapping.dpd || 'DPD',
       address: nextMapping.address || 'Address',
-      outstanding: nextMapping.outstandingAmount || 'Outstanding Amount',
+      due: nextMapping.dueAmount || 'EMI / Due',
       staff: nextMapping.staff || 'Staff Member',
     });
     if (rawSheetRows.length > 0) {
@@ -222,8 +310,11 @@ export default function BulkImportModal({
         loanAccount: detectedMapping.loanAccountNo || 'Auto-generated or Column Missing',
         name: detectedMapping.name || 'Required',
         phone: detectedMapping.phone || 'Required',
+        pos: detectedMapping.pos || 'POS',
+        tos: detectedMapping.tos || detectedMapping.outstandingAmount || 'TOS',
+        dpd: detectedMapping.dpd || 'DPD',
         address: detectedMapping.address || 'Address',
-        outstanding: detectedMapping.outstandingAmount || 'Outstanding Amount',
+        due: detectedMapping.dueAmount || 'EMI / Due',
         staff: detectedMapping.staff || 'Staff Member',
       });
 
@@ -276,19 +367,27 @@ export default function BulkImportModal({
 
     try {
       // Map to API format expected by /api/cases/import-bulk (valid rows only)
-      const casesPayload = validRows.map((r) => ({
-        loanAccountNo: r.loanAccountNo,
-        referenceNumber: r.referenceNumber,
-        name: r.name,
-        phone: r.phone,
-        alternatePhone: r.alternatePhone,
-        address: r.address,
-        area: r.area,
-        city: r.city,
-        outstandingAmount: r.outstandingAmount,
-        dueAmount: r.dueAmount,
-        assignedStaffId: r.assignedStaffId || defaultStaffId || undefined,
-      }));
+      const casesPayload = validRows.map((r) => {
+        const finalStaffId = r.assignedStaffId || defaultStaffId || undefined;
+        return {
+          loanAccountNo: r.loanAccountNo,
+          referenceNumber: r.referenceNumber,
+          name: r.name,
+          phone: r.phone,
+          alternatePhone: r.alternatePhone,
+          address: r.address,
+          area: r.area,
+          city: r.city,
+          pos: r.pos,
+          tos: r.tos,
+          dpd: r.dpd,
+          outstandingAmount: r.outstandingAmount,
+          dueAmount: r.dueAmount,
+          assignedStaffId: finalStaffId,
+          assignedStaff: finalStaffId,
+          staffId: finalStaffId,
+        };
+      });
 
       const res = await apiFetch('/api/cases/import-bulk', {
         method: 'POST',
@@ -296,6 +395,8 @@ export default function BulkImportModal({
           portfolioId: selectedPortfolioId,
           batchMonth,
           defaultStaffId: defaultStaffId || undefined,
+          assignedStaff: defaultStaffId || undefined,
+          assignedStaffId: defaultStaffId || undefined,
           cases: casesPayload,
         }),
       });
@@ -495,21 +596,33 @@ export default function BulkImportModal({
 
                   {/* Default Staff Allocation */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '600', marginBottom: '4px' }}>
-                      Default Staff (If unassigned in file)
-                    </label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <label style={{ fontSize: '12.5px', fontWeight: '600' }}>
+                        Default Staff (If unassigned in file)
+                      </label>
+                      {isLoadingStaff && (
+                        <span style={{ fontSize: '11px', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <RefreshCw size={11} className="animate-spin" /> Loading...
+                        </span>
+                      )}
+                    </div>
                     <select
                       className="input-field"
                       value={defaultStaffId}
-                      onChange={(e) => setDefaultStaffId(e.target.value)}
+                      onChange={(e) => handleDefaultStaffChange(e.target.value)}
                     >
                       <option value="">Leave Unassigned</option>
-                      {staffList.map((s) => (
+                      {displayStaffList.map((s) => (
                         <option key={s._id} value={s._id}>
-                          {s.name} ({s.assignedArea || 'Field'})
+                          {s.name} {s.employeeId ? `(${s.employeeId})` : ''} • {s.assignedArea || 'Field Staff'}
                         </option>
                       ))}
                     </select>
+                    {displayStaffList.length === 0 && !isLoadingStaff && (
+                      <p style={{ fontSize: '11px', color: 'var(--danger-text)', marginTop: '4px' }}>
+                        No active staff found. Please approve or create staff in Staff Management.
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -668,7 +781,7 @@ export default function BulkImportModal({
 
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                       <span className="badge" style={{ background: columnMapping.loanAccountNo ? '#D1FAE5' : '#FEE2E2', color: columnMapping.loanAccountNo ? '#065F46' : '#991B1B', border: '1px solid', borderColor: columnMapping.loanAccountNo ? '#6EE7B7' : '#FCA5A5' }}>
-                        Loan ID: <strong>{columnMapping.loanAccountNo || 'Missing'}</strong>
+                        Loan ID: <strong>{columnMapping.loanAccountNo || 'Auto'}</strong>
                       </span>
                       <span className="badge" style={{ background: columnMapping.name ? '#D1FAE5' : '#FEE2E2', color: columnMapping.name ? '#065F46' : '#991B1B', border: '1px solid', borderColor: columnMapping.name ? '#6EE7B7' : '#FCA5A5' }}>
                         Name: <strong>{columnMapping.name || 'Missing'}</strong>
@@ -676,6 +789,23 @@ export default function BulkImportModal({
                       <span className="badge" style={{ background: columnMapping.phone ? '#D1FAE5' : '#FEE2E2', color: columnMapping.phone ? '#065F46' : '#991B1B', border: '1px solid', borderColor: columnMapping.phone ? '#6EE7B7' : '#FCA5A5' }}>
                         Phone: <strong>{columnMapping.phone || 'Missing'}</strong>
                       </span>
+                      {/* POS (Principal Outstanding) */}
+                      <span className="badge" style={{ background: columnMapping.pos ? '#E0F2FE' : '#F1F5F9', color: columnMapping.pos ? '#0284C7' : '#64748B', border: '1px solid', borderColor: columnMapping.pos ? '#BAE6FD' : '#CBD5E1', fontWeight: '700' }}>
+                        POS: <strong>{columnMapping.pos || 'Auto'}</strong>
+                      </span>
+                      {/* TOS (Total Outstanding) */}
+                      <span className="badge" style={{ background: (columnMapping.tos || columnMapping.outstandingAmount) ? '#D1FAE5' : '#F1F5F9', color: (columnMapping.tos || columnMapping.outstandingAmount) ? '#059669' : '#64748B', border: '1px solid', borderColor: (columnMapping.tos || columnMapping.outstandingAmount) ? '#6EE7B7' : '#CBD5E1', fontWeight: '700' }}>
+                        TOS: <strong>{columnMapping.tos || columnMapping.outstandingAmount || 'Auto'}</strong>
+                      </span>
+                      {/* DPD (Days Past Due) */}
+                      <span className="badge" style={{ background: columnMapping.dpd ? '#FEF3C7' : '#F1F5F9', color: columnMapping.dpd ? '#B45309' : '#64748B', border: '1px solid', borderColor: columnMapping.dpd ? '#FDE68A' : '#CBD5E1', fontWeight: '700' }}>
+                        DPD: <strong>{columnMapping.dpd || 'Auto (0)'}</strong>
+                      </span>
+                      {columnMapping.dueAmount && (
+                        <span className="badge" style={{ background: '#D1FAE5', color: '#065F46', border: '1px solid #6EE7B7' }}>
+                          Due/EMI: <strong>{columnMapping.dueAmount}</strong>
+                        </span>
+                      )}
                       {columnMapping.altPhone && (
                         <span className="badge" style={{ background: '#E0F2FE', color: '#0369A1', border: '1px solid #BAE6FD' }}>
                           Alt Phone: <strong>{columnMapping.altPhone}</strong>
@@ -684,17 +814,9 @@ export default function BulkImportModal({
                       <span className="badge" style={{ background: columnMapping.address ? '#D1FAE5' : '#F3F4F6', color: columnMapping.address ? '#065F46' : '#6B7280', border: '1px solid #E5E7EB' }}>
                         Address: <strong>{columnMapping.address || 'Address on file'}</strong>
                       </span>
-                      <span className="badge" style={{ background: columnMapping.outstandingAmount ? '#D1FAE5' : '#F3F4F6', color: columnMapping.outstandingAmount ? '#065F46' : '#6B7280', border: '1px solid #E5E7EB' }}>
-                        Outstanding: <strong>{columnMapping.outstandingAmount || 'Not Mapped'}</strong>
-                      </span>
-                      {columnMapping.dueAmount && (
-                        <span className="badge" style={{ background: '#D1FAE5', color: '#065F46', border: '1px solid #6EE7B7' }}>
-                          Due/EMI: <strong>{columnMapping.dueAmount}</strong>
-                        </span>
-                      )}
                       {columnMapping.area && (
                         <span className="badge" style={{ background: '#E0E7FF', color: '#3730A3', border: '1px solid #C7D2FE' }}>
-                          Territory: <strong>{columnMapping.area}</strong>
+                          Location: <strong>{columnMapping.area}</strong>
                         </span>
                       )}
                       {columnMapping.staff && (
@@ -760,6 +882,76 @@ export default function BulkImportModal({
                             ))}
                           </select>
                         </div>
+                        {/* POS Column */}
+                        <div>
+                          <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#0284C7', marginBottom: '2px' }}>
+                            POS (Principal OS)
+                          </label>
+                          <select
+                            className="input-field"
+                            style={{ fontSize: '12px', padding: '4px 6px', borderColor: columnMapping.pos ? '#38BDF8' : undefined }}
+                            value={columnMapping.pos}
+                            onChange={(e) => handleMappingChange('pos', e.target.value)}
+                          >
+                            <option value="">-- Auto or 0 --</option>
+                            {availableColumns.map((c) => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                        </div>
+                        {/* TOS Column */}
+                        <div>
+                          <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#059669', marginBottom: '2px' }}>
+                            TOS (Total Outstanding)
+                          </label>
+                          <select
+                            className="input-field"
+                            style={{ fontSize: '12px', padding: '4px 6px', borderColor: columnMapping.tos ? '#34D399' : undefined }}
+                            value={columnMapping.tos || columnMapping.outstandingAmount}
+                            onChange={(e) => {
+                              handleMappingChange('tos', e.target.value);
+                              handleMappingChange('outstandingAmount', e.target.value);
+                            }}
+                          >
+                            <option value="">-- Auto or 0 --</option>
+                            {availableColumns.map((c) => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                        </div>
+                        {/* DPD Column */}
+                        <div>
+                          <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#B45309', marginBottom: '2px' }}>
+                            DPD (Days Past Due)
+                          </label>
+                          <select
+                            className="input-field"
+                            style={{ fontSize: '12px', padding: '4px 6px', borderColor: columnMapping.dpd ? '#FBBF24' : undefined }}
+                            value={columnMapping.dpd}
+                            onChange={(e) => handleMappingChange('dpd', e.target.value)}
+                          >
+                            <option value="">-- Auto or 0 --</option>
+                            {availableColumns.map((c) => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '2px' }}>
+                            Due / EMI Amount
+                          </label>
+                          <select
+                            className="input-field"
+                            style={{ fontSize: '12px', padding: '4px 6px' }}
+                            value={columnMapping.dueAmount}
+                            onChange={(e) => handleMappingChange('dueAmount', e.target.value)}
+                          >
+                            <option value="">-- Not Mapped (0) --</option>
+                            {availableColumns.map((c) => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                        </div>
                         <div>
                           <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '2px' }}>
                             Address
@@ -778,15 +970,15 @@ export default function BulkImportModal({
                         </div>
                         <div>
                           <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '2px' }}>
-                            Outstanding (TOS / POS)
+                            Location / Area
                           </label>
                           <select
                             className="input-field"
                             style={{ fontSize: '12px', padding: '4px 6px' }}
-                            value={columnMapping.outstandingAmount}
-                            onChange={(e) => handleMappingChange('outstandingAmount', e.target.value)}
+                            value={columnMapping.area}
+                            onChange={(e) => handleMappingChange('area', e.target.value)}
                           >
-                            <option value="">-- Not Mapped (0) --</option>
+                            <option value="">-- Not Mapped --</option>
                             {availableColumns.map((c) => (
                               <option key={c} value={c}>{c}</option>
                             ))}
@@ -814,7 +1006,7 @@ export default function BulkImportModal({
 
                   {/* Preview Table (First 5 rows) */}
                   <div style={{ border: '1px solid var(--border)', borderRadius: '8px', marginBottom: '20px' }}>
-                    <div className="table-responsive" style={{ maxHeight: '200px' }}>
+                    <div className="table-responsive" style={{ maxHeight: '230px' }}>
                       <table className="data-table" style={{ fontSize: '12px' }}>
                         <thead>
                           <tr>
@@ -822,8 +1014,10 @@ export default function BulkImportModal({
                             <th>Account No</th>
                             <th>Customer Name</th>
                             <th>Phone</th>
-                            <th>Address / Area</th>
-                            <th>Outstanding</th>
+                            <th>Address / Location</th>
+                            <th>POS</th>
+                            <th>TOS</th>
+                            <th>DPD</th>
                             <th>Assigned Staff</th>
                             <th>Validation</th>
                           </tr>
@@ -835,16 +1029,45 @@ export default function BulkImportModal({
                               <td style={{ fontWeight: '700', fontFamily: 'var(--font-mono)' }}>{r.loanAccountNo}</td>
                               <td style={{ fontWeight: '600' }}>{r.name}</td>
                               <td>{r.phone}</td>
-                              <td style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <td style={{ maxWidth: '130px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {r.address}
                               </td>
-                              <td>₹{r.outstandingAmount.toLocaleString('en-IN')}</td>
+                              <td style={{ fontWeight: '700', color: 'var(--text-main)' }}>
+                                ₹{(r.pos || 0).toLocaleString('en-IN')}
+                              </td>
+                              <td style={{ fontWeight: '700', color: '#047857' }}>
+                                ₹{(r.tos || r.outstandingAmount || 0).toLocaleString('en-IN')}
+                              </td>
                               <td>
-                                {r.assignedStaffId ? (
-                                  staffList.find((s) => s._id === r.assignedStaffId)?.name || 'Mapped'
-                                ) : (
-                                  <span style={{ color: 'var(--text-muted)' }}>Default</span>
-                                )}
+                                <span style={{
+                                  display: 'inline-block',
+                                  padding: '2px 7px',
+                                  borderRadius: '4px',
+                                  fontSize: '11px',
+                                  fontWeight: '800',
+                                  background: (r.dpd || 0) > 90 ? '#FEE2E2' : (r.dpd || 0) > 30 ? '#FEF3C7' : '#E0F2FE',
+                                  color: (r.dpd || 0) > 90 ? '#991B1B' : (r.dpd || 0) > 30 ? '#92400E' : '#0369A1',
+                                }}>
+                                  {r.dpd || 0} DPD
+                                </span>
+                              </td>
+                              <td>
+                                {(() => {
+                                  const effectiveStaffId = r.assignedStaffId || defaultStaffId;
+                                  const found = displayStaffList.find((s) => s._id === effectiveStaffId) || staffListToUse.find((s) => s._id === effectiveStaffId);
+                                  if (found) {
+                                    return (
+                                      <span style={{ fontWeight: '600', color: 'var(--primary)' }}>
+                                        {found.name}
+                                      </span>
+                                    );
+                                  }
+                                  return (
+                                    <span style={{ color: 'var(--text-muted)' }}>
+                                      {effectiveStaffId ? 'Assigned' : 'Unassigned'}
+                                    </span>
+                                  );
+                                })()}
                               </td>
                               <td>
                                 {r.isValid ? (

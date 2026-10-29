@@ -88,7 +88,7 @@ export default function ExploreActivityScreen() {
         <View style={styles.heroCard}>
           <Text style={styles.heroSub}>FIELD EFFICIENCY REPORT</Text>
           <Text style={styles.heroTitle}>{user?.name || "Field Staff"}</Text>
-          <Text style={styles.heroArea}>Territory: {user?.assignedArea || "Kozhikode Central"}</Text>
+          <Text style={styles.heroArea}>Location: {user?.assignedArea || "Kozhikode Central"}</Text>
 
           <View style={styles.heroStatsRow}>
             <View style={styles.heroStatItem}>
@@ -169,10 +169,10 @@ export default function ExploreActivityScreen() {
                   </View>
                 </View>
                 <Text style={styles.actMeta}>
-                  A/C: {cust.loanAccountNo} • Outstanding: ₹{cust.outstandingAmount?.toLocaleString("en-IN")}
+                  POS: ₹{(cust.pos !== undefined && cust.pos !== null ? cust.pos : (cust.outstandingAmount || 0)).toLocaleString("en-IN")} • TOS: ₹{(cust.tos !== undefined && cust.tos !== null ? cust.tos : (cust.outstandingAmount || 0)).toLocaleString("en-IN")} • DPD: {cust.dpd ?? 0}d
                 </Text>
                 <Text style={styles.actAddress} numberOfLines={1}>
-                  📍 {cust.address}
+                  📍 {cust.address || "Address not provided"}
                 </Text>
               </Pressable>
             ))

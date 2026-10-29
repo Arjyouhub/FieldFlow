@@ -70,9 +70,9 @@ export default function AddLocationScreen() {
   const captureGps = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      let currentLat = 11.2592;
-      let currentLng = 75.7728;
-      let reportedAcc = 8;
+      let currentLat: number | null = null;
+      let currentLng: number | null = null;
+      let reportedAcc = 0;
 
       if (status === "granted") {
         try {
@@ -89,8 +89,13 @@ export default function AddLocationScreen() {
         } catch {}
       }
 
-      setCoords({ lat: currentLat, lng: currentLng });
-      setAccuracy(reportedAcc);
+      if (currentLat !== null && currentLng !== null) {
+        setCoords({ lat: currentLat, lng: currentLng });
+        setAccuracy(reportedAcc);
+      } else {
+        setCoords(null);
+        Alert.alert("GPS Required", "Could not get live GPS fix. Please ensure location services are enabled on your device.");
+      }
     } catch (err: any) {
       Alert.alert("GPS Error", err.message);
     }

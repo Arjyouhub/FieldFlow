@@ -632,7 +632,7 @@ export default function AccountActivationScreen() {
                   </Text>
                 </View>
                 <View style={styles.successDetailRow}>
-                  <Text style={styles.successDetailLabel}>Territory</Text>
+                  <Text style={styles.successDetailLabel}>Location</Text>
                   <Text style={styles.successDetailVal}>
                     {successData?.user?.assignedArea || "Field Operations"}
                   </Text>

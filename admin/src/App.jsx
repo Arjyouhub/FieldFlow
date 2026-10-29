@@ -322,6 +322,58 @@ export default function App() {
     visitDate: new Date().toISOString().slice(0, 16),
   });
 
+  // Staff Target Inline Editing State in Performance Report
+  const [editingTargetStaffId, setEditingTargetStaffId] = useState(null);
+  const [editingTargetValue, setEditingTargetValue] = useState('');
+  const [savingTarget, setSavingTarget] = useState(false);
+
+  const handleSaveStaffTarget = async (staffId) => {
+    if (!staffId) return;
+    const num = Math.max(0, parseInt(String(editingTargetValue).replace(/[^0-9]/g, '') || '0', 10));
+    setSavingTarget(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/staff/${staffId}/target`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ target: num }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        toast.error(data.message || 'Failed to update staff target.');
+        return;
+      }
+      toast.success(data.message || 'Staff target updated successfully.');
+      setEditingTargetStaffId(null);
+      setReportPerformanceMatrix((prev) =>
+        prev.map((r) => {
+          if (String(r.staffId) === String(staffId)) {
+            const sumOfCol = r.sumOfCollection || 0;
+            const newTarget = num > 0 ? num : Math.round((r.sumOfPos || 0) * 0.10);
+            return {
+              ...r,
+              target: newTarget,
+              customTarget: num,
+              drr: Math.round(newTarget / 25),
+              yetToGo: Math.max(0, newTarget - sumOfCol),
+              achPercent: newTarget > 0 ? Math.round((sumOfCol / newTarget) * 100) : 0,
+            };
+          }
+          return r;
+        })
+      );
+      setStaffList((prev) =>
+        prev.map((s) => (String(s._id || s.id) === String(staffId) ? { ...s, monthlyTarget: num } : s))
+      );
+    } catch (err) {
+      toast.error('Network error updating target: ' + err.message);
+    } finally {
+      setSavingTarget(false);
+    }
+  };
+
   // Auth Form
   const [loginPhone, setLoginPhone] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -437,9 +489,13 @@ export default function App() {
     setLoading(true);
     setErrorMsg('');
     try {
-      // Keep portfolios refreshed
+      // Keep portfolios and staff list refreshed for modals
       apiFetch('/api/portfolios')
         .then((d) => setPortfolios(d.portfolios || []))
+        .catch(() => {});
+
+      apiFetch('/api/admin/staff')
+        .then((d) => setStaffList(d.staff || []))
         .catch(() => {});
 
       if (activeTab === 'dashboard') {
@@ -2093,7 +2149,6 @@ export default function App() {
             { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
             { id: 'portfolios', label: 'Portfolios', icon: Layers, badge: portfolios?.length, badgeColor: 'info' },
             { id: 'cases', label: 'Cases & Recovery', icon: Briefcase, badge: stats?.pendingCases },
-            { id: 'customers', label: 'Customer Details', icon: Users },
             { id: 'locations', label: 'Customer Locations', icon: MapPin },
             { id: 'suspicious', label: 'Suspicious Visits', icon: AlertTriangle, badge: stats?.suspiciousCount, badgeColor: 'danger' },
             { id: 'collections', label: 'Payment Verification', icon: CreditCard, badge: stats?.pendingPaymentVerifications, badgeColor: 'warning' },
@@ -2163,7 +2218,6 @@ export default function App() {
                activeTab === 'portfolios' ? 'Portfolios' :
                activeTab === 'cases' ? 'Cases & Recovery' :
                (activeTab === 'staff' || activeTab === 'approvals') ? 'Staff Details & Approvals' :
-               activeTab === 'customers' ? 'Customer Details' :
                activeTab === 'locations' ? 'Customer Locations' :
                activeTab === 'suspicious' ? 'Suspicious Visits' :
                activeTab === 'collections' ? 'Collections' :
@@ -2584,377 +2638,6 @@ export default function App() {
                   </table>
                 </div>
               </div>
-            </div>
-          )}
-
-          {/* ================================================================ */}
-          {/* TAB 2: CUSTOMERS & CASES */}
-          {/* ================================================================ */}
-          {activeTab === 'customers' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {/* Customer Active vs Trash sub-tabs */}
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  className={`btn btn-sm ${!customerTrashView ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => {
-                    setCustomerTrashView(false);
-                    fetchCustomers(false);
-                  }}
-                  style={{ gap: '6px' }}
-                >
-                  <Users size={14} /> Active Customers
-                </button>
-                <button
-                  type="button"
-                  className={`btn btn-sm ${customerTrashView ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => {
-                    setCustomerTrashView(true);
-                    fetchCustomers(true);
-                  }}
-                  style={{
-                    gap: '6px',
-                    background: customerTrashView ? 'var(--danger-text)' : undefined,
-                    borderColor: customerTrashView ? 'var(--danger-text)' : undefined,
-                    color: customerTrashView ? '#fff' : undefined,
-                  }}
-                >
-                  <Trash2 size={14} /> Deleted / Trash Customers
-                </button>
-                {customerTrashView && (
-                  <span style={{ fontSize: '12.5px', color: 'var(--text-muted)', marginLeft: '6px' }}>
-                    ⚠️ Deleted customers and their cases are removed from staff phones and active analytics. You can restore them anytime.
-                  </span>
-                )}
-              </div>
-
-              <div className="card cases-filter-card">
-                <div className="cases-filter-top-row">
-                  <div className="cases-search-box">
-                    <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                    <input
-                      type="text"
-                      className="search-input-sm"
-                      placeholder="Search customer, account, phone..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      style={{ width: '100%', paddingLeft: '32px' }}
-                    />
-                  </div>
-
-                  <div className="cases-dropdown-group">
-                    <select
-                      className="filter-select-sm"
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
-                    >
-                      <option value="ALL">All Statuses</option>
-                      <option value="pending">Pending</option>
-                      <option value="visited">Visited</option>
-                      <option value="collected">Collected</option>
-                      <option value="ptp">PTP</option>
-                      <option value="broken_ptp">Broken PTP</option>
-                    </select>
-
-                    <select
-                      className="filter-select-sm"
-                      value={customerStaffFilter}
-                      onChange={(e) => setCustomerStaffFilter(e.target.value)}
-                      title="Filter customers by assigned field staff"
-                    >
-                      <option value="ALL">All Staff ({staffList.length})</option>
-                      <option value="UNASSIGNED">Unassigned</option>
-                      {staffList.map((stf) => (
-                        <option key={stf._id} value={stf._id}>
-                          {stf.name} {stf.employeeId ? `(${stf.employeeId})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="cases-actions-group">
-                    <button
-                      className="btn btn-primary btn-sm"
-                      onClick={() => {
-                        setImportModalTab('file');
-                        setShowImportModal(true);
-                      }}
-                      style={{ gap: '5px' }}
-                    >
-                      <UploadCloud size={14} /> Import File
-                    </button>
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => {
-                        setImportModalTab('single');
-                        setShowImportModal(true);
-                      }}
-                      style={{ gap: '5px' }}
-                    >
-                      <Plus size={14} /> Add Single Case
-                    </button>
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={handleDownloadSampleTemplate}
-                      title="Download Excel sample template (.xlsx)"
-                      style={{ gap: '5px' }}
-                    >
-                      <Download size={14} /> Template
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {(customerViewMode === 'cards' || customerViewMode === 'auto') && (
-                /* Mobile Stacked Card View */
-                <div className={customerViewMode === 'auto' ? 'responsive-auto-cards' : ''} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {filteredCustomers.length === 0 ? (
-                    <div className="card" style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
-                      No customer cases match the current filter.
-                    </div>
-                  ) : (
-                    filteredCustomers.map((c) => (
-                      <div key={c._id} className="case-mobile-card">
-                        <div className="case-card-top">
-                          <div>
-                            <div className="case-card-name">{c.name}</div>
-                            <div className="case-card-loan">A/C: {c.loanAccountNo}</div>
-                          </div>
-                          <span className={`badge ${c.status === 'collected' ? 'badge-success' : c.status === 'visited' ? 'badge-info' : c.status === 'ptp' ? 'badge-warning' : 'badge-neutral'}`}>
-                            {c.status?.toUpperCase()}
-                          </span>
-                        </div>
-
-                        <div className="case-card-row" style={{ marginTop: '6px' }}>
-                          <span className="case-card-label">Phone:</span>
-                          <a
-                            href={`tel:${c.phone}`}
-                            style={{
-                              color: 'var(--primary)',
-                              fontWeight: 600,
-                              textDecoration: 'none',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                            }}
-                          >
-                            <Phone size={12} /> {c.phone}
-                          </a>
-                        </div>
-
-                        <div className="case-card-row" style={{ alignItems: 'flex-start', marginTop: '4px' }}>
-                          <span className="case-card-label">Address:</span>
-                          <span className="case-card-val" style={{ whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.4 }}>
-                            {c.address || 'No address provided'} {c.area ? `(${c.area})` : ''}
-                          </span>
-                        </div>
-
-                        <div className="case-card-financials">
-                          <div style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: '6px', padding: '5px 10px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <span style={{ color: '#065F46', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 700 }}>Total Balance:</span>
-                            <strong style={{ color: '#047857' }}>₹{c.outstandingAmount?.toLocaleString('en-IN')}</strong>
-                          </div>
-                          {c.emiAmount > 0 && (
-                            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '5px 10px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                              <span style={{ color: '#64748B', fontSize: '10.5px', textTransform: 'uppercase', fontWeight: 700 }}>Due EMI:</span>
-                              <strong style={{ color: '#334155' }}>₹{c.emiAmount?.toLocaleString('en-IN')}</strong>
-                            </div>
-                          )}
-                        </div>
-
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', fontSize: '12px', borderTop: '1px dashed var(--border)', paddingTop: '8px' }}>
-                          <div style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <span className="case-card-label">{customerTrashView ? 'Reason:' : 'Staff:'}</span>
-                            <strong style={{ color: customerTrashView ? 'var(--danger-text)' : c.assignedStaff ? 'var(--text-main)' : 'var(--warning-text, #d97706)' }}>
-                              {customerTrashView ? (c.deleteReason || 'Moved to Trash') : (c.assignedStaff?.name || 'Unassigned')}
-                            </strong>
-                          </div>
-                          <div>
-                            {c.documents && c.documents.length > 0 && (
-                              <span className="badge badge-success" style={{ fontSize: '10.5px', gap: '3px' }}>
-                                <Image size={11} /> {c.documents.length} File{c.documents.length > 1 ? 's' : ''}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="case-card-actions">
-                          {customerTrashView ? (
-                            <button
-                              type="button"
-                              className="btn btn-sm"
-                              style={{ flex: 1, justifyContent: 'center', background: '#16a34a', color: '#fff', gap: '5px', padding: '7px 12px' }}
-                              onClick={() => handleRestoreCustomer(c)}
-                            >
-                              <RotateCcw size={13} /> Restore Customer & Cases
-                            </button>
-                          ) : (
-                            <>
-                              <button
-                                type="button"
-                                className="btn btn-secondary btn-sm"
-                                style={{ flex: 1, justifyContent: 'center', gap: '5px' }}
-                                onClick={() => {
-                                  handleClearSelectedDoc();
-                                  setSelectedCustomerForDoc(c);
-                                }}
-                              >
-                                <Image size={13} /> Files & Photos {c.documents?.length > 0 ? `(${c.documents.length})` : ''}
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn-primary btn-sm"
-                                style={{ flex: 1, justifyContent: 'center' }}
-                                onClick={() => setReassignModal(c)}
-                              >
-                                Reassign Staff
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn-secondary btn-sm"
-                                style={{ justifyContent: 'center', color: 'var(--danger-text)' }}
-                                title="Move Customer to Trash"
-                                onClick={() => {
-                                  setDeleteConfirmCustomer(c);
-                                  setCustomerDeleteReason('Account closed or customer requested deletion');
-                                }}
-                              >
-                                <Trash2 size={13} /> Delete
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-
-              {(customerViewMode === 'table' || customerViewMode === 'auto') && (
-                /* Desktop / Tablet Table */
-                <div className={`table-wrapper table-responsive ${customerViewMode === 'auto' ? 'responsive-auto-table' : ''}`} style={{ marginTop: '16px' }}>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Customer & Loan A/C</th>
-                        <th>Phone & Contact</th>
-                        <th>Address & Area</th>
-                        <th>Outstanding Balance</th>
-                        <th>Due EMI</th>
-                        <th>Status</th>
-                        <th>{customerTrashView ? 'Deletion Info' : 'Assigned Staff'}</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredCustomers.length === 0 ? (
-                        <tr>
-                          <td colSpan={8} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
-                            {customerTrashView ? 'Trash is empty. No deleted customers found.' : 'No customer cases match the current filter.'}
-                          </td>
-                        </tr>
-                      ) : (
-                        filteredCustomers.map((c) => (
-                          <tr key={c._id}>
-                            <td>
-                              <strong>{c.name}</strong>
-                              <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{c.loanAccountNo}</div>
-                            </td>
-                            <td>
-                              <div>{c.phone}</div>
-                            </td>
-                            <td style={{ maxWidth: '240px' }}>
-                              <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.address}</div>
-                              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{c.area || c.city}</div>
-                            </td>
-                            <td>
-                              <strong>₹{c.outstandingAmount?.toLocaleString('en-IN')}</strong>
-                            </td>
-                            <td>
-                              {c.emiAmount ? `₹${c.emiAmount?.toLocaleString('en-IN')}` : '—'}
-                            </td>
-                            <td>
-                              <span className={`badge ${c.status === 'collected' ? 'badge-success' : c.status === 'visited' ? 'badge-info' : c.status === 'ptp' ? 'badge-warning' : 'badge-neutral'}`}>
-                                {c.status?.toUpperCase()}
-                              </span>
-                            </td>
-                            <td>
-                              {customerTrashView ? (
-                                <div>
-                                  <div style={{ fontSize: '12px', color: 'var(--danger-text)', fontWeight: '600' }}>
-                                    {c.deleteReason || 'Moved to Trash'}
-                                  </div>
-                                  {c.deletedAt && (
-                                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                                      {new Date(c.deletedAt).toLocaleDateString('en-IN')}
-                                    </div>
-                                  )}
-                                </div>
-                              ) : (
-                                <div style={{ fontSize: '13px' }}>{c.assignedStaff?.name || 'Unassigned'}</div>
-                              )}
-                            </td>
-                            <td>
-                              <div style={{ display: 'flex', gap: '6px' }}>
-                                {customerTrashView ? (
-                                  <button
-                                    type="button"
-                                    className="btn btn-sm"
-                                    style={{ background: '#16a34a', color: '#fff', gap: '4px', fontSize: '11.5px', padding: '3px 9px' }}
-                                    onClick={() => handleRestoreCustomer(c)}
-                                    title="Restore Customer & Associated Cases"
-                                  >
-                                    <RotateCcw size={12} /> Restore
-                                  </button>
-                                ) : (
-                                  <>
-                                    <button
-                                      type="button"
-                                      className="btn btn-secondary btn-sm"
-                                      onClick={() => {
-                                        handleClearSelectedDoc();
-                                        setSelectedCustomerForDoc(c);
-                                      }}
-                                      title="Upload & View Customer Files and Photos"
-                                      style={{ gap: '4px' }}
-                                    >
-                                      <Image size={13} /> Files & Photos
-                                      {c.documents && c.documents.length > 0 && (
-                                        <span style={{ background: '#DCFCE7', color: '#166534', fontSize: '10px', padding: '1px 5px', borderRadius: '10px', fontWeight: 700 }}>
-                                          {c.documents.length}
-                                        </span>
-                                      )}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="btn btn-secondary btn-sm"
-                                      onClick={() => setReassignModal(c)}
-                                    >
-                                      Reassign
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="btn btn-secondary btn-sm"
-                                      title="Move Customer to Trash"
-                                      style={{ color: 'var(--danger-text)' }}
-                                      onClick={() => {
-                                        setDeleteConfirmCustomer(c);
-                                        setCustomerDeleteReason('Account closed or customer requested deletion');
-                                      }}
-                                    >
-                                      <Trash2 size={13} />
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
             </div>
           )}
 
@@ -4420,7 +4103,7 @@ export default function App() {
                               <th style={{ width: '130px' }}>Sum of POS</th>
                               <th style={{ width: '100px' }}>Count of POS</th>
                               <th style={{ width: '140px' }}>Sum of COLLECTION</th>
-                              <th style={{ width: '120px' }}>TARGET</th>
+                              <th style={{ width: '150px' }}>TARGET (EDITABLE)</th>
                               <th style={{ width: '100px' }}>DRR</th>
                               <th style={{ width: '120px' }}>YET TO GO</th>
                               <th style={{ width: '90px' }}>ACH%</th>
@@ -4461,7 +4144,89 @@ export default function App() {
                                       {row.sumOfCollection > 0 ? row.sumOfCollection?.toLocaleString('en-IN') : (row.sumOfPos > 0 ? '0' : '—')}
                                     </td>
                                     <td style={{ fontWeight: 800, fontFamily: 'var(--font-mono)' }}>
-                                      {row.target?.toLocaleString('en-IN') || 0}
+                                      {editingTargetStaffId === row.staffId ? (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                          <input
+                                            type="number"
+                                            value={editingTargetValue}
+                                            onChange={(e) => setEditingTargetValue(e.target.value)}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Enter') handleSaveStaffTarget(row.staffId);
+                                              if (e.key === 'Escape') setEditingTargetStaffId(null);
+                                            }}
+                                            autoFocus
+                                            style={{
+                                              width: '85px',
+                                              padding: '3px 6px',
+                                              fontSize: '12px',
+                                              fontFamily: 'var(--font-mono)',
+                                              fontWeight: 700,
+                                              border: '2px solid #0284c7',
+                                              borderRadius: '4px',
+                                              outline: 'none',
+                                            }}
+                                            placeholder="Target"
+                                          />
+                                          <button
+                                            type="button"
+                                            disabled={savingTarget}
+                                            onClick={() => handleSaveStaffTarget(row.staffId)}
+                                            style={{
+                                              background: '#059669',
+                                              color: '#fff',
+                                              border: 'none',
+                                              padding: '4px 6px',
+                                              borderRadius: '4px',
+                                              cursor: 'pointer',
+                                              fontSize: '11px',
+                                              fontWeight: 700,
+                                            }}
+                                            title="Save Target"
+                                          >
+                                            ✓
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setEditingTargetStaffId(null)}
+                                            style={{
+                                              background: '#e2e8f0',
+                                              color: '#475569',
+                                              border: 'none',
+                                              padding: '4px 6px',
+                                              borderRadius: '4px',
+                                              cursor: 'pointer',
+                                              fontSize: '11px',
+                                            }}
+                                            title="Cancel"
+                                          >
+                                            ✕
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
+                                          <span>{row.target?.toLocaleString('en-IN') || 0}</span>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setEditingTargetStaffId(row.staffId);
+                                              setEditingTargetValue(String(row.target || ''));
+                                            }}
+                                            style={{
+                                              background: '#eff6ff',
+                                              border: '1px solid #bfdbfe',
+                                              color: '#0284c7',
+                                              padding: '2px 5px',
+                                              borderRadius: '4px',
+                                              cursor: 'pointer',
+                                              fontSize: '10px',
+                                              fontWeight: 700,
+                                            }}
+                                            title="Set or update monthly target"
+                                          >
+                                            ✎ Set
+                                          </button>
+                                        </div>
+                                      )}
                                     </td>
                                     <td style={{ fontFamily: 'var(--font-mono)' }}>
                                       {row.drr?.toLocaleString('en-IN') || 0}

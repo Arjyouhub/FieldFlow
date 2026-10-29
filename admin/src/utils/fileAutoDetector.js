@@ -63,6 +63,30 @@ const HEADER_DICTIONARY = {
     ],
     excludes: ['areacode', 'phone']
   },
+  pos: {
+    candidates: [
+      'pos', 'bompos', 'principaloutstanding', 'principalos', 'principalosamount',
+      'principalbalance', 'principaldue', 'principal', 'posamount', 'posamt', 'curpos',
+      'pos_amount', 'pos_amt', 'balance_pos', 'closingpos'
+    ],
+    excludes: ['purpose', 'deposit', 'post', 'postal', 'possession']
+  },
+  tos: {
+    candidates: [
+      'tos', 'totaloutstanding', 'totaloutstandingamount', 'totalos', 'tosamount',
+      'tos_amount', 'total_outstanding', 'outstandingamount', 'outstandingbalance',
+      'totaldue', 'totalbalance', 'balanceamount', 'currentbalance', 'odamount',
+      'grossdue', 'netdue', 'outstanding', 'arrears', 'balance'
+    ],
+    excludes: ['dueamount', 'emi', 'installment', 'currentdue', 'interest']
+  },
+  dpd: {
+    candidates: [
+      'dpd', 'dayspastdue', 'overduedays', 'overdue_days', 'dpdcount', 'bucket',
+      'agedays', 'dpdbucket', 'delaydays', 'od_days', 'oddays', 'arreardays', 'dpd_days'
+    ],
+    excludes: []
+  },
   outstandingAmount: {
     candidates: [
       'tos', 'totaloutstanding', 'outstandingamount', 'outstandingbalance', 'principaloutstanding',
@@ -217,6 +241,9 @@ export function autoDetectColumns(availableColumns = [], sampleRows = []) {
     altPhone: '',
     address: '',
     area: '',
+    pos: '',
+    tos: '',
+    dpd: '',
     outstandingAmount: '',
     dueAmount: '',
     referenceNumber: '',
@@ -269,12 +296,15 @@ export function autoDetectColumns(availableColumns = [], sampleRows = []) {
     return null;
   };
 
-  // Primary dictionary matching order (Phone, Name, Account, Amount first)
+  // Primary dictionary matching order (Phone, Name, Account, POS, TOS, DPD first)
   const fieldsInOrder = [
     'phone',
     'altPhone',
     'name',
     'loanAccountNo',
+    'pos',
+    'tos',
+    'dpd',
     'outstandingAmount',
     'dueAmount',
     'address',

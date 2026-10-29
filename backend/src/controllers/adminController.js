@@ -1368,7 +1368,9 @@ export async function getCollectionsReport(req, res) {
       const sumOfCollection = colMap[stf._id.toString()] || 0;
       const sumOfPos = pos.sumOfPos;
       const countOfPos = pos.countOfPos;
-      const target = Math.round(sumOfPos * 0.10); // 10% standard recovery target
+      const target = (stf.monthlyTarget !== undefined && stf.monthlyTarget > 0)
+        ? stf.monthlyTarget
+        : Math.round(sumOfPos * 0.10); // Standard 10% recovery target if not customized
       const drr = Math.round(target / 25); // Daily Required Run-rate (25 working days)
       const yetToGo = Math.max(0, target - sumOfCollection);
       const achPercent = target > 0 ? Math.round((sumOfCollection / target) * 100) : 0;
@@ -1376,10 +1378,12 @@ export async function getCollectionsReport(req, res) {
       return {
         staffId: stf._id,
         fsName: stf.name,
+        employeeId: stf.employeeId || '',
         sumOfPos,
         countOfPos,
         sumOfCollection,
         target,
+        customTarget: stf.monthlyTarget || 0,
         drr,
         yetToGo,
         achPercent,
@@ -1466,8 +1470,8 @@ export async function recordStaffVisit(req, res) {
     // Try to get customer's saved location coordinates, or fallback gracefully
     const savedLoc = await CustomerLocation.findOne({ customerId: customer._id });
     const coordinates = {
-      lat: savedLoc?.coordinates?.lat || 11.2588,
-      lng: savedLoc?.coordinates?.lng || 75.7804,
+      lat: savedLoc?.coordinates?.lat || null,
+      lng: savedLoc?.coordinates?.lng || null,
     };
 
     const parsedDate = visitDate ? new Date(visitDate) : new Date();
@@ -1782,4 +1786,43 @@ export async function deleteAdmin(req, res) {
     return res.status(500).json({ success: false, message: error.message });
   }
 }
+
+/**
+ * Update monthly target for a specific field staff member
+ */
+export async function updateStaffTarget(req, res) {
+  try {
+    const { id } = req.params;
+    const { target } = req.body;
+    const numericTarget = Math.max(0, Number(target || 0));
+
+    const staff = await User.findById(id);
+    if (!staff) {
+      return res.status(404).json({ success: false, message: 'Field Staff member not found.' });
+    }
+
+    staff.monthlyTarget = numericTarget;
+    await staff.save();
+
+    await AuditLog.create({
+      actorId: req.user._id,
+      actorName: req.user.name,
+      actorRole: req.user.role,
+      action: 'UPDATE_STAFF_TARGET',
+      entityType: 'User',
+      entityId: id,
+      details: { staffName: staff.name, newTarget: numericTarget },
+    }).catch(() => {});
+
+    return res.json({
+      success: true,
+      message: `Updated target for ${staff.name} to ₹${numericTarget.toLocaleString('en-IN')}`,
+      staffId: staff._id,
+      monthlyTarget: numericTarget,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
 

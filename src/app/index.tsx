@@ -137,8 +137,8 @@ export default function LoginScreen() {
   const [resendTimer, setResendTimer] = useState(28);
 
   const otpInputRefs = useRef<Array<any>>([]);
-  const regScrollRef = useRef<ScrollView>(null);
-  const loginScrollRef = useRef<ScrollView>(null);
+  const regScrollRef = useRef<any>(null);
+  const loginScrollRef = useRef<any>(null);
 
   // Field Staff Registration State
   const [regName, setRegName] = useState("");

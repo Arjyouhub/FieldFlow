@@ -34,6 +34,14 @@ const portfolioSchema = new mongoose.Schema(
       type: Number,
       default: 100,
     },
+    monthlyTarget: {
+      type: Number,
+      default: 0,
+    },
+    customPos: {
+      type: Number,
+      default: 0,
+    },
     auditHistory: [
       {
         action: { type: String, required: true },

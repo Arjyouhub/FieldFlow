@@ -43,6 +43,8 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
     name: '',
     code: '',
     defaultRadiusMetres: 100,
+    monthlyTarget: 0,
+    customPos: 0,
   });
 
   const loadPortfolios = async () => {
@@ -72,11 +74,15 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
     try {
       const res = await apiFetch('/api/portfolios', {
         method: 'POST',
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          monthlyTarget: Number(formData.monthlyTarget || 0),
+          customPos: Number(formData.customPos || 0),
+        }),
       });
       setSuccessMsg(res.message || 'Portfolio created successfully!');
       setShowCreateModal(false);
-      setFormData({ name: '', code: '', defaultRadiusMetres: 100 });
+      setFormData({ name: '', code: '', defaultRadiusMetres: 100, monthlyTarget: 0, customPos: 0 });
       loadPortfolios();
     } catch (err) {
       setErrorMsg(err.message);
@@ -94,6 +100,8 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
           name: editingPortfolio.name,
           defaultRadiusMetres: editingPortfolio.defaultRadiusMetres,
           isActive: editingPortfolio.isActive,
+          monthlyTarget: Number(editingPortfolio.monthlyTarget || 0),
+          customPos: Number(editingPortfolio.customPos || 0),
         }),
       });
       setSuccessMsg(res.message || 'Portfolio updated successfully!');
@@ -512,6 +520,38 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
                 />
               </div>
 
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '600', marginBottom: '6px' }}>
+                  Sum of POS (Principal Outstanding Sum) ₹
+                </label>
+                <input
+                  type="number"
+                  className="input-field"
+                  placeholder="e.g. 5000000"
+                  value={formData.customPos || ''}
+                  onChange={(e) => setFormData({ ...formData, customPos: Number(e.target.value) })}
+                />
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  Total POS amount for this portfolio.
+                </span>
+              </div>
+
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '600', marginBottom: '6px' }}>
+                  Monthly Recovery Target ₹
+                </label>
+                <input
+                  type="number"
+                  className="input-field"
+                  placeholder="e.g. 500000"
+                  value={formData.monthlyTarget || ''}
+                  onChange={(e) => setFormData({ ...formData, monthlyTarget: Number(e.target.value) })}
+                />
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  Monthly target amount. Standard is 10% of POS if left blank.
+                </span>
+              </div>
+
               <div style={{ marginBottom: '18px' }}>
                 <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '600', marginBottom: '6px' }}>
                   Default Verification Radius (Metres)
@@ -561,6 +601,32 @@ export default function PortfoliosView({ apiFetch, onSelectPortfolioForUpload })
                   value={editingPortfolio.name}
                   onChange={(e) => setEditingPortfolio({ ...editingPortfolio, name: e.target.value })}
                   required
+                />
+              </div>
+
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '600', marginBottom: '6px' }}>
+                  Sum of POS (Principal Outstanding Sum) ₹
+                </label>
+                <input
+                  type="number"
+                  className="input-field"
+                  placeholder="e.g. 5000000"
+                  value={editingPortfolio.customPos ?? ''}
+                  onChange={(e) => setEditingPortfolio({ ...editingPortfolio, customPos: Number(e.target.value) })}
+                />
+              </div>
+
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '600', marginBottom: '6px' }}>
+                  Monthly Recovery Target ₹
+                </label>
+                <input
+                  type="number"
+                  className="input-field"
+                  placeholder="e.g. 500000"
+                  value={editingPortfolio.monthlyTarget ?? ''}
+                  onChange={(e) => setEditingPortfolio({ ...editingPortfolio, monthlyTarget: Number(e.target.value) })}
                 />
               </div>
 

@@ -4,6 +4,7 @@ import {
   getPortfolioById,
   createPortfolio,
   updatePortfolio,
+  updatePortfolioTargetPos,
   deletePortfolio,
   listBatches,
   createBatch,
@@ -22,6 +23,7 @@ router.get('/:id', getPortfolioById);
 // Admin-only mutations
 router.post('/', authorize('admin', 'super_admin'), createPortfolio);
 router.put('/:id', authorize('admin', 'super_admin'), updatePortfolio);
+router.put('/:id/target-pos', authorize('admin', 'super_admin'), updatePortfolioTargetPos);
 router.delete('/:id', authorize('admin', 'super_admin'), deletePortfolio);
 router.post('/batches', authorize('admin', 'super_admin'), createBatch);
 

@@ -57,6 +57,7 @@ import {
   Image,
   Camera,
   RotateCcw,
+  PieChart,
 } from 'lucide-react';
 
 import PortfoliosView from './components/PortfoliosView';
@@ -256,10 +257,12 @@ export default function App() {
   const [reportCollectionsSummary, setReportCollectionsSummary] = useState(null);
   const [reportPerformanceMatrix, setReportPerformanceMatrix] = useState([]);
   const [reportPerformanceGrandTotal, setReportPerformanceGrandTotal] = useState(null);
+  const [reportPortfolioMatrix, setReportPortfolioMatrix] = useState([]);
+  const [reportPortfolioGrandTotal, setReportPortfolioGrandTotal] = useState(null);
   const [reportTimeSlotMatrix, setReportTimeSlotMatrix] = useState([]);
   const [reportColumnTotals, setReportColumnTotals] = useState({});
   const [reportGrandTotalVisits, setReportGrandTotalVisits] = useState(0);
-  const [collectionSubView, setCollectionSubView] = useState('model'); // 'model' | 'ledger'
+  const [collectionSubView, setCollectionSubView] = useState('portfolioModel'); // 'portfolioModel' | 'model' | 'ledger'
   const [visitSubView, setVisitSubView] = useState('model'); // 'model' | 'logs'
   const [loadingReport, setLoadingReport] = useState(false);
 
@@ -373,6 +376,154 @@ export default function App() {
       setSavingTarget(false);
     }
   };
+
+  // Portfolio Target & Sum of POS Inline and Modal Editing State in Performance Report
+  const [editingPortfolioField, setEditingPortfolioField] = useState(null); // { portfolioId: string, field: 'target' | 'pos' }
+  const [editingPortfolioValue, setEditingPortfolioValue] = useState('');
+  const [savingPortfolioTargetPos, setSavingPortfolioTargetPos] = useState(false);
+  const [portfolioTargetPosModal, setPortfolioTargetPosModal] = useState(null); // { isOpen: boolean, portfolio: any, target: string, pos: string }
+
+  const handleSavePortfolioTargetPos = async (portfolioId, field, directValue) => {
+    if (!portfolioId) return;
+    const rawVal = directValue !== undefined ? directValue : editingPortfolioValue;
+    const num = Math.max(0, parseInt(String(rawVal).replace(/[^0-9]/g, '') || '0', 10));
+    setSavingPortfolioTargetPos(true);
+    try {
+      const payload = field === 'target' ? { target: num } : { sumOfPos: num };
+      const res = await fetch(`${API_BASE_URL}/portfolios/${portfolioId}/target-pos`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        toast.error(data.message || `Failed to update portfolio ${field}.`);
+        return;
+      }
+      toast.success(data.message || `Portfolio ${field === 'target' ? 'Target' : 'Sum of POS'} updated successfully.`);
+      setEditingPortfolioField(null);
+      setReportPortfolioMatrix((prev) =>
+        prev.map((r) => {
+          if (String(r.portfolioId) === String(portfolioId)) {
+            const sumOfCol = r.sumOfCollection || 0;
+            const newPos = field === 'pos' ? num : (r.sumOfPos || 0);
+            const newTarget = field === 'target' ? num : (r.customTarget > 0 ? r.customTarget : Math.round(newPos * 0.10));
+            return {
+              ...r,
+              sumOfPos: newPos,
+              customPos: field === 'pos' ? num : r.customPos,
+              target: newTarget,
+              customTarget: field === 'target' ? num : r.customTarget,
+              drr: Math.round(newTarget / 25),
+              yetToGo: Math.max(0, newTarget - sumOfCol),
+              achPercent: newTarget > 0 ? Math.round((sumOfCol / newTarget) * 100) : 0,
+            };
+          }
+          return r;
+        })
+      );
+      setPortfolios((prev) =>
+        prev.map((p) => {
+          if (String(p._id) === String(portfolioId)) {
+            return {
+              ...p,
+              monthlyTarget: field === 'target' ? num : p.monthlyTarget,
+              customPos: field === 'pos' ? num : p.customPos,
+            };
+          }
+          return p;
+        })
+      );
+    } catch (err) {
+      toast.error('Network error updating portfolio: ' + err.message);
+    } finally {
+      setSavingPortfolioTargetPos(false);
+    }
+  };
+
+  const handleSavePortfolioModalTargetPos = async (e) => {
+    e.preventDefault();
+    if (!portfolioTargetPosModal?.portfolio?.portfolioId && !portfolioTargetPosModal?.portfolio?._id) return;
+    const pId = portfolioTargetPosModal.portfolio.portfolioId || portfolioTargetPosModal.portfolio._id;
+    const targetNum = Math.max(0, parseInt(String(portfolioTargetPosModal.target).replace(/[^0-9]/g, '') || '0', 10));
+    const posNum = Math.max(0, parseInt(String(portfolioTargetPosModal.pos).replace(/[^0-9]/g, '') || '0', 10));
+
+    setSavingPortfolioTargetPos(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/portfolios/${pId}/target-pos`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ target: targetNum, sumOfPos: posNum }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        toast.error(data.message || 'Failed to update portfolio target and POS.');
+        return;
+      }
+      toast.success(data.message || 'Portfolio target and POS updated successfully.');
+      setPortfolioTargetPosModal(null);
+      setReportPortfolioMatrix((prev) =>
+        prev.map((r) => {
+          if (String(r.portfolioId) === String(pId)) {
+            const sumOfCol = r.sumOfCollection || 0;
+            const newPos = posNum;
+            const newTarget = targetNum > 0 ? targetNum : Math.round(newPos * 0.10);
+            return {
+              ...r,
+              sumOfPos: newPos,
+              customPos: posNum,
+              target: newTarget,
+              customTarget: targetNum,
+              drr: Math.round(newTarget / 25),
+              yetToGo: Math.max(0, newTarget - sumOfCol),
+              achPercent: newTarget > 0 ? Math.round((sumOfCol / newTarget) * 100) : 0,
+            };
+          }
+          return r;
+        })
+      );
+      setPortfolios((prev) =>
+        prev.map((p) => {
+          if (String(p._id) === String(pId)) {
+            return {
+              ...p,
+              monthlyTarget: targetNum,
+              customPos: posNum,
+            };
+          }
+          return p;
+        })
+      );
+    } catch (err) {
+      toast.error('Network error updating portfolio: ' + err.message);
+    } finally {
+      setSavingPortfolioTargetPos(false);
+    }
+  };
+
+  const portfolioGrandTotalCalculated = useMemo(() => {
+    if (!reportPortfolioMatrix || reportPortfolioMatrix.length === 0) return null;
+    const totals = reportPortfolioMatrix.reduce(
+      (acc, r) => {
+        acc.sumOfPos += r.sumOfPos || 0;
+        acc.countOfPos += r.countOfPos || 0;
+        acc.sumOfCollection += r.sumOfCollection || 0;
+        acc.target += r.target || 0;
+        acc.drr += r.drr || 0;
+        acc.yetToGo += r.yetToGo || 0;
+        return acc;
+      },
+      { sumOfPos: 0, countOfPos: 0, sumOfCollection: 0, target: 0, drr: 0, yetToGo: 0 }
+    );
+    totals.achPercent = totals.target > 0 ? Math.round((totals.sumOfCollection / totals.target) * 100) : 0;
+    return totals;
+  }, [reportPortfolioMatrix]);
 
   // Auth Form
   const [loginPhone, setLoginPhone] = useState('');
@@ -647,6 +798,8 @@ export default function App() {
         setReportCollectionsSummary(data.summary || null);
         setReportPerformanceMatrix(data.performanceMatrix || []);
         setReportPerformanceGrandTotal(data.performanceGrandTotal || null);
+        setReportPortfolioMatrix(data.portfolioPerformanceMatrix || []);
+        setReportPortfolioGrandTotal(data.portfolioPerformanceGrandTotal || null);
       } else {
         const params = new URLSearchParams({
           startDate: reportStartDate || '',
@@ -870,6 +1023,135 @@ export default function App() {
     document.body.removeChild(link);
   };
 
+  // Download Portfolio Performance Model as formatted Excel (.xlsx)
+  const downloadPortfolioModelExcel = () => {
+    if (!reportPortfolioMatrix || reportPortfolioMatrix.length === 0) {
+      toast.error('No portfolio collection performance data available for current selection.');
+      return;
+    }
+
+    const headers = [
+      'PORTFOLIO',
+      'Sum of POS',
+      'Count of POS',
+      'Sum of COLLECTION',
+      'TARGET',
+      'DRR',
+      'YET TO GO',
+      'ACH%',
+    ];
+
+    const rows = reportPortfolioMatrix.map((r) => [
+      `${r.portfolioName} (${r.portfolioCode})`,
+      r.sumOfPos || 0,
+      r.countOfPos || 0,
+      r.sumOfCollection || 0,
+      r.target || 0,
+      r.drr || 0,
+      r.yetToGo || 0,
+      `${r.achPercent || 0}%`,
+    ]);
+
+    const total = portfolioGrandTotalCalculated || reportPortfolioGrandTotal || {
+      sumOfPos: 0,
+      countOfPos: 0,
+      sumOfCollection: 0,
+      target: 0,
+      drr: 0,
+      yetToGo: 0,
+      achPercent: 0,
+    };
+
+    const totalRow = [
+      'Grand Total',
+      total.sumOfPos,
+      total.countOfPos,
+      total.sumOfCollection,
+      total.target,
+      total.drr,
+      total.yetToGo,
+      `${total.achPercent}%`,
+    ];
+
+    const aoa = [headers, ...rows, totalRow];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+    ws['!cols'] = [
+      { wch: 26 },
+      { wch: 18 },
+      { wch: 14 },
+      { wch: 20 },
+      { wch: 18 },
+      { wch: 14 },
+      { wch: 16 },
+      { wch: 12 },
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Portfolio Report');
+    XLSX.writeFile(wb, `FieldFlow_Portfolio_Target_POS_Report_${reportStartDate}_to_${reportEndDate}.xlsx`);
+    toast.success('Portfolio Target & POS report exported to Excel successfully.');
+  };
+
+  // Export Portfolio Performance Model as CSV
+  const exportPortfolioModelCSV = () => {
+    if (!reportPortfolioMatrix || reportPortfolioMatrix.length === 0) {
+      toast.error('No portfolio performance data available for current selection.');
+      return;
+    }
+    const headers = ['PORTFOLIO', 'Sum of POS', 'Count of POS', 'Sum of COLLECTION', 'TARGET', 'DRR', 'YET TO GO', 'ACH%'];
+    const rows = reportPortfolioMatrix.map((r) => [
+      `"${r.portfolioName} (${r.portfolioCode})"`,
+      r.sumOfPos || 0,
+      r.countOfPos || 0,
+      r.sumOfCollection || 0,
+      r.target || 0,
+      r.drr || 0,
+      r.yetToGo || 0,
+      `"${r.achPercent || 0}%"`,
+    ]);
+    const total = portfolioGrandTotalCalculated || reportPortfolioGrandTotal || { sumOfPos: 0, countOfPos: 0, sumOfCollection: 0, target: 0, drr: 0, yetToGo: 0, achPercent: 0 };
+    const totalRow = [
+      '"Grand Total"',
+      total.sumOfPos,
+      total.countOfPos,
+      total.sumOfCollection,
+      total.target,
+      total.drr,
+      total.yetToGo,
+      `"${total.achPercent}%"`,
+    ];
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(',')), totalRow.join(',')].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `FieldFlow_Portfolio_Target_POS_Report_${reportStartDate}_to_${reportEndDate}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Portfolio CSV exported successfully.');
+  };
+
+  // Direct WhatsApp Share for a Portfolio's Target and Performance
+  const sharePortfolioPerformanceWhatsApp = (row) => {
+    if (!row) return;
+    const msg =
+      `📊 *FIELDFLOW PORTFOLIO TARGET & POS REPORT*\n` +
+      `━━━━━━━━━━━━━━━━━━━\n` +
+      `🏦 *Portfolio:* ${row.portfolioName} (${row.portfolioCode})\n` +
+      `💳 *Sum of POS:* ₹${(row.sumOfPos || 0).toLocaleString('en-IN')}\n` +
+      `📂 *Total Accounts:* ${row.countOfPos || 0}\n` +
+      `💰 *Sum of Collection:* ₹${(row.sumOfCollection || 0).toLocaleString('en-IN')}\n` +
+      `🎯 *Monthly Target:* ₹${(row.target || 0).toLocaleString('en-IN')}\n` +
+      `⚡ *DRR (Run-rate):* ₹${(row.drr || 0).toLocaleString('en-IN')}\n` +
+      `⏳ *Yet to Go:* ₹${(row.yetToGo || 0).toLocaleString('en-IN')}\n` +
+      `📈 *Achievement:* ${row.achPercent || 0}%\n` +
+      `━━━━━━━━━━━━━━━━━━━\n` +
+      `*FieldFlow Recovery Management*`;
+
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+  };
+
   // Download Daily Visit Time-Slot Matrix as 2-tier formatted Excel (.xlsx)
   const downloadDailyVisitModelExcel = () => {
     if (!visibleTimeSlotMatrix || visibleTimeSlotMatrix.length === 0) {
@@ -1012,7 +1294,17 @@ export default function App() {
     let title = 'FieldFlow Report';
 
     if (reportType === 'collections') {
-      if (collectionSubView === 'model') {
+      if (collectionSubView === 'portfolioModel') {
+        title = `Portfolio Target & POS Report (${dateLabel})`;
+        imageData = await generateCollectionModelImage({
+          period: dateLabel,
+          total: portfolioGrandTotalCalculated || reportPortfolioGrandTotal || {},
+          rows: (reportPortfolioMatrix || []).map((r) => ({
+            ...r,
+            fsName: `${r.portfolioName} (${r.portfolioCode})`,
+          })),
+        });
+      } else if (collectionSubView === 'model') {
         title = `Collection Report (${dateLabel})`;
         imageData = await generateCollectionModelImage({
           period: dateLabel,
@@ -3707,7 +3999,8 @@ export default function App() {
                     className="btn btn-secondary"
                     onClick={() => {
                       if (reportType === 'collections') {
-                        if (collectionSubView === 'model') downloadCollectionModelExcel();
+                        if (collectionSubView === 'portfolioModel') downloadPortfolioModelExcel();
+                        else if (collectionSubView === 'model') downloadCollectionModelExcel();
                         else downloadCollectionsExcel();
                       } else {
                         if (visitSubView === 'model') downloadDailyVisitModelExcel();
@@ -3723,7 +4016,8 @@ export default function App() {
                     className="btn btn-secondary"
                     onClick={() => {
                       if (reportType === 'collections') {
-                        if (collectionSubView === 'model') exportCollectionModelCSV();
+                        if (collectionSubView === 'portfolioModel') exportPortfolioModelCSV();
+                        else if (collectionSubView === 'model') exportCollectionModelCSV();
                         else exportCollectionsCSV();
                       } else {
                         if (visitSubView === 'model') exportDailyVisitModelCSV();
@@ -4042,9 +4336,16 @@ export default function App() {
               {/* REPORT 1: COLLECTION LEDGER & PERFORMANCE MODEL */}
               {reportType === 'collections' && !loadingReport && (
                 <div>
-                  {/* Sub-view toggle (Model vs Ledger) */}
+                  {/* Sub-view toggle (Portfolio Model vs Staff Model vs Ledger) */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
                     <div className="report-subview-toggle">
+                      <button
+                        type="button"
+                        className={`report-subview-btn ${collectionSubView === 'portfolioModel' ? 'active' : ''}`}
+                        onClick={() => setCollectionSubView('portfolioModel')}
+                      >
+                        <PieChart size={15} /> Portfolio Target & POS Model ({reportPortfolioMatrix.length})
+                      </button>
                       <button
                         type="button"
                         className={`report-subview-btn ${collectionSubView === 'model' ? 'active' : ''}`}
@@ -4064,14 +4365,26 @@ export default function App() {
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button
                         className="btn btn-secondary btn-sm"
-                        onClick={collectionSubView === 'model' ? downloadCollectionModelExcel : downloadCollectionsExcel}
+                        onClick={
+                          collectionSubView === 'portfolioModel'
+                            ? downloadPortfolioModelExcel
+                            : collectionSubView === 'model'
+                            ? downloadCollectionModelExcel
+                            : downloadCollectionsExcel
+                        }
                         title="Export current view to Excel"
                       >
                         <FileSpreadsheet size={13} color="#16a34a" /> Download Excel (.xlsx)
                       </button>
                       <button
                         className="btn btn-secondary btn-sm"
-                        onClick={collectionSubView === 'model' ? exportCollectionModelCSV : exportCollectionsCSV}
+                        onClick={
+                          collectionSubView === 'portfolioModel'
+                            ? exportPortfolioModelCSV
+                            : collectionSubView === 'model'
+                            ? exportCollectionModelCSV
+                            : exportCollectionsCSV
+                        }
                         title="Export current view to CSV"
                       >
                         <Download size={13} /> Export CSV
@@ -4087,7 +4400,318 @@ export default function App() {
                     </div>
                   </div>
 
-                  {collectionSubView === 'model' ? (
+                  {collectionSubView === 'portfolioModel' ? (
+                    <div className="card table-card">
+                      <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)' }}>
+                        <div>
+                          <strong style={{ fontSize: '16px' }}>Portfolio Target & POS Recovery Model</strong>
+                          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                            Set Principal Outstanding Sum (POS) and monthly targets directly for each portfolio or agency bucket
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="table-responsive">
+                        <table className="table-matrix">
+                          <thead>
+                            <tr style={{ background: '#f8fafc' }}>
+                              <th className="fe-name-col" style={{ width: '190px' }}>PORTFOLIO NAME</th>
+                              <th style={{ width: '150px' }}>Sum of POS (₹)</th>
+                              <th style={{ width: '90px' }}>Count of POS</th>
+                              <th style={{ width: '130px' }}>Sum of COLLECTION</th>
+                              <th style={{ width: '150px' }}>TARGET (₹)</th>
+                              <th style={{ width: '95px' }}>DRR</th>
+                              <th style={{ width: '110px' }}>YET TO GO</th>
+                              <th style={{ width: '85px' }}>ACH%</th>
+                              <th style={{ width: '120px', textAlign: 'center' }}>ACTIONS</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {reportPortfolioMatrix.length === 0 ? (
+                              <tr>
+                                <td colSpan={9} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                                  No portfolio performance records available.
+                                </td>
+                              </tr>
+                            ) : (
+                              reportPortfolioMatrix.map((row) => {
+                                const achClass = row.achPercent >= 40 ? 'ach-high' : row.achPercent >= 10 ? 'ach-mid' : 'ach-low';
+                                const isEditingPos = editingPortfolioField?.portfolioId === row.portfolioId && editingPortfolioField?.field === 'sumOfPos';
+                                const isEditingTarget = editingPortfolioField?.portfolioId === row.portfolioId && editingPortfolioField?.field === 'target';
+
+                                return (
+                                  <tr key={row.portfolioId}>
+                                    <td className="fe-name-col">
+                                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                        <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>{row.portfolioName}</span>
+                                        {row.agency && (
+                                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{row.agency}</span>
+                                        )}
+                                      </div>
+                                    </td>
+                                    
+                                    {/* SUM OF POS (EDITABLE) */}
+                                    <td style={{ fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
+                                      {isEditingPos ? (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                          <input
+                                            type="number"
+                                            value={editingPortfolioValue}
+                                            onChange={(e) => setEditingPortfolioValue(e.target.value)}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Enter') handleSavePortfolioTargetPos(row.portfolioId, 'sumOfPos', editingPortfolioValue);
+                                              if (e.key === 'Escape') setEditingPortfolioField(null);
+                                            }}
+                                            autoFocus
+                                            style={{
+                                              width: '90px',
+                                              padding: '3px 6px',
+                                              fontSize: '12px',
+                                              fontFamily: 'var(--font-mono)',
+                                              fontWeight: 700,
+                                              border: '2px solid #0284c7',
+                                              borderRadius: '4px',
+                                              outline: 'none',
+                                            }}
+                                            placeholder="POS"
+                                          />
+                                          <button
+                                            type="button"
+                                            disabled={savingPortfolioTargetPos}
+                                            onClick={() => handleSavePortfolioTargetPos(row.portfolioId, 'sumOfPos', editingPortfolioValue)}
+                                            style={{
+                                              background: '#059669',
+                                              color: '#fff',
+                                              border: 'none',
+                                              padding: '4px 6px',
+                                              borderRadius: '4px',
+                                              cursor: 'pointer',
+                                              fontSize: '11px',
+                                              fontWeight: 700,
+                                            }}
+                                            title="Save Sum of POS"
+                                          >
+                                            ✓
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setEditingPortfolioField(null)}
+                                            style={{
+                                              background: '#e2e8f0',
+                                              color: '#475569',
+                                              border: 'none',
+                                              padding: '4px 6px',
+                                              borderRadius: '4px',
+                                              cursor: 'pointer',
+                                              fontSize: '11px',
+                                            }}
+                                            title="Cancel"
+                                          >
+                                            ✕
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
+                                          <span>{row.sumOfPos?.toLocaleString('en-IN') || 0}</span>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setEditingPortfolioField({ portfolioId: row.portfolioId, field: 'sumOfPos' });
+                                              setEditingPortfolioValue(String(row.sumOfPos || ''));
+                                            }}
+                                            style={{
+                                              background: '#eff6ff',
+                                              border: '1px solid #bfdbfe',
+                                              color: '#0284c7',
+                                              padding: '2px 5px',
+                                              borderRadius: '4px',
+                                              cursor: 'pointer',
+                                              fontSize: '10px',
+                                              fontWeight: 700,
+                                            }}
+                                            title="Set custom Sum of POS"
+                                          >
+                                            ✎ Set
+                                          </button>
+                                        </div>
+                                      )}
+                                    </td>
+
+                                    <td className="cell-count-pos">
+                                      {row.countOfPos || 0}
+                                    </td>
+
+                                    <td style={{ background: row.sumOfCollection > 0 ? '#fef08a' : '#fecaca', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
+                                      {row.sumOfCollection > 0 ? row.sumOfCollection?.toLocaleString('en-IN') : (row.sumOfPos > 0 ? '0' : '—')}
+                                    </td>
+
+                                    {/* TARGET (EDITABLE) */}
+                                    <td style={{ fontWeight: 800, fontFamily: 'var(--font-mono)' }}>
+                                      {isEditingTarget ? (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                          <input
+                                            type="number"
+                                            value={editingPortfolioValue}
+                                            onChange={(e) => setEditingPortfolioValue(e.target.value)}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Enter') handleSavePortfolioTargetPos(row.portfolioId, 'target', editingPortfolioValue);
+                                              if (e.key === 'Escape') setEditingPortfolioField(null);
+                                            }}
+                                            autoFocus
+                                            style={{
+                                              width: '90px',
+                                              padding: '3px 6px',
+                                              fontSize: '12px',
+                                              fontFamily: 'var(--font-mono)',
+                                              fontWeight: 700,
+                                              border: '2px solid #0284c7',
+                                              borderRadius: '4px',
+                                              outline: 'none',
+                                            }}
+                                            placeholder="Target"
+                                          />
+                                          <button
+                                            type="button"
+                                            disabled={savingPortfolioTargetPos}
+                                            onClick={() => handleSavePortfolioTargetPos(row.portfolioId, 'target', editingPortfolioValue)}
+                                            style={{
+                                              background: '#059669',
+                                              color: '#fff',
+                                              border: 'none',
+                                              padding: '4px 6px',
+                                              borderRadius: '4px',
+                                              cursor: 'pointer',
+                                              fontSize: '11px',
+                                              fontWeight: 700,
+                                            }}
+                                            title="Save Target"
+                                          >
+                                            ✓
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setEditingPortfolioField(null)}
+                                            style={{
+                                              background: '#e2e8f0',
+                                              color: '#475569',
+                                              border: 'none',
+                                              padding: '4px 6px',
+                                              borderRadius: '4px',
+                                              cursor: 'pointer',
+                                              fontSize: '11px',
+                                            }}
+                                            title="Cancel"
+                                          >
+                                            ✕
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
+                                          <span>{row.target?.toLocaleString('en-IN') || 0}</span>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setEditingPortfolioField({ portfolioId: row.portfolioId, field: 'target' });
+                                              setEditingPortfolioValue(String(row.target || ''));
+                                            }}
+                                            style={{
+                                              background: '#eff6ff',
+                                              border: '1px solid #bfdbfe',
+                                              color: '#0284c7',
+                                              padding: '2px 5px',
+                                              borderRadius: '4px',
+                                              cursor: 'pointer',
+                                              fontSize: '10px',
+                                              fontWeight: 700,
+                                            }}
+                                            title="Set or update monthly target"
+                                          >
+                                            ✎ Set
+                                          </button>
+                                        </div>
+                                      )}
+                                    </td>
+
+                                    <td style={{ fontFamily: 'var(--font-mono)' }}>
+                                      {row.drr?.toLocaleString('en-IN') || 0}
+                                    </td>
+
+                                    <td style={{ background: row.yetToGo > 0 && row.achPercent < 10 ? '#fef08a' : '#bbf7d0', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
+                                      {row.yetToGo?.toLocaleString('en-IN') || 0}
+                                    </td>
+
+                                    <td className={achClass}>
+                                      {row.achPercent}%
+                                    </td>
+
+                                    <td style={{ textAlign: 'center' }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
+                                        <button
+                                          type="button"
+                                          onClick={() => sharePortfolioPerformanceWhatsApp(row)}
+                                          style={{ background: '#25D366', color: '#fff', border: 'none', padding: '3px 6px', borderRadius: '4px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '11px', fontWeight: 700 }}
+                                          title={`Share ${row.portfolioName} performance on WhatsApp`}
+                                        >
+                                          <MessageCircle size={11} />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setPortfolioTargetPosModal({
+                                            isOpen: true,
+                                            portfolioId: row.portfolioId,
+                                            portfolioName: row.portfolioName,
+                                            sumOfPos: row.sumOfPos,
+                                            target: row.target,
+                                          })}
+                                          style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#334155', padding: '3px 6px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}
+                                          title="Configure Target and POS"
+                                        >
+                                          Config
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })
+                            )}
+                          </tbody>
+                          {portfolioGrandTotalCalculated && reportPortfolioMatrix.length > 0 && (
+                            <tfoot>
+                              <tr style={{ background: '#e2e8f0', fontWeight: 800, borderTop: '2px solid #94a3b8' }}>
+                                <td className="fe-name-col" style={{ fontWeight: 900, color: '#0f172a' }}>
+                                  Grand Total
+                                </td>
+                                <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 800 }}>
+                                  {portfolioGrandTotalCalculated.sumOfPos?.toLocaleString('en-IN')}
+                                </td>
+                                <td style={{ fontWeight: 900 }}>
+                                  {portfolioGrandTotalCalculated.countOfPos}
+                                </td>
+                                <td style={{ background: '#86efac', color: '#14532d', fontWeight: 900, fontFamily: 'var(--font-mono)' }}>
+                                  {portfolioGrandTotalCalculated.sumOfCollection?.toLocaleString('en-IN')}
+                                </td>
+                                <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 800 }}>
+                                  {portfolioGrandTotalCalculated.target?.toLocaleString('en-IN')}
+                                </td>
+                                <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 800 }}>
+                                  {portfolioGrandTotalCalculated.drr?.toLocaleString('en-IN')}
+                                </td>
+                                <td style={{ background: '#fca5a5', color: '#7f1d1d', fontWeight: 900, fontFamily: 'var(--font-mono)' }}>
+                                  {portfolioGrandTotalCalculated.yetToGo?.toLocaleString('en-IN')}
+                                </td>
+                                <td className={portfolioGrandTotalCalculated.achPercent >= 40 ? 'ach-high' : portfolioGrandTotalCalculated.achPercent >= 10 ? 'ach-mid' : 'ach-low'}>
+                                  {portfolioGrandTotalCalculated.achPercent}%
+                                </td>
+                                <td style={{ textAlign: 'center', fontSize: '11px', color: 'var(--text-muted)' }}>
+                                  —
+                                </td>
+                              </tr>
+                            </tfoot>
+                          )}
+                        </table>
+                      </div>
+                    </div>
+                  ) : collectionSubView === 'model' ? (
                     <div className="card table-card">
                       <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)' }}>
                         <div>
@@ -6839,6 +7463,91 @@ export default function App() {
                     <Trash2 size={14} />
                   )}
                   {isDeletingCustomer ? 'Moving to Trash...' : 'Yes, Move to Trash'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PORTFOLIO TARGET & SUM OF POS CONFIGURATION MODAL */}
+      {portfolioTargetPosModal.isOpen && (
+        <div className="modal-backdrop" onClick={() => !savingPortfolioTargetPos && setPortfolioTargetPosModal({ isOpen: false, portfolioId: null, portfolioName: '', sumOfPos: 0, target: 0 })}>
+          <div className="modal-content" style={{ maxWidth: '440px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <PieChart size={20} color="var(--primary)" />
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>
+                  Set Target & POS — {portfolioTargetPosModal.portfolioName}
+                </h3>
+              </div>
+              <button
+                type="button"
+                className="modal-close-btn"
+                disabled={savingPortfolioTargetPos}
+                onClick={() => setPortfolioTargetPosModal({ isOpen: false, portfolioId: null, portfolioName: '', sumOfPos: 0, target: 0 })}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ padding: '20px' }}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                  Principal Outstanding Sum (POS) (₹)
+                </label>
+                <input
+                  type="number"
+                  className="input-field"
+                  placeholder="e.g. 5000000"
+                  value={portfolioTargetPosModal.sumOfPos}
+                  onChange={(e) => setPortfolioTargetPosModal(prev => ({ ...prev, sumOfPos: e.target.value }))}
+                  style={{ width: '100%', fontFamily: 'var(--font-mono)' }}
+                />
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginTop: '4px' }}>
+                  Overrides dynamically aggregated customer loan POS for this portfolio.
+                </span>
+              </div>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                  Monthly Recovery Target (₹)
+                </label>
+                <input
+                  type="number"
+                  className="input-field"
+                  placeholder="e.g. 500000"
+                  value={portfolioTargetPosModal.target}
+                  onChange={(e) => setPortfolioTargetPosModal(prev => ({ ...prev, target: e.target.value }))}
+                  style={{ width: '100%', fontFamily: 'var(--font-mono)' }}
+                />
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginTop: '4px' }}>
+                  Overrides the default 10% target benchmark and recalculates DRR & Yet To Go.
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={savingPortfolioTargetPos}
+                  onClick={() => setPortfolioTargetPosModal({ isOpen: false, portfolioId: null, portfolioName: '', sumOfPos: 0, target: 0 })}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={savingPortfolioTargetPos}
+                  onClick={() => handleSavePortfolioModalTargetPos(
+                    portfolioTargetPosModal.portfolioId,
+                    portfolioTargetPosModal.target,
+                    portfolioTargetPosModal.sumOfPos
+                  )}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  {savingPortfolioTargetPos ? <RefreshCw size={13} className="animate-spin" /> : <CheckCircle size={14} />}
+                  {savingPortfolioTargetPos ? 'Saving...' : 'Save Settings'}
                 </button>
               </div>
             </div>

@@ -1407,11 +1407,115 @@ export async function getCollectionsReport(req, res) {
         ? Math.round((performanceGrandTotal.sumOfCollection / performanceGrandTotal.target) * 100)
         : 0;
 
+    // -------------------------------------------------------------
+    // Build Portfolio Performance & Target Model (Sum of POS, Target, DRR, Yet to Go, ACH%)
+    // -------------------------------------------------------------
+    const allPortfolios = await Portfolio.find({ isActive: true })
+      .select('name code description monthlyTarget customPos')
+      .sort({ name: 1 })
+      .lean();
+
+    const customerPortfolioAgg = await Customer.aggregate([
+      { $match: { portfolioId: { $exists: true, $ne: null } } },
+      {
+        $group: {
+          _id: '$portfolioId',
+          sumOfPos: { $sum: '$outstandingAmount' },
+          countOfPos: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const casePortfolioAgg = await Case.aggregate([
+      { $match: { portfolioId: { $exists: true, $ne: null } } },
+      {
+        $group: {
+          _id: '$portfolioId',
+          sumOfPos: { $sum: { $ifNull: ['$outstandingAmount', '$dueAmount'] } },
+          countOfPos: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const portfolioPosMap = {};
+    customerPortfolioAgg.forEach((a) => {
+      const pId = a._id.toString();
+      portfolioPosMap[pId] = { sumOfPos: a.sumOfPos || 0, countOfPos: a.countOfPos || 0 };
+    });
+    casePortfolioAgg.forEach((a) => {
+      const pId = a._id.toString();
+      if (!portfolioPosMap[pId] || (portfolioPosMap[pId].countOfPos === 0 && a.countOfPos > 0)) {
+        portfolioPosMap[pId] = { sumOfPos: a.sumOfPos || 0, countOfPos: a.countOfPos || 0 };
+      }
+    });
+
+    const portfolioColMap = {};
+    filteredCollections.forEach((c) => {
+      if (c.paymentStatus !== 'REJECTED') {
+        const pId = c.portfolioId?._id?.toString() || c.portfolioId?.toString() || c.customerId?.portfolioId?.toString();
+        if (pId) {
+          portfolioColMap[pId] = (portfolioColMap[pId] || 0) + (c.collectedAmount || 0);
+        }
+      }
+    });
+
+    const portfolioPerformanceMatrix = allPortfolios.map((p) => {
+      const pId = p._id.toString();
+      const pos = portfolioPosMap[pId] || { sumOfPos: 0, countOfPos: 0 };
+      const sumOfCollection = portfolioColMap[pId] || 0;
+
+      const sumOfPos = (p.customPos !== undefined && p.customPos > 0)
+        ? p.customPos
+        : (pos.sumOfPos || 0);
+      const countOfPos = pos.countOfPos || 0;
+
+      const target = (p.monthlyTarget !== undefined && p.monthlyTarget > 0)
+        ? p.monthlyTarget
+        : Math.round(sumOfPos * 0.10);
+      const drr = Math.round(target / 25);
+      const yetToGo = Math.max(0, target - sumOfCollection);
+      const achPercent = target > 0 ? Math.round((sumOfCollection / target) * 100) : 0;
+
+      return {
+        portfolioId: p._id,
+        portfolioName: p.name,
+        portfolioCode: p.code,
+        sumOfPos,
+        countOfPos,
+        sumOfCollection,
+        target,
+        customTarget: p.monthlyTarget || 0,
+        customPos: p.customPos || 0,
+        drr,
+        yetToGo,
+        achPercent,
+      };
+    });
+
+    const portfolioPerformanceGrandTotal = portfolioPerformanceMatrix.reduce(
+      (acc, r) => {
+        acc.sumOfPos += r.sumOfPos;
+        acc.countOfPos += r.countOfPos;
+        acc.sumOfCollection += r.sumOfCollection;
+        acc.target += r.target;
+        acc.drr += r.drr;
+        acc.yetToGo += r.yetToGo;
+        return acc;
+      },
+      { sumOfPos: 0, countOfPos: 0, sumOfCollection: 0, target: 0, drr: 0, yetToGo: 0 }
+    );
+    portfolioPerformanceGrandTotal.achPercent =
+      portfolioPerformanceGrandTotal.target > 0
+        ? Math.round((portfolioPerformanceGrandTotal.sumOfCollection / portfolioPerformanceGrandTotal.target) * 100)
+        : 0;
+
     return res.json({
       success: true,
       collections: filteredCollections,
       performanceMatrix,
       performanceGrandTotal,
+      portfolioPerformanceMatrix,
+      portfolioPerformanceGrandTotal,
       summary: {
         totalAmount,
         cashTotal,

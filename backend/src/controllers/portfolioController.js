@@ -150,7 +150,7 @@ export async function getPortfolioById(req, res) {
  */
 export async function createPortfolio(req, res) {
   try {
-    const { name, code, description, clientContact, defaultRadiusMetres } = req.body;
+    const { name, code, description, clientContact, defaultRadiusMetres, monthlyTarget, target, customPos, sumOfPos } = req.body;
 
     if (!name || !name.trim()) {
       return res.status(400).json({ success: false, message: 'Portfolio name is required.' });
@@ -166,18 +166,23 @@ export async function createPortfolio(req, res) {
       });
     }
 
+    const numTarget = Math.max(0, Number(target ?? monthlyTarget ?? 0));
+    const numPos = Math.max(0, Number(sumOfPos ?? customPos ?? 0));
+
     const portfolio = await Portfolio.create({
       name: name.trim(),
       code: cleanCode,
       description: description ? description.trim() : '',
       clientContact: clientContact || {},
       defaultRadiusMetres: Number(defaultRadiusMetres) || 100,
+      monthlyTarget: numTarget,
+      customPos: numPos,
       isActive: true,
       auditHistory: [
         {
           action: 'CREATE_PORTFOLIO',
           performedBy: req.user?._id,
-          details: { name: name.trim(), code: cleanCode },
+          details: { name: name.trim(), code: cleanCode, monthlyTarget: numTarget, customPos: numPos },
         },
       ],
     });
@@ -207,7 +212,7 @@ export async function createPortfolio(req, res) {
  */
 export async function updatePortfolio(req, res) {
   try {
-    const { name, description, isActive, clientContact, defaultRadiusMetres } = req.body;
+    const { name, description, isActive, clientContact, defaultRadiusMetres, monthlyTarget, target, customPos, sumOfPos } = req.body;
     const portfolio = await Portfolio.findById(req.params.id);
 
     if (!portfolio) {
@@ -219,11 +224,17 @@ export async function updatePortfolio(req, res) {
     if (isActive !== undefined) portfolio.isActive = Boolean(isActive);
     if (clientContact) portfolio.clientContact = { ...portfolio.clientContact, ...clientContact };
     if (defaultRadiusMetres) portfolio.defaultRadiusMetres = Number(defaultRadiusMetres);
+    if (monthlyTarget !== undefined || target !== undefined) {
+      portfolio.monthlyTarget = Math.max(0, Number(target ?? monthlyTarget ?? 0));
+    }
+    if (customPos !== undefined || sumOfPos !== undefined) {
+      portfolio.customPos = Math.max(0, Number(sumOfPos ?? customPos ?? 0));
+    }
 
     portfolio.auditHistory.push({
       action: 'UPDATE_PORTFOLIO',
       performedBy: req.user?._id,
-      details: { name, description, isActive },
+      details: { name, description, isActive, monthlyTarget: portfolio.monthlyTarget, customPos: portfolio.customPos },
     });
 
     await portfolio.save();
@@ -232,6 +243,67 @@ export async function updatePortfolio(req, res) {
       success: true,
       message: 'Portfolio updated successfully.',
       portfolio,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+/**
+ * Update target and sum of POS for a specific portfolio
+ */
+export async function updatePortfolioTargetPos(req, res) {
+  try {
+    const { id } = req.params;
+    const { target, sumOfPos, monthlyTarget, customPos } = req.body;
+
+    const portfolio = await Portfolio.findById(id);
+    if (!portfolio) {
+      return res.status(404).json({ success: false, message: 'Portfolio not found.' });
+    }
+
+    let changed = false;
+    if (target !== undefined || monthlyTarget !== undefined) {
+      portfolio.monthlyTarget = Math.max(0, Number(target ?? monthlyTarget ?? 0));
+      changed = true;
+    }
+    if (sumOfPos !== undefined || customPos !== undefined) {
+      portfolio.customPos = Math.max(0, Number(sumOfPos ?? customPos ?? 0));
+      changed = true;
+    }
+
+    if (!changed) {
+      return res.status(400).json({ success: false, message: 'Please provide target or sumOfPos to update.' });
+    }
+
+    portfolio.auditHistory.push({
+      action: 'UPDATE_PORTFOLIO_TARGET_POS',
+      performedBy: req.user?._id,
+      details: { monthlyTarget: portfolio.monthlyTarget, customPos: portfolio.customPos },
+    });
+
+    await portfolio.save();
+
+    await AuditLog.create({
+      actorId: req.user?._id,
+      actorName: req.user?.name || 'Administrator',
+      actorRole: req.user?.role || 'admin',
+      action: 'UPDATE_PORTFOLIO_TARGET_POS',
+      entityType: 'Portfolio',
+      entityId: id,
+      details: {
+        portfolioName: portfolio.name,
+        monthlyTarget: portfolio.monthlyTarget,
+        customPos: portfolio.customPos,
+      },
+    }).catch(() => {});
+
+    return res.json({
+      success: true,
+      message: `Updated target (₹${portfolio.monthlyTarget.toLocaleString('en-IN')}) & POS (₹${portfolio.customPos.toLocaleString('en-IN')}) for "${portfolio.name}".`,
+      portfolio,
+      monthlyTarget: portfolio.monthlyTarget,
+      customPos: portfolio.customPos,
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

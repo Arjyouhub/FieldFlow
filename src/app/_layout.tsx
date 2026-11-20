@@ -14,11 +14,12 @@ export default function RootLayout() {
       try {
         const update = await Updates.checkForUpdateAsync();
         if (update.isAvailable) {
+          // Automatically download and apply the update immediately
           await Updates.fetchUpdateAsync();
           await Updates.reloadAsync();
         }
       } catch (error) {
-        console.log("[EAS Update] Background check completed:", error);
+        console.log("[EAS Update] Automatic background check:", error);
       }
     }
 

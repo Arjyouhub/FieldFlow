@@ -19,6 +19,9 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
+import * as Sharing from "expo-sharing";
+import * as Clipboard from "expo-clipboard";
+import { File, Paths } from "expo-file-system";
 import { API_BASE_URL } from "../../config/api";
 import { getAuthSession } from "../../utils/storage";
 import { Colors, Radii, Shadows } from "../../constants/theme";
@@ -157,6 +160,10 @@ export default function StartVisitScreen() {
     visitTime: string;
     photoUri?: string | null;
   } | null>(null);
+
+  // Share Loading & Notice State
+  const [sharingLoading, setSharingLoading] = useState(false);
+  const [shareSuccessToast, setShareSuccessToast] = useState<string | null>(null);
 
   // Visit Outcome Selection
   const [selectedOutcome, setSelectedOutcome] = useState<string>("Promise to Pay (PTP)");
@@ -389,39 +396,111 @@ export default function StartVisitScreen() {
     }
   };
 
-  // Share Visit Summary with Photo, Details, Feedback & Timestamp
-  const handleShareVisitSummary = async () => {
-    if (!submittedVisitSummary) return;
+  // Generate formatted text report for visit
+  const buildVisitReportText = (s: NonNullable<typeof submittedVisitSummary>) => {
+    let text = `📋 *FIELDFLOW VISIT REPORT*\n━━━━━━━━━━━━━━━━━━━\n👤 *Customer:* ${s.customerName}\n💳 *Loan A/C:* ${s.loanAccountNo}\n📞 *Phone:* ${s.phone}\n📍 *Address:* ${s.address}\n\n⚡ *Outcome:* ${s.outcome}\n`;
+
+    if (s.outcome === "Payment Collected") {
+      text += `💰 *Collected Amount:* ₹${(s.collectedAmount || 0).toLocaleString("en-IN")}\n`;
+      text += `💳 *Payment Mode:* ${s.paymentMethod}\n`;
+      if (s.paymentReference) {
+        text += `🔖 *Ref/Txn ID:* ${s.paymentReference}\n`;
+      }
+    } else if (s.outcome === "Promise to Pay (PTP)") {
+      text += `🤝 *Promised Amount:* ₹${(s.ptpAmount || 0).toLocaleString("en-IN")}\n`;
+      text += `📅 *PTP Date:* ${s.ptpDate}\n`;
+    }
+
+    text += `📝 *Feedback/Remarks:* ${s.remarks}\n`;
+    text += `🕒 *Visit Time:* ${s.visitTime}\n`;
+    text += `📍 *Geotag Accuracy:* ${accuracy}m\n`;
+    if (s.photoUri) {
+      text += `📷 *Evidence Photo:* Attached\n`;
+    }
+    text += `━━━━━━━━━━━━━━━━━━━\n*FieldFlow Recovery Management*`;
+    return text;
+  };
+
+  // Ensure photo URI is a local file URI suitable for native sharing
+  const resolveLocalPhotoUri = async (uri: string): Promise<string> => {
     try {
-      const s = submittedVisitSummary;
-      let text = `📋 *FIELDFLOW VISIT REPORT*\n━━━━━━━━━━━━━━━━━━━\n👤 *Customer:* ${s.customerName}\n💳 *Loan A/C:* ${s.loanAccountNo}\n📞 *Phone:* ${s.phone}\n📍 *Address:* ${s.address}\n\n⚡ *Outcome:* ${s.outcome}\n`;
+      if (uri.startsWith("http://") || uri.startsWith("https://")) {
+        const filename = `visit_proof_${Date.now()}.jpg`;
+        const dest = new File(Paths.cache, filename);
+        const downloaded = await File.downloadFileAsync(uri, dest);
+        return downloaded.uri;
+      }
+    } catch (e) {
+      console.warn("Could not cache remote photo for sharing:", e);
+    }
+    return uri;
+  };
 
-      if (s.outcome === "Payment Collected") {
-        text += `💰 *Collected Amount:* ₹${(s.collectedAmount || 0).toLocaleString("en-IN")}\n`;
-        text += `💳 *Payment Mode:* ${s.paymentMethod}\n`;
-        if (s.paymentReference) {
-          text += `🔖 *Ref/Txn ID:* ${s.paymentReference}\n`;
-        }
-      } else if (s.outcome === "Promise to Pay (PTP)") {
-        text += `🤝 *Promised Amount:* ₹${(s.ptpAmount || 0).toLocaleString("en-IN")}\n`;
-        text += `📅 *PTP Date:* ${s.ptpDate}\n`;
+  // Share photo directly using native file sharing + copy report details to clipboard
+  const handleSharePhoto = async () => {
+    if (!submittedVisitSummary?.photoUri) {
+      Alert.alert("No Photo", "No photo was captured for this visit. Sharing text summary instead.");
+      await handleShareTextSummary();
+      return;
+    }
+    try {
+      setSharingLoading(true);
+      const reportText = buildVisitReportText(submittedVisitSummary);
+
+      // Auto-copy report text to clipboard so agent can easily paste as caption in WhatsApp
+      try {
+        await Clipboard.setStringAsync(reportText);
+        setShareSuccessToast("Report details copied! Paste it as caption when sharing.");
+      } catch (clipErr) {
+        console.warn("Clipboard notice:", clipErr);
       }
 
-      text += `📝 *Feedback/Remarks:* ${s.remarks}\n`;
-      text += `🕒 *Visit Time:* ${s.visitTime}\n`;
-      text += `📍 *Geotag Accuracy:* ${accuracy}m\n`;
-      if (s.photoUri) {
-        text += `📷 *Evidence Photo:* Attached\n`;
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (!isAvailable) {
+        Alert.alert(
+          "Photo Sharing Notice",
+          "Direct photo sharing is not supported on this platform. The text summary has been copied to your clipboard."
+        );
+        return;
       }
-      text += `━━━━━━━━━━━━━━━━━━━\n*FieldFlow Recovery Management*`;
 
-      await Share.share({
-        message: text,
-        url: s.photoUri || undefined,
-        title: `Visit Report - ${s.customerName}`,
+      const localUri = await resolveLocalPhotoUri(submittedVisitSummary.photoUri);
+      await Sharing.shareAsync(localUri, {
+        mimeType: "image/jpeg",
+        dialogTitle: `FieldFlow Visit Photo - ${submittedVisitSummary.customerName}`,
+        UTI: "public.jpeg",
       });
     } catch (err: any) {
-      console.warn("Share notice:", err.message);
+      console.warn("Share photo error:", err.message);
+      Alert.alert("Share Notice", err.message || "Failed to share photo.");
+    } finally {
+      setSharingLoading(false);
+    }
+  };
+
+  // Share text summary via React Native Share
+  const handleShareTextSummary = async () => {
+    if (!submittedVisitSummary) return;
+    try {
+      setSharingLoading(true);
+      const text = buildVisitReportText(submittedVisitSummary);
+      await Share.share({
+        message: text,
+        title: `Visit Report - ${submittedVisitSummary.customerName}`,
+      });
+    } catch (err: any) {
+      console.warn("Share text notice:", err.message);
+    } finally {
+      setSharingLoading(false);
+    }
+  };
+
+  // Default handler: prioritizes sharing photo if one was taken
+  const handleShareVisitSummary = async () => {
+    if (submittedVisitSummary?.photoUri) {
+      await handleSharePhoto();
+    } else {
+      await handleShareTextSummary();
     }
   };
 
@@ -1107,24 +1186,75 @@ export default function StartVisitScreen() {
               </View>
 
               {submittedVisitSummary?.photoUri ? (
-                <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <View style={styles.sharePhotoBanner}>
                   <Image
                     source={{ uri: submittedVisitSummary.photoUri }}
-                    style={{ width: 44, height: 44, borderRadius: 6, backgroundColor: "#E2E8F0" }}
+                    style={styles.sharePhotoBannerImg}
                   />
-                  <Text style={{ fontSize: 11.5, color: "#059669", fontWeight: "600" }}>
-                    ✓ Photo Evidence Geotagged
-                  </Text>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                      <Ionicons name="checkmark-circle" size={15} color="#059669" />
+                      <Text style={styles.sharePhotoBannerTitle}>Evidence Photo Geotagged</Text>
+                    </View>
+                    <Text style={styles.sharePhotoBannerSub}>
+                      Captured premises proof ready to share
+                    </Text>
+                  </View>
                 </View>
               ) : null}
             </View>
 
+            {shareSuccessToast ? (
+              <View style={styles.shareToastBox}>
+                <Ionicons name="copy-outline" size={15} color="#047857" />
+                <Text style={styles.shareToastText}>{shareSuccessToast}</Text>
+              </View>
+            ) : null}
+
             {/* Actions: Share & Done */}
             <View style={styles.shareActionsCol}>
-              <Pressable style={styles.shareReportButton} onPress={handleShareVisitSummary}>
-                <Ionicons name="share-social" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                <Text style={styles.shareReportButtonText}>Share Visit Summary</Text>
-              </Pressable>
+              {submittedVisitSummary?.photoUri ? (
+                <>
+                  <Pressable
+                    style={[styles.shareReportButton, { backgroundColor: "#059669" }]}
+                    onPress={handleSharePhoto}
+                    disabled={sharingLoading}
+                  >
+                    {sharingLoading ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Ionicons name="camera" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                        <Text style={styles.shareReportButtonText}>Share Photo Evidence</Text>
+                      </>
+                    )}
+                  </Pressable>
+
+                  <Pressable
+                    style={styles.shareTextOutlineButton}
+                    onPress={handleShareTextSummary}
+                    disabled={sharingLoading}
+                  >
+                    <Ionicons name="document-text-outline" size={17} color="#0284C7" style={{ marginRight: 8 }} />
+                    <Text style={styles.shareTextOutlineButtonText}>Share Text Report Only</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <Pressable
+                  style={styles.shareReportButton}
+                  onPress={handleShareTextSummary}
+                  disabled={sharingLoading}
+                >
+                  {sharingLoading ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Ionicons name="share-social" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                      <Text style={styles.shareReportButtonText}>Share Visit Summary</Text>
+                    </>
+                  )}
+                </Pressable>
+              )}
 
               <Pressable
                 style={styles.doneDashboardButton}
@@ -1801,5 +1931,66 @@ const styles = StyleSheet.create({
     color: "#475569",
     fontSize: 14,
     fontWeight: "600",
+  },
+  sharePhotoBanner: {
+    marginTop: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    borderRadius: 8,
+    padding: 8,
+    gap: 10,
+  },
+  sharePhotoBannerImg: {
+    width: 48,
+    height: 48,
+    borderRadius: 6,
+    backgroundColor: "#E2E8F0",
+  },
+  sharePhotoBannerTitle: {
+    fontSize: 12,
+    color: "#065F46",
+    fontWeight: "700",
+  },
+  sharePhotoBannerSub: {
+    fontSize: 11,
+    color: "#047857",
+    marginTop: 1,
+  },
+  shareToastBox: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ECFDF5",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    gap: 6,
+    marginBottom: 4,
+  },
+  shareToastText: {
+    flex: 1,
+    fontSize: 11.5,
+    color: "#065F46",
+    fontWeight: "600",
+  },
+  shareTextOutlineButton: {
+    backgroundColor: "#F0F9FF",
+    borderWidth: 1.5,
+    borderColor: "#BAE6FD",
+    borderRadius: 12,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  shareTextOutlineButtonText: {
+    color: "#0284C7",
+    fontSize: 14,
+    fontWeight: "700",
   },
 });

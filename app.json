@@ -36,6 +36,7 @@
         }
       ],
       "expo-secure-store",
+      "expo-sharing",
       "expo-build-properties"
     ],
     "experiments": {
@@ -56,7 +57,7 @@
       "url": "https://u.expo.dev/9837820c-721c-4538-b880-f6480ff79a9b",
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 0,
+      "fallbackToCacheTimeout": 5000,
       "requestHeaders": {
         "expo-channel-name": "production"
       }

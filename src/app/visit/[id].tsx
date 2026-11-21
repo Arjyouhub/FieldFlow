@@ -1,29 +1,29 @@
-import React, { useState, useEffect } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
+import * as Location from "expo-location";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  TextInput,
   ActivityIndicator,
   Alert,
   Image,
   KeyboardAvoidingView,
-  Platform,
-  Share,
-  Modal,
   Linking,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import * as Location from "expo-location";
-import * as ImagePicker from "expo-image-picker";
 import { API_BASE_URL } from "../../config/api";
-import { getAuthSession } from "../../utils/storage";
 import { Colors, Radii, Shadows } from "../../constants/theme";
 import { fontScale } from "../../utils/responsive";
+import { getAuthSession } from "../../utils/storage";
 
 type VisitStep = "RADAR" | "DETAILS";
 
@@ -140,6 +140,7 @@ export default function StartVisitScreen() {
 
   // Photo Evidence State (Starts empty, no dummy photo)
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photoBase64, setPhotoBase64] = useState<string | null>(null);
   const [photoGallery, setPhotoGallery] = useState<string[]>([]);
 
   // Post-submit Share Summary Modal State
@@ -157,6 +158,7 @@ export default function StartVisitScreen() {
     remarks: string;
     visitTime: string;
     photoUri?: string | null;
+    photoUrl?: string | null;
   } | null>(null);
 
   // Share Loading & Notice State
@@ -209,7 +211,7 @@ export default function StartVisitScreen() {
             }
           }
         })
-        .catch(() => {});
+        .catch(() => { });
 
       // Background GPS acquisition
       captureCurrentGps(session.token);
@@ -233,7 +235,7 @@ export default function StartVisitScreen() {
           currentLat = loc.coords.latitude;
           currentLng = loc.coords.longitude;
           reportedAccuracy = Math.round(loc.coords.accuracy || 8);
-        } catch {}
+        } catch { }
       }
 
       if (currentLat !== null && currentLng !== null) {
@@ -280,10 +282,12 @@ export default function StartVisitScreen() {
       const res = await ImagePicker.launchCameraAsync({
         quality: 0.7,
         allowsEditing: false,
+        base64: true,
       });
 
       if (!res.canceled && res.assets[0]?.uri) {
         setPhotoUri(res.assets[0].uri);
+        setPhotoBase64(res.assets[0].base64 || null);
         setPhotoGallery((prev) => [res.assets[0].uri, ...prev.slice(0, 2)]);
       }
       setCurrentStep("DETAILS");
@@ -336,6 +340,26 @@ export default function StartVisitScreen() {
         return;
       }
 
+      let uploadedServerPhotoUrl = "";
+      if (photoBase64) {
+        try {
+          const upRes = await fetch(`${API_BASE_URL}/upload/photo`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ imageBase64: photoBase64 }),
+          });
+          const upData = await upRes.json();
+          if (upData.success && upData.photoUrl) {
+            uploadedServerPhotoUrl = upData.photoUrl;
+          }
+        } catch (uploadErr) {
+          console.warn("Evidence photo upload error:", uploadErr);
+        }
+      }
+
       const payload: any = {
         customerId: id,
         caseId: customer?.caseDbId || customer?.caseId || undefined,
@@ -344,7 +368,7 @@ export default function StartVisitScreen() {
         lng: coords.lng,
         accuracy,
         outcome: outcomeToUse,
-        photoUrl: photoUri || "",
+        photoUrl: uploadedServerPhotoUrl || photoUri || "",
         notes: remarks.trim() ? remarks.trim() : `${outcomeToUse} visit completed`,
       };
 
@@ -369,6 +393,9 @@ export default function StartVisitScreen() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
 
+      const baseDomain = API_BASE_URL.replace(/\/api\/?$/, "");
+      const fullPhotoUrl = uploadedServerPhotoUrl ? `${baseDomain}${uploadedServerPhotoUrl}` : null;
+
       // Prepare structured visit report data for sharing
       const summaryPayload = {
         customerName: customer?.name || "Customer",
@@ -384,6 +411,7 @@ export default function StartVisitScreen() {
         remarks: remarks.trim() || `${outcomeToUse} visit completed`,
         visitTime: `${new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}, ${new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}`,
         photoUri: photoUri || null,
+        photoUrl: fullPhotoUrl,
       };
 
       setSubmittedVisitSummary(summaryPayload);
@@ -412,8 +440,10 @@ export default function StartVisitScreen() {
     text += `📝 *Feedback/Remarks:* ${s.remarks}\n`;
     text += `🕒 *Visit Time:* ${s.visitTime}\n`;
     text += `📍 *Geotag Accuracy:* ${accuracy}m\n`;
-    if (s.photoUri) {
-      text += `📷 *Evidence Photo:* Attached\n`;
+    if (s.photoUrl) {
+      text += `📷 *Evidence Photo:* ${s.photoUrl}\n`;
+    } else if (s.photoUri) {
+      text += `📷 *Evidence Photo:* Captured on site\n`;
     }
     text += `━━━━━━━━━━━━━━━━━━━\n*FieldFlow Recovery Management*`;
     return text;
@@ -1079,12 +1109,12 @@ export default function StartVisitScreen() {
                   {selectedOutcome === "Payment Collected"
                     ? `Submit Collection (₹${collectedAmount || "0"})`
                     : selectedOutcome === "Promise to Pay (PTP)"
-                    ? `Submit PTP (₹${ptpAmount || "0"})`
-                    : selectedOutcome === "Refused to Pay (RTP)"
-                    ? "Submit Visit (RTP)"
-                    : selectedOutcome === "Message Left"
-                    ? "Submit Visit (Message Left)"
-                    : `Submit Visit (${activeOutcomeObj.shortLabel})`}
+                      ? `Submit PTP (₹${ptpAmount || "0"})`
+                      : selectedOutcome === "Refused to Pay (RTP)"
+                        ? "Submit Visit (RTP)"
+                        : selectedOutcome === "Message Left"
+                          ? "Submit Visit (Message Left)"
+                          : `Submit Visit (${activeOutcomeObj.shortLabel})`}
                 </Text>
               </>
             )}

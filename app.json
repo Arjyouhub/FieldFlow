@@ -36,7 +36,13 @@
         }
       ],
       "expo-secure-store",
-      "expo-build-properties"
+      "expo-build-properties",
+      [
+        "react-native-share",
+        {
+          "android": ["com.whatsapp"]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

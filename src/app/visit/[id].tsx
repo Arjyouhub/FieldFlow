@@ -449,12 +449,32 @@ export default function StartVisitScreen() {
     return text;
   };
 
-  // Share via WhatsApp directly
+  // Share via WhatsApp directly with Photo + Caption
   const handleShareWhatsApp = async () => {
     if (!submittedVisitSummary) return;
     try {
       setSharingLoading(true);
       const text = buildVisitReportText(submittedVisitSummary);
+      const localPhoto = submittedVisitSummary.photoUri;
+
+      // 1. Try Native Image + Caption WhatsApp share if react-native-share is available in binary
+      if (localPhoto) {
+        try {
+          const RNShare = require("react-native-share").default;
+          if (RNShare && RNShare.shareSingle) {
+            await RNShare.shareSingle({
+              social: RNShare.Social?.WHATSAPP || "whatsapp",
+              url: localPhoto,
+              message: text,
+            });
+            return;
+          }
+        } catch (nativeErr) {
+          console.warn("Direct native WhatsApp share unavailable:", nativeErr);
+        }
+      }
+
+      // 2. Fallback: WhatsApp URL scheme with report text & photo link
       const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(text)}`;
       const supported = await Linking.canOpenURL(whatsappUrl);
       if (supported) {
@@ -479,15 +499,35 @@ export default function StartVisitScreen() {
     }
   };
 
-  // Share visit report via system share sheet
+  // Share visit report via system share sheet (Photo + Caption)
   const handleShareVisitSummary = async () => {
     if (!submittedVisitSummary) return;
     try {
       setSharingLoading(true);
       const text = buildVisitReportText(submittedVisitSummary);
+      const localPhoto = submittedVisitSummary.photoUri;
+
+      // 1. Try Native Image + Caption share sheet if react-native-share is available in binary
+      if (localPhoto) {
+        try {
+          const RNShare = require("react-native-share").default;
+          if (RNShare && RNShare.open) {
+            await RNShare.open({
+              url: localPhoto,
+              message: text,
+              title: `Visit Report - ${submittedVisitSummary.customerName}`,
+            });
+            return;
+          }
+        } catch (nativeErr) {
+          console.warn("Native share open unavailable:", nativeErr);
+        }
+      }
+
+      // 2. Fallback: Core React Native Share
       await Share.share({
         message: text,
-        url: submittedVisitSummary.photoUri || undefined,
+        url: localPhoto || undefined,
         title: `Visit Report - ${submittedVisitSummary.customerName}`,
       });
     } catch (err: any) {

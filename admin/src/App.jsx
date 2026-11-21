@@ -84,6 +84,9 @@ import ModernToastContainer, { toast } from './components/ModernToast';
 import { parseSpreadsheetWithAutoHeader, autoDetectColumns, cleanPhoneNumber } from './utils/fileAutoDetector';
 
 export default function App() {
+  // Base URL configuration for production vs local dev
+  const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+
   const [token, setToken] = useState(localStorage.getItem('fieldflow_admin_token') || '');
   const [adminUser, setAdminUser] = useState(() => {
     try {
@@ -381,7 +384,13 @@ export default function App() {
   const [editingPortfolioField, setEditingPortfolioField] = useState(null); // { portfolioId: string, field: 'target' | 'pos' }
   const [editingPortfolioValue, setEditingPortfolioValue] = useState('');
   const [savingPortfolioTargetPos, setSavingPortfolioTargetPos] = useState(false);
-  const [portfolioTargetPosModal, setPortfolioTargetPosModal] = useState(null); // { isOpen: boolean, portfolio: any, target: string, pos: string }
+  const [portfolioTargetPosModal, setPortfolioTargetPosModal] = useState({
+    isOpen: false,
+    portfolioId: null,
+    portfolioName: '',
+    sumOfPos: 0,
+    target: 0,
+  });
 
   const handleSavePortfolioTargetPos = async (portfolioId, field, directValue) => {
     if (!portfolioId) return;
@@ -444,12 +453,11 @@ export default function App() {
     }
   };
 
-  const handleSavePortfolioModalTargetPos = async (e) => {
-    e.preventDefault();
-    if (!portfolioTargetPosModal?.portfolio?.portfolioId && !portfolioTargetPosModal?.portfolio?._id) return;
-    const pId = portfolioTargetPosModal.portfolio.portfolioId || portfolioTargetPosModal.portfolio._id;
-    const targetNum = Math.max(0, parseInt(String(portfolioTargetPosModal.target).replace(/[^0-9]/g, '') || '0', 10));
-    const posNum = Math.max(0, parseInt(String(portfolioTargetPosModal.pos).replace(/[^0-9]/g, '') || '0', 10));
+  const handleSavePortfolioModalTargetPos = async (portfolioId, targetVal, posVal) => {
+    const pId = portfolioId || portfolioTargetPosModal?.portfolioId;
+    if (!pId) return;
+    const targetNum = Math.max(0, parseInt(String(targetVal !== undefined ? targetVal : portfolioTargetPosModal.target).replace(/[^0-9]/g, '') || '0', 10));
+    const posNum = Math.max(0, parseInt(String(posVal !== undefined ? posVal : portfolioTargetPosModal.sumOfPos).replace(/[^0-9]/g, '') || '0', 10));
 
     setSavingPortfolioTargetPos(true);
     try {
@@ -467,7 +475,7 @@ export default function App() {
         return;
       }
       toast.success(data.message || 'Portfolio target and POS updated successfully.');
-      setPortfolioTargetPosModal(null);
+      setPortfolioTargetPosModal({ isOpen: false, portfolioId: null, portfolioName: '', sumOfPos: 0, target: 0 });
       setReportPortfolioMatrix((prev) =>
         prev.map((r) => {
           if (String(r.portfolioId) === String(pId)) {
@@ -529,9 +537,6 @@ export default function App() {
   const [loginPhone, setLoginPhone] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
-
-  // Base URL configuration for production vs local dev
-  const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
   // Track broken / unreachable photo URLs to fallback cleanly to styled initials
   const [brokenImages, setBrokenImages] = useState({});
@@ -7471,7 +7476,7 @@ export default function App() {
       )}
 
       {/* PORTFOLIO TARGET & SUM OF POS CONFIGURATION MODAL */}
-      {portfolioTargetPosModal.isOpen && (
+      {portfolioTargetPosModal?.isOpen && (
         <div className="modal-backdrop" onClick={() => !savingPortfolioTargetPos && setPortfolioTargetPosModal({ isOpen: false, portfolioId: null, portfolioName: '', sumOfPos: 0, target: 0 })}>
           <div className="modal-content" style={{ maxWidth: '440px' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">

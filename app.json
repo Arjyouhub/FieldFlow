@@ -36,7 +36,6 @@
         }
       ],
       "expo-secure-store",
-      "expo-sharing",
       "expo-build-properties"
     ],
     "experiments": {

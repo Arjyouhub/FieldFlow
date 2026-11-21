@@ -13,15 +13,13 @@ import {
   Platform,
   Share,
   Modal,
+  Linking,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
-import * as Sharing from "expo-sharing";
-import * as Clipboard from "expo-clipboard";
-import { File, Paths } from "expo-file-system";
 import { API_BASE_URL } from "../../config/api";
 import { getAuthSession } from "../../utils/storage";
 import { Colors, Radii, Shadows } from "../../constants/theme";
@@ -421,86 +419,51 @@ export default function StartVisitScreen() {
     return text;
   };
 
-  // Ensure photo URI is a local file URI suitable for native sharing
-  const resolveLocalPhotoUri = async (uri: string): Promise<string> => {
-    try {
-      if (uri.startsWith("http://") || uri.startsWith("https://")) {
-        const filename = `visit_proof_${Date.now()}.jpg`;
-        const dest = new File(Paths.cache, filename);
-        const downloaded = await File.downloadFileAsync(uri, dest);
-        return downloaded.uri;
-      }
-    } catch (e) {
-      console.warn("Could not cache remote photo for sharing:", e);
-    }
-    return uri;
-  };
-
-  // Share photo directly using native file sharing + copy report details to clipboard
-  const handleSharePhoto = async () => {
-    if (!submittedVisitSummary?.photoUri) {
-      Alert.alert("No Photo", "No photo was captured for this visit. Sharing text summary instead.");
-      await handleShareTextSummary();
-      return;
-    }
+  // Share via WhatsApp directly
+  const handleShareWhatsApp = async () => {
+    if (!submittedVisitSummary) return;
     try {
       setSharingLoading(true);
-      const reportText = buildVisitReportText(submittedVisitSummary);
-
-      // Auto-copy report text to clipboard so agent can easily paste as caption in WhatsApp
-      try {
-        await Clipboard.setStringAsync(reportText);
-        setShareSuccessToast("Report details copied! Paste it as caption when sharing.");
-      } catch (clipErr) {
-        console.warn("Clipboard notice:", clipErr);
+      const text = buildVisitReportText(submittedVisitSummary);
+      const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(text)}`;
+      const supported = await Linking.canOpenURL(whatsappUrl);
+      if (supported) {
+        await Linking.openURL(whatsappUrl);
+      } else {
+        await Share.share({
+          message: text,
+          title: `Visit Report - ${submittedVisitSummary.customerName}`,
+        });
       }
-
-      const isAvailable = await Sharing.isAvailableAsync();
-      if (!isAvailable) {
-        Alert.alert(
-          "Photo Sharing Notice",
-          "Direct photo sharing is not supported on this platform. The text summary has been copied to your clipboard."
-        );
-        return;
-      }
-
-      const localUri = await resolveLocalPhotoUri(submittedVisitSummary.photoUri);
-      await Sharing.shareAsync(localUri, {
-        mimeType: "image/jpeg",
-        dialogTitle: `FieldFlow Visit Photo - ${submittedVisitSummary.customerName}`,
-        UTI: "public.jpeg",
-      });
     } catch (err: any) {
-      console.warn("Share photo error:", err.message);
-      Alert.alert("Share Notice", err.message || "Failed to share photo.");
+      console.warn("WhatsApp share notice:", err.message);
+      if (submittedVisitSummary) {
+        const text = buildVisitReportText(submittedVisitSummary);
+        await Share.share({
+          message: text,
+          title: `Visit Report - ${submittedVisitSummary.customerName}`,
+        });
+      }
     } finally {
       setSharingLoading(false);
     }
   };
 
-  // Share text summary via React Native Share
-  const handleShareTextSummary = async () => {
+  // Share visit report via system share sheet
+  const handleShareVisitSummary = async () => {
     if (!submittedVisitSummary) return;
     try {
       setSharingLoading(true);
       const text = buildVisitReportText(submittedVisitSummary);
       await Share.share({
         message: text,
+        url: submittedVisitSummary.photoUri || undefined,
         title: `Visit Report - ${submittedVisitSummary.customerName}`,
       });
     } catch (err: any) {
-      console.warn("Share text notice:", err.message);
+      console.warn("Share notice:", err.message);
     } finally {
       setSharingLoading(false);
-    }
-  };
-
-  // Default handler: prioritizes sharing photo if one was taken
-  const handleShareVisitSummary = async () => {
-    if (submittedVisitSummary?.photoUri) {
-      await handleSharePhoto();
-    } else {
-      await handleShareTextSummary();
     }
   };
 
@@ -1213,48 +1176,29 @@ export default function StartVisitScreen() {
 
             {/* Actions: Share & Done */}
             <View style={styles.shareActionsCol}>
-              {submittedVisitSummary?.photoUri ? (
-                <>
-                  <Pressable
-                    style={[styles.shareReportButton, { backgroundColor: "#059669" }]}
-                    onPress={handleSharePhoto}
-                    disabled={sharingLoading}
-                  >
-                    {sharingLoading ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <>
-                        <Ionicons name="camera" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                        <Text style={styles.shareReportButtonText}>Share Photo Evidence</Text>
-                      </>
-                    )}
-                  </Pressable>
+              <Pressable
+                style={[styles.shareReportButton, { backgroundColor: "#25D366" }]}
+                onPress={handleShareWhatsApp}
+                disabled={sharingLoading}
+              >
+                {sharingLoading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons name="logo-whatsapp" size={19} color="#FFFFFF" style={{ marginRight: 8 }} />
+                    <Text style={styles.shareReportButtonText}>Share Report on WhatsApp</Text>
+                  </>
+                )}
+              </Pressable>
 
-                  <Pressable
-                    style={styles.shareTextOutlineButton}
-                    onPress={handleShareTextSummary}
-                    disabled={sharingLoading}
-                  >
-                    <Ionicons name="document-text-outline" size={17} color="#0284C7" style={{ marginRight: 8 }} />
-                    <Text style={styles.shareTextOutlineButtonText}>Share Text Report Only</Text>
-                  </Pressable>
-                </>
-              ) : (
-                <Pressable
-                  style={styles.shareReportButton}
-                  onPress={handleShareTextSummary}
-                  disabled={sharingLoading}
-                >
-                  {sharingLoading ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <>
-                      <Ionicons name="share-social" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                      <Text style={styles.shareReportButtonText}>Share Visit Summary</Text>
-                    </>
-                  )}
-                </Pressable>
-              )}
+              <Pressable
+                style={styles.shareTextOutlineButton}
+                onPress={handleShareVisitSummary}
+                disabled={sharingLoading}
+              >
+                <Ionicons name="share-social-outline" size={17} color="#0284C7" style={{ marginRight: 8 }} />
+                <Text style={styles.shareTextOutlineButtonText}>Share via Other Apps</Text>
+              </Pressable>
 
               <Pressable
                 style={styles.doneDashboardButton}

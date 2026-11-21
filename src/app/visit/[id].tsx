@@ -440,11 +440,6 @@ export default function StartVisitScreen() {
     text += `📝 *Feedback/Remarks:* ${s.remarks}\n`;
     text += `🕒 *Visit Time:* ${s.visitTime}\n`;
     text += `📍 *Geotag Accuracy:* ${accuracy}m\n`;
-    if (s.photoUrl) {
-      text += `📷 *Evidence Photo:* ${s.photoUrl}\n`;
-    } else if (s.photoUri) {
-      text += `📷 *Evidence Photo:* Captured on site\n`;
-    }
     text += `━━━━━━━━━━━━━━━━━━━\n*FieldFlow Recovery Management*`;
     return text;
   };
@@ -457,7 +452,7 @@ export default function StartVisitScreen() {
       const text = buildVisitReportText(submittedVisitSummary);
       const localPhoto = submittedVisitSummary.photoUri;
 
-      // 1. Try Native Image + Caption WhatsApp share if react-native-share is available in binary
+      // 1. Try Native Image + Caption WhatsApp share (works in Custom APK / Development Build)
       if (localPhoto) {
         try {
           const RNShare = require("react-native-share").default;
@@ -472,9 +467,26 @@ export default function StartVisitScreen() {
         } catch (nativeErr) {
           console.warn("Direct native WhatsApp share unavailable:", nativeErr);
         }
+
+        // 2. Try expo-sharing (works in Expo Go on physical device)
+        try {
+          const ExpoSharing = require("expo-sharing");
+          if (ExpoSharing && typeof ExpoSharing.isAvailableAsync === "function") {
+            const isAvail = await ExpoSharing.isAvailableAsync();
+            if (isAvail) {
+              await ExpoSharing.shareAsync(localPhoto, {
+                mimeType: "image/jpeg",
+                dialogTitle: `FieldFlow Visit Photo - ${submittedVisitSummary.customerName}`,
+              });
+              return;
+            }
+          }
+        } catch (expoShareErr) {
+          console.warn("expo-sharing unavailable:", expoShareErr);
+        }
       }
 
-      // 2. Fallback: WhatsApp URL scheme with report text & photo link
+      // 3. Fallback: WhatsApp URL scheme with report text
       const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(text)}`;
       const supported = await Linking.canOpenURL(whatsappUrl);
       if (supported) {
@@ -507,7 +519,7 @@ export default function StartVisitScreen() {
       const text = buildVisitReportText(submittedVisitSummary);
       const localPhoto = submittedVisitSummary.photoUri;
 
-      // 1. Try Native Image + Caption share sheet if react-native-share is available in binary
+      // 1. Try Native Image + Caption share sheet (works in Custom APK / Development Build)
       if (localPhoto) {
         try {
           const RNShare = require("react-native-share").default;
@@ -522,9 +534,26 @@ export default function StartVisitScreen() {
         } catch (nativeErr) {
           console.warn("Native share open unavailable:", nativeErr);
         }
+
+        // 2. Try expo-sharing (works in Expo Go on physical device)
+        try {
+          const ExpoSharing = require("expo-sharing");
+          if (ExpoSharing && typeof ExpoSharing.isAvailableAsync === "function") {
+            const isAvail = await ExpoSharing.isAvailableAsync();
+            if (isAvail) {
+              await ExpoSharing.shareAsync(localPhoto, {
+                mimeType: "image/jpeg",
+                dialogTitle: `FieldFlow Visit Photo - ${submittedVisitSummary.customerName}`,
+              });
+              return;
+            }
+          }
+        } catch (expoShareErr) {
+          console.warn("expo-sharing unavailable:", expoShareErr);
+        }
       }
 
-      // 2. Fallback: Core React Native Share
+      // 3. Fallback: Core React Native Share
       await Share.share({
         message: text,
         url: localPhoto || undefined,

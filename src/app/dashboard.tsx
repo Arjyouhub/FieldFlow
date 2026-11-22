@@ -2361,10 +2361,10 @@ export default function DashboardScreen() {
                 >
                   <Ionicons name="notifications" size={20} color="#0D5D37" />
                 </View>
-                <div>
+                <View>
                   <Text style={styles.modalTitle}>Field Notifications</Text>
                   <Text style={{ fontSize: fontScale(11.5), color: "#64748B" }}>Live route & case activity alerts</Text>
-                </div>
+                </View>
               </View>
               <Pressable onPress={() => setShowNotifModal(false)} hitSlop={8}>
                 <Ionicons name="close" size={22} color={Colors.light.text} />
@@ -2857,10 +2857,10 @@ export default function DashboardScreen() {
                 >
                   <Ionicons name="key" size={20} color="#D97706" />
                 </View>
-                <div>
+                <View>
                   <Text style={styles.modalTitle}>Change Password</Text>
                   <Text style={{ fontSize: fontScale(11.5), color: "#64748B" }}>Update login credentials</Text>
-                </div>
+                </View>
               </View>
               <Pressable
                 onPress={() => {
@@ -3083,10 +3083,10 @@ export default function DashboardScreen() {
                 >
                   <Ionicons name="person" size={20} color="#0D5D37" />
                 </View>
-                <div>
+                <View>
                   <Text style={styles.modalTitle}>Staff Profile</Text>
                   <Text style={{ fontSize: fontScale(11.5), color: "#64748B" }}>Official Field Executive Details</Text>
-                </div>
+                </View>
               </View>
               <Pressable onPress={() => setShowMyProfileModal(false)} hitSlop={8}>
                 <Ionicons name="close" size={22} color={Colors.light.text} />
@@ -3191,7 +3191,7 @@ export default function DashboardScreen() {
                   {
                     icon: "trophy-outline",
                     label: "Monthly Recovery Target",
-                    value: `₹${(user?.monthlyTarget || 250000).toLocaleString("en-IN")}`,
+                    value: `₹${Number(user?.monthlyTarget || 250000).toLocaleString("en-IN")}`,
                     highlight: true,
                   },
                 ].map((row, rIdx) => (
@@ -3263,7 +3263,7 @@ export default function DashboardScreen() {
                   <View style={{ width: 1, backgroundColor: "#BBF7D0" }} />
                   <View style={{ alignItems: "center" }}>
                     <Text style={{ fontSize: fontScale(16), fontWeight: "900", color: "#15803D" }}>
-                      ₹{(kpis.totalCollectedAmt || 0).toLocaleString("en-IN")}
+                      ₹{Number(kpis.totalCollectedAmt || 0).toLocaleString("en-IN")}
                     </Text>
                     <Text style={{ fontSize: fontScale(11), color: "#166534", marginTop: 2 }}>Total Collected</Text>
                   </View>
@@ -3333,10 +3333,10 @@ export default function DashboardScreen() {
                 >
                   <Ionicons name="help-buoy" size={20} color="#2563EB" />
                 </View>
-                <div>
+                <View>
                   <Text style={styles.modalTitle}>Help & Support</Text>
                   <Text style={{ fontSize: fontScale(11.5), color: "#64748B" }}>Field Staff Assistance Desk</Text>
-                </div>
+                </View>
               </View>
               <Pressable onPress={() => setShowHelpModal(false)} hitSlop={8}>
                 <Ionicons name="close" size={22} color={Colors.light.text} />
@@ -3578,10 +3578,10 @@ export default function DashboardScreen() {
                 >
                   <Ionicons name="cloud-download" size={20} color="#2563EB" />
                 </View>
-                <div>
+                <View>
                   <Text style={styles.modalTitle}>Offline Data & Cache</Text>
                   <Text style={{ fontSize: fontScale(11.5), color: "#64748B" }}>Local encrypted storage</Text>
-                </div>
+                </View>
               </View>
               <Pressable onPress={() => setShowOfflineModal(false)} hitSlop={8}>
                 <Ionicons name="close" size={22} color={Colors.light.text} />

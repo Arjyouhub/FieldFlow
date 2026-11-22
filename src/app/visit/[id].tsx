@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -452,6 +453,12 @@ export default function StartVisitScreen() {
       const text = buildVisitReportText(submittedVisitSummary);
       const localPhoto = submittedVisitSummary.photoUri;
 
+      // 0. Auto-copy text to clipboard so it's guaranteed to be available
+      try {
+        await Clipboard.setStringAsync(text);
+        setShareSuccessToast("Report details copied to clipboard!");
+      } catch {}
+
       // 1. Try Native Image + Caption WhatsApp share (works in Custom APK / Development Build)
       if (localPhoto) {
         try {
@@ -518,6 +525,11 @@ export default function StartVisitScreen() {
       setSharingLoading(true);
       const text = buildVisitReportText(submittedVisitSummary);
       const localPhoto = submittedVisitSummary.photoUri;
+
+      try {
+        await Clipboard.setStringAsync(text);
+        setShareSuccessToast("Report details copied to clipboard!");
+      } catch {}
 
       // 1. Try Native Image + Caption share sheet (works in Custom APK / Development Build)
       if (localPhoto) {
@@ -1297,6 +1309,20 @@ export default function StartVisitScreen() {
               >
                 <Ionicons name="share-social-outline" size={17} color="#0284C7" style={{ marginRight: 8 }} />
                 <Text style={styles.shareTextOutlineButtonText}>Share via Other Apps</Text>
+              </Pressable>
+
+              <Pressable
+                style={[styles.shareTextOutlineButton, { borderColor: "#059669", backgroundColor: "#F0FDF4" }]}
+                onPress={async () => {
+                  if (!submittedVisitSummary) return;
+                  const text = buildVisitReportText(submittedVisitSummary);
+                  await Clipboard.setStringAsync(text);
+                  setShareSuccessToast("Visit report copied to clipboard!");
+                }}
+                disabled={sharingLoading}
+              >
+                <Ionicons name="copy-outline" size={17} color="#059669" style={{ marginRight: 8 }} />
+                <Text style={[styles.shareTextOutlineButtonText, { color: "#059669" }]}>Copy Full Report Text</Text>
               </Pressable>
 
               <Pressable

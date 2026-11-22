@@ -2486,7 +2486,7 @@ export default function DashboardScreen() {
                       <Text style={{ fontSize: fontScale(10.5), color: "#166534" }}>Today, 10:15 AM</Text>
                     </View>
                     <Text style={{ fontSize: fontScale(12), color: "#166534", marginTop: 3, lineHeight: 18 }}>
-                      Total collected: ₹{(kpis.totalCollectedAmt || 0).toLocaleString("en-IN")}. All receipts and cash logs are successfully synced with server.
+                      Total collected: ₹{Number(kpis.totalCollectedAmt || 0).toLocaleString("en-IN")}. All receipts and cash logs are successfully synced with server.
                     </Text>
                   </View>
                 </View>
@@ -2529,7 +2529,7 @@ export default function DashboardScreen() {
                       <Text style={{ fontSize: fontScale(10.5), color: "#B45309" }}>Yesterday</Text>
                     </View>
                     <Text style={{ fontSize: fontScale(12), color: "#92400E", marginTop: 3, lineHeight: 18 }}>
-                      Target: ₹{(user?.monthlyTarget || 250000).toLocaleString("en-IN")}. Maintain consistent daily recovery to achieve 100% target.
+                      Target: ₹{Number(user?.monthlyTarget || 250000).toLocaleString("en-IN")}. Maintain consistent daily recovery to achieve 100% target.
                     </Text>
                   </View>
                 </View>

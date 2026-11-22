@@ -1,6 +1,7 @@
 import { Portfolio } from '../models/Portfolio.js';
 import { Case } from '../models/Case.js';
 import { Customer } from '../models/Customer.js';
+import { CustomerLocation } from '../models/CustomerLocation.js';
 import { MonthlyBatch } from '../models/MonthlyBatch.js';
 import { Visit } from '../models/Visit.js';
 import { SuspiciousEvent } from '../models/SuspiciousEvent.js';
@@ -388,24 +389,58 @@ export async function deletePortfolio(req, res) {
     }
 
     const casesCount = await Case.countDocuments({ portfolioId: id });
-    if (casesCount > 0 && req.query.force !== 'true') {
+    const customersCount = await Customer.countDocuments({
+      $or: [{ portfolioId: id }, { portfolioName: portfolio.name }],
+    });
+    const totalItems = casesCount + customersCount;
+
+    if (totalItems > 0 && req.query.force !== 'true') {
       return res.status(400).json({
         success: false,
-        casesCount,
-        message: `Cannot delete "${portfolio.name}" because it contains ${casesCount} cases. Please confirm force delete to remove it along with its cases.`,
+        casesCount: totalItems,
+        message: `Cannot delete "${portfolio.name}" because it contains ${totalItems} cases/records. Please confirm force delete to remove it along with all its data.`,
       });
     }
 
-    // Delete associated monthly batches
+    // Cascade delete associated monthly batches, cases, and customers
     await MonthlyBatch.deleteMany({ portfolioId: id });
-    if (req.query.force === 'true') {
-      await Case.deleteMany({ portfolioId: id });
+    await Case.deleteMany({ portfolioId: id });
+
+    // Locate and delete all customers and their geofence locations
+    const customerIds = await Customer.find({
+      $or: [{ portfolioId: id }, { portfolioName: portfolio.name }],
+    }).distinct('_id');
+
+    if (customerIds && customerIds.length > 0) {
+      await CustomerLocation.deleteMany({ customerId: { $in: customerIds } });
+      await Customer.deleteMany({ _id: { $in: customerIds } });
     }
+
+    // Delete visits and suspicious events associated with this portfolio
+    await Visit.deleteMany({ portfolioId: id });
+    await SuspiciousEvent.deleteMany({ portfolioId: id });
+
+    // Finally delete the portfolio document
     await Portfolio.findByIdAndDelete(id);
+
+    await AuditLog.create({
+      actorId: req.user?._id,
+      actorName: req.user?.name || 'Administrator',
+      actorRole: req.user?.role || 'admin',
+      action: 'DELETE_PORTFOLIO',
+      entityType: 'Portfolio',
+      entityId: id,
+      details: {
+        portfolioName: portfolio.name,
+        code: portfolio.code,
+        deletedCases: casesCount,
+        deletedCustomers: customerIds.length,
+      },
+    }).catch(() => {});
 
     return res.json({
       success: true,
-      message: `Portfolio "${portfolio.name}" deleted successfully.`,
+      message: `Portfolio "${portfolio.name}" and all associated cases/customers deleted successfully.`,
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

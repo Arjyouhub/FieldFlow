@@ -17,8 +17,27 @@ router.use(protect);
  */
 router.get('/assigned', async (req, res) => {
   try {
+    // 0. Fetch all active portfolios
+    const activePortfolios = await Portfolio.find({ isActive: { $ne: false } }).select('_id name code defaultRadiusMetres');
+
+    // If no active portfolios exist in the database, return empty immediately
+    if (!activePortfolios || activePortfolios.length === 0) {
+      return res.json({
+        success: true,
+        count: 0,
+        customers: [],
+      });
+    }
+
+    const activePortfolioMap = new Map();
+    activePortfolios.forEach((p) => {
+      activePortfolioMap.set(p._id.toString(), p);
+    });
+    const activePortfolioIds = activePortfolios.map((p) => p._id);
+
     const filter = {
       isDeleted: { $ne: true },
+      portfolioId: { $in: activePortfolioIds },
       ...(req.user.role === 'staff' ? { assignedStaff: req.user._id } : {}),
     };
 
@@ -28,9 +47,13 @@ router.get('/assigned', async (req, res) => {
       .populate('portfolioId', 'name code defaultRadiusMetres')
       .sort({ createdAt: -1 });
 
-    if (cases && cases.length > 0) {
+    const validCases = cases.filter(
+      (c) => c.portfolioId && activePortfolioMap.has(c.portfolioId._id?.toString() || c.portfolioId.toString())
+    );
+
+    if (validCases && validCases.length > 0) {
       const enrichedCases = await Promise.all(
-        cases.map(async (c) => {
+        validCases.map(async (c) => {
           const cust = c.customerId ? (c.customerId.toObject ? c.customerId.toObject() : c.customerId) : {};
           const locations = cust._id
             ? await CustomerLocation.find({ customerId: cust._id, isActive: true })
@@ -80,8 +103,12 @@ router.get('/assigned', async (req, res) => {
       .populate('portfolioId', 'name code')
       .sort({ createdAt: -1 });
 
+    const validCustomers = rawCustomers.filter(
+      (cust) => cust.portfolioId && activePortfolioMap.has(cust.portfolioId._id?.toString() || cust.portfolioId.toString())
+    );
+
     const enrichedCustomers = await Promise.all(
-      rawCustomers.map(async (cust) => {
+      validCustomers.map(async (cust) => {
         const locations = await CustomerLocation.find({ customerId: cust._id, isActive: true });
         const custObj = cust.toObject();
         return {

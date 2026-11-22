@@ -32,6 +32,9 @@ import {
   updateAdminStatus,
   deleteAdmin,
   updateStaffTarget,
+  listLoginSessions,
+  revokeLoginSession,
+  terminateAllUserSessions,
 } from '../controllers/adminController.js';
 import { updatePortfolioTargetPos } from '../controllers/portfolioController.js';
 import { protect, authorize } from '../middleware/authMiddleware.js';
@@ -82,5 +85,10 @@ router.delete('/admins/:id', deleteAdmin);
 
 router.get('/settings', getSettings);
 router.put('/settings', updateSettings);
+
+// Login Sessions Management
+router.get('/sessions', listLoginSessions);
+router.post('/sessions/:id/revoke', revokeLoginSession);
+router.post('/sessions/user/:userId/terminate-all', terminateAllUserSessions);
 
 export default router;

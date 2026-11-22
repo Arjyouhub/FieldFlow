@@ -77,6 +77,7 @@ export async function getDashboardStats(req, res) {
     });
 
     const portfoliosCount = await Portfolio.countDocuments({ isActive: true });
+    const activeSessionsCount = await Session.countDocuments({ isValid: true });
 
     // Aggregate total verified collections vs pending collections
     const collectionsAgg = await Visit.aggregate([
@@ -126,6 +127,7 @@ export async function getDashboardStats(req, res) {
         approvedCollectionAmount,
         pendingCollectionAmount,
         portfoliosCount,
+        activeSessionsCount,
       },
       recentVisits,
     });
@@ -1923,6 +1925,137 @@ export async function updateStaffTarget(req, res) {
       message: `Updated target for ${staff.name} to ₹${numericTarget.toLocaleString('en-IN')}`,
       staffId: staff._id,
       monthlyTarget: numericTarget,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+/**
+ * 8. Login Sessions Management
+ */
+export async function listLoginSessions(req, res) {
+  try {
+    const { search, status = 'all', role = 'all', limit = 100 } = req.query;
+
+    const query = {};
+    if (status === 'active') {
+      query.isValid = true;
+    } else if (status === 'revoked') {
+      query.isValid = false;
+    }
+
+    const rawSessions = await Session.find(query)
+      .populate('userId', 'name phone email role employeeId assignedArea profilePhoto status')
+      .sort({ lastActiveAt: -1, createdAt: -1 })
+      .limit(Number(limit) || 100);
+
+    // Filter populated sessions with valid user accounts
+    let filteredSessions = rawSessions.filter((s) => s.userId);
+
+    if (role && role !== 'all') {
+      filteredSessions = filteredSessions.filter((s) => s.userId?.role === role);
+    }
+
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      filteredSessions = filteredSessions.filter((s) => {
+        const u = s.userId || {};
+        return (
+          (u.name && u.name.toLowerCase().includes(q)) ||
+          (u.phone && u.phone.includes(q)) ||
+          (u.employeeId && u.employeeId.toLowerCase().includes(q)) ||
+          (s.ipAddress && s.ipAddress.includes(q)) ||
+          (s.deviceType && s.deviceType.toLowerCase().includes(q))
+        );
+      });
+    }
+
+    const activeCount = await Session.countDocuments({ isValid: true });
+    const mobileCount = await Session.countDocuments({
+      isValid: true,
+      $or: [{ deviceType: /android/i }, { deviceType: /app/i }, { deviceType: /mobile/i }],
+    });
+    const webCount = await Session.countDocuments({
+      isValid: true,
+      $or: [{ deviceType: /web/i }, { deviceType: /browser/i }, { deviceType: /portal/i }],
+    });
+    const revokedCount = await Session.countDocuments({ isValid: false });
+
+    return res.json({
+      success: true,
+      totalCount: filteredSessions.length,
+      activeCount,
+      mobileCount,
+      webCount,
+      revokedCount,
+      sessions: filteredSessions,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+export async function revokeLoginSession(req, res) {
+  try {
+    const { id } = req.params;
+    const session = await Session.findById(id).populate('userId', 'name phone role');
+    if (!session) {
+      return res.status(404).json({ success: false, message: 'Session not found.' });
+    }
+
+    session.isValid = false;
+    await session.save();
+
+    await AuditLog.create({
+      actorId: req.user._id,
+      actorName: req.user.name,
+      actorRole: req.user.role,
+      action: 'REVOKE_SESSION',
+      entityType: 'Session',
+      entityId: session._id.toString(),
+      details: {
+        targetUserId: session.userId?._id,
+        targetUserName: session.userId?.name,
+        deviceType: session.deviceType,
+        ipAddress: session.ipAddress,
+      },
+    }).catch(() => {});
+
+    return res.json({
+      success: true,
+      message: `Session for ${session.userId?.name || 'user'} terminated. Client will be forced to log in on next action.`,
+      sessionId: session._id,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+export async function terminateAllUserSessions(req, res) {
+  try {
+    const { userId } = req.params;
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    const result = await Session.updateMany({ userId, isValid: true }, { isValid: false });
+
+    await AuditLog.create({
+      actorId: req.user._id,
+      actorName: req.user.name,
+      actorRole: req.user.role,
+      action: 'TERMINATE_ALL_USER_SESSIONS',
+      entityType: 'User',
+      entityId: userId,
+      details: { targetUserName: user.name, terminatedCount: result.modifiedCount },
+    }).catch(() => {});
+
+    return res.json({
+      success: true,
+      message: `Terminated ${result.modifiedCount} active session(s) for ${user.name}.`,
+      terminatedCount: result.modifiedCount,
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

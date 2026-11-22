@@ -174,43 +174,27 @@ export default function LoginScreen() {
     };
   }, []);
 
-  // Check existing session on startup
+  // Check existing session on startup - persistent login
   useEffect(() => {
     let isMounted = true;
 
     (async () => {
       try {
-        const { token, user } = await getAuthSession();
-        if (!token) {
-          if (isMounted) setIsCheckingAuth(false);
-          return;
-        }
-
-        // Validate active token with backend
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
-
-        const res = await fetch(`${API_BASE_URL}/customers/assigned`, {
-          headers: { Authorization: `Bearer ${token}` },
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-
-        if (res.ok) {
+        const { token } = await getAuthSession();
+        if (token) {
+          // If token exists, stay logged in and go directly to dashboard
+          // Only manual logout or explicit 401 will log the user out
           if (isMounted) {
             router.replace("/dashboard");
           }
           return;
         }
-
-        // Token expired, invalid or account inactive/deleted (401 / 403)
-        console.warn(`[FieldFlow Auth] Saved session invalid (HTTP ${res.status}). Clearing local auth.`);
-        await clearAuthSession();
-        if (isMounted) setIsCheckingAuth(false);
       } catch (err: any) {
-        // If network timed out or unverified on startup, do not auto-login to prevent stale session bypass
-        console.warn("[FieldFlow Auth] Active session verification check failed:", err.message);
-        if (isMounted) setIsCheckingAuth(false);
+        console.warn("[FieldFlow Auth] Saved session check error:", err.message);
+      }
+
+      if (isMounted) {
+        setIsCheckingAuth(false);
       }
     })();
 

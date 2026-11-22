@@ -13,7 +13,7 @@ const uploadDir = path.join(__dirname, '../../uploads');
 
 function generateToken(id) {
   return jwt.sign({ id }, process.env.JWT_SECRET || 'fieldflow_secure_jwt_secret_dev_key_2026', {
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+    expiresIn: process.env.JWT_EXPIRES_IN || '365d',
   });
 }
 
@@ -98,9 +98,9 @@ export async function login(req, res) {
 
     const token = generateToken(user._id);
 
-    // Create session record
+    // Create session record (persistent 1 year)
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
+    expiresAt.setDate(expiresAt.getDate() + 365);
 
     await Session.create({
       userId: user._id,

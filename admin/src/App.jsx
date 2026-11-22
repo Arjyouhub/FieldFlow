@@ -68,6 +68,7 @@ import AdminAccountsView from './components/AdminAccountsView';
 import PtpView from './components/PtpView';
 import NonWorkableView from './components/NonWorkableView';
 import AuditLogsView from './components/AuditLogsView';
+import LoginSessionsView from './components/LoginSessionsView';
 import SuspiciousVisitsView from './components/SuspiciousVisitsView';
 import WhatsAppShareModal from './components/WhatsAppShareModal';
 import StaffApprovalsView from './components/StaffApprovalsView';
@@ -2452,6 +2453,7 @@ export default function App() {
             { id: 'ptp', label: 'PTP Commitments', icon: Clock, badge: stats?.ptpCases },
             { id: 'nonworkable', label: 'Non-Workable Cases', icon: UserX, badge: stats?.nonWorkableCases },
             { id: 'staff', label: 'Staff Details & Approvals', icon: UserCheck, badge: stats?.pendingStaffApprovals, badgeColor: 'warning' },
+            { id: 'sessions', label: 'Login Sessions', icon: ShieldCheck, badge: stats?.activeSessionsCount, badgeColor: 'info' },
             { id: 'reports', label: 'Reports & Export', icon: FileText },
             { id: 'audit', label: 'Audit Logs', icon: FileCheck },
             { id: 'settings', label: 'Settings', icon: Settings },
@@ -2520,6 +2522,7 @@ export default function App() {
                activeTab === 'collections' ? 'Collections' :
                activeTab === 'ptp' ? 'PTP Commitments' :
                activeTab === 'nonworkable' ? 'Non-Workable' :
+               activeTab === 'sessions' ? 'Active Login Sessions' :
                activeTab === 'reports' ? 'Reports & Export' :
                activeTab === 'audit' ? 'Audit Trail' : 'Settings'}
             </h2>
@@ -2723,6 +2726,30 @@ export default function App() {
                     </div>
                   </div>
                   <span className="badge badge-warning">{stats.pendingPaymentVerifications || 3} Receipts</span>
+                </div>
+
+                <div
+                  className="card"
+                  style={{
+                    padding: '14px 18px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                  onClick={() => setActiveTab('sessions')}
+                  title="Click to monitor Active Login Sessions"
+                >
+                  <div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Active Logins</div>
+                    <div style={{ fontSize: '18px', fontWeight: 800, marginTop: '2px', color: '#059669' }}>
+                      {stats.activeSessionsCount != null ? stats.activeSessionsCount : stats.activeStaff} Active Sessions
+                    </div>
+                  </div>
+                  <span className="badge badge-success" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <ShieldCheck size={12} /> Monitor
+                  </span>
                 </div>
               </div>
 
@@ -3121,6 +3148,15 @@ export default function App() {
           {/* ================================================================ */}
           {activeTab === 'audit' && (
             <AuditLogsView
+              apiFetch={apiFetch}
+            />
+          )}
+
+          {/* ================================================================ */}
+          {/* TAB: LOGIN SESSIONS MONITORING */}
+          {/* ================================================================ */}
+          {activeTab === 'sessions' && (
+            <LoginSessionsView
               apiFetch={apiFetch}
             />
           )}
@@ -5440,6 +5476,14 @@ export default function App() {
                 >
                   <Settings size={14} /> Operational Policies & Geofence
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setSettingsSubTab('sessions')}
+                  className={`btn btn-sm ${settingsSubTab === 'sessions' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ gap: '6px' }}
+                >
+                  <ShieldCheck size={14} /> Active Login Sessions
+                </button>
               </div>
 
               {/* Sub-Tab 1: Administrators Management */}
@@ -5507,6 +5551,11 @@ export default function App() {
                     </button>
                   </form>
                 </div>
+              )}
+
+              {/* Sub-Tab 3: Login Sessions */}
+              {settingsSubTab === 'sessions' && (
+                <LoginSessionsView apiFetch={apiFetch} />
               )}
             </div>
           )}

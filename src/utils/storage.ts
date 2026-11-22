@@ -50,7 +50,13 @@ export async function removeItem(key: string): Promise<void> {
 
 export async function saveAuthSession(token: string, user: any) {
   await setItem(TOKEN_KEY, token);
-  await setItem(USER_KEY, JSON.stringify(user));
+  // Ensure user object does not exceed SecureStore 2048-byte limit on Android KeyStore
+  // Strip heavy base64 strings if present in user payload
+  const cleanUser = user ? { ...user } : {};
+  if (cleanUser.profilePhoto && cleanUser.profilePhoto.length > 500) {
+    cleanUser.profilePhoto = ''; // Keep SecureStore payload light & reliable
+  }
+  await setItem(USER_KEY, JSON.stringify(cleanUser));
 }
 
 export async function getAuthSession(): Promise<{ token: string | null; user: any | null }> {

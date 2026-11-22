@@ -11,6 +11,8 @@ import {
   requestActivationOtp,
   verifyActivationOtp,
   completeActivation,
+  changePassword,
+  updateProfile,
 } from '../controllers/authController.js';
 import { protect } from '../middleware/authMiddleware.js';
 
@@ -29,6 +31,8 @@ router.post('/activate/set-password', completeActivation);
 
 router.post('/logout', protect, logout);
 router.get('/me', protect, getMe);
+router.post('/change-password', protect, changePassword);
+router.put('/profile', protect, updateProfile);
 router.post('/seed-initial-users', seedInitialUsers);
 
 export default router;

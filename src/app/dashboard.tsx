@@ -21,7 +21,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import * as Location from "expo-location";
 import { API_BASE_URL } from "../config/api";
-import { getAuthSession, clearAuthSession } from "../utils/storage";
+import { getAuthSession, clearAuthSession, saveAuthSession } from "../utils/storage";
 import { Colors, Spacing, Radii, Shadows } from "../constants/theme";
 import { fontScale, scale, verticalScale } from "../utils/responsive";
 import { formatDistance, getCustomerNearestDistance } from "../utils/geo";
@@ -66,10 +66,101 @@ export default function DashboardScreen() {
   const [visitPlanFilter, setVisitPlanFilter] = useState<"ALL" | "PLANNED" | "UNPLANNED">("ALL");
   const [togglingPlanId, setTogglingPlanId] = useState<string | null>(null);
   const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
+  const [showMyProfileModal, setShowMyProfileModal] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showOfflineModal, setShowOfflineModal] = useState(false);
+  const [showAboutModal, setShowAboutModal] = useState(false);
+
+  // Change Password form state
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPass, setShowCurrentPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState("");
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false);
+
+  // Notification category filter
+  const [notifFilter, setNotifFilter] = useState<"ALL" | "CASES" | "COLLECTIONS">("ALL");
 
   useEffect(() => {
     loadSessionAndData();
   }, []);
+
+  const refreshUserProfile = async (authToken = token) => {
+    if (!authToken) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/me`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.user) {
+          setUser(data.user);
+          saveAuthSession(authToken, data.user).catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to refresh user profile:", err);
+    }
+  };
+
+  const handleChangePasswordSubmit = async () => {
+    const cleanCurrent = currentPassword.trim();
+    const cleanNew = newPassword.trim();
+    const cleanConfirm = confirmPassword.trim();
+
+    if (!cleanCurrent) {
+      setPasswordError("Please enter your current password.");
+      return;
+    }
+    if (!cleanNew || cleanNew.length < 6) {
+      setPasswordError("New password must be at least 6 characters long.");
+      return;
+    }
+    if (cleanNew !== cleanConfirm) {
+      setPasswordError("New passwords do not match.");
+      return;
+    }
+
+    setPasswordSubmitting(true);
+    setPasswordError("");
+    setPasswordSuccess("");
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/change-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          currentPassword: cleanCurrent,
+          newPassword: cleanNew,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to change password.");
+      }
+
+      setPasswordSuccess("Password updated successfully! Keep it safe.");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setTimeout(() => {
+        setShowPasswordChangeModal(false);
+        setPasswordSuccess("");
+      }, 1500);
+    } catch (err: any) {
+      setPasswordError(err.message || "Unable to change password. Please verify connection.");
+    } finally {
+      setPasswordSubmitting(false);
+    }
+  };
 
   const loadSessionAndData = async () => {
     const session = await getAuthSession();
@@ -82,6 +173,7 @@ export default function DashboardScreen() {
     setCaseError(null);
     fetchAdminPortfolios(session.token);
     fetchAssignedCases(session.token);
+    refreshUserProfile(session.token);
   };
 
   const fetchAdminPortfolios = async (authToken: string) => {
@@ -1427,7 +1519,10 @@ export default function DashboardScreen() {
       </View>
 
       {/* Profile Header (Screen 14) */}
-      <View style={styles.profileHeaderCard}>
+      <Pressable
+        style={styles.profileHeaderCard}
+        onPress={() => setShowMyProfileModal(true)}
+      >
         <View style={styles.profileAvatarLarge}>
           {user?.profilePhoto || user?.avatar ? (
             <Image source={{ uri: user.profilePhoto || user.avatar }} style={styles.profileAvatarImg} />
@@ -1437,42 +1532,81 @@ export default function DashboardScreen() {
             </Text>
           )}
         </View>
-        <Text style={styles.profileName}>{user?.name || "Akhil V"}</Text>
-        <Text style={styles.profileRole}>Field Executive</Text>
-        <Text style={styles.profilePhone}>+91 {user?.phone || "98765 43210"}</Text>
-      </View>
+        <Text style={styles.profileName}>{user?.name || "Field Executive"}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
+          <Text style={styles.profileRole}>Field Executive</Text>
+          <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: "#94A3B8" }} />
+          <Text style={[styles.profileRole, { color: "#00A86B", fontWeight: "700" }]}>
+            {user?.employeeId || "STF-101"}
+          </Text>
+        </View>
+        <Text style={styles.profilePhone}>+91 {user?.phone || "N/A"}</Text>
+        <View
+          style={{
+            marginTop: 8,
+            backgroundColor: "#E8F6ED",
+            paddingHorizontal: 12,
+            paddingVertical: 4,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: "#B4E3C9",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 4,
+          }}
+        >
+          <Ionicons name="eye-outline" size={13} color="#0D5D37" />
+          <Text style={{ fontSize: fontScale(11), fontWeight: "700", color: "#0D5D37" }}>
+            Tap to View Full Profile
+          </Text>
+        </View>
+      </Pressable>
 
       {/* Profile Menu List (Screen 14) */}
       <View style={styles.menuListCard}>
         {[
-          { icon: "person-outline" as const, title: "My Profile", subtitle: `ID: ${user?.employeeId || "STF-201"}` },
+          {
+            icon: "person-outline" as const,
+            title: "My Profile",
+            subtitle: `ID: ${user?.employeeId || "STF-101"} • View staff credentials`,
+            onPress: () => setShowMyProfileModal(true),
+          },
           {
             icon: "key-outline" as const,
             title: "Change Password",
             subtitle: "Update your login credentials",
-            onPress: () => setShowPasswordChangeModal(true),
+            onPress: () => {
+              setPasswordError("");
+              setPasswordSuccess("");
+              setCurrentPassword("");
+              setNewPassword("");
+              setConfirmPassword("");
+              setShowPasswordChangeModal(true);
+            },
           },
           {
             icon: "notifications-outline" as const,
             title: "Notifications",
-            subtitle: "App alerts and case updates",
+            subtitle: "Live route, target & collection alerts",
             onPress: () => setShowNotifModal(true),
           },
           {
             icon: "cloud-download-outline" as const,
             title: "Offline Data",
-            subtitle: "Cached customer profiles",
+            subtitle: `${customers.length} cached customer profiles`,
+            onPress: () => setShowOfflineModal(true),
           },
           {
             icon: "help-circle-outline" as const,
             title: "Help & Support",
-            subtitle: "Field staff assistance",
-            onPress: () => Linking.openURL("mailto:support@fieldflow.local"),
+            subtitle: "Helpline, WhatsApp & Field FAQs",
+            onPress: () => setShowHelpModal(true),
           },
           {
             icon: "information-circle-outline" as const,
             title: "About FieldFlow",
-            subtitle: "Version 2.4.0 • Powered by GETLUX",
+            subtitle: "v1.0.0 Production • Powered by GETLUX",
+            onPress: () => setShowAboutModal(true),
           },
         ].map((item, idx) => (
           <Pressable
@@ -2210,29 +2344,260 @@ export default function DashboardScreen() {
       {/* NOTIFICATIONS MODAL */}
       <Modal visible={showNotifModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
+          <View style={[styles.modalCard, { maxHeight: "85%" }]}>
             <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>Field Notifications</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 10,
+                    backgroundColor: "#E8F6ED",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderWidth: 1,
+                    borderColor: "#B4E3C9",
+                  }}
+                >
+                  <Ionicons name="notifications" size={20} color="#0D5D37" />
+                </View>
+                <div>
+                  <Text style={styles.modalTitle}>Field Notifications</Text>
+                  <Text style={{ fontSize: fontScale(11.5), color: "#64748B" }}>Live route & case activity alerts</Text>
+                </div>
+              </View>
               <Pressable onPress={() => setShowNotifModal(false)} hitSlop={8}>
                 <Ionicons name="close" size={22} color={Colors.light.text} />
               </Pressable>
             </View>
 
-            <View style={styles.notifItem}>
-              <Text style={styles.notifDot}>•</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.notifTitle}>Daily Route Ready</Text>
-                <Text style={styles.notifBody}>{customers.length} cases assigned for {user?.assignedArea || "Kozhikode"}.</Text>
-              </View>
+            {/* Notification Filter Chips */}
+            <View style={{ flexDirection: "row", gap: 8, marginBottom: 14 }}>
+              {[
+                { id: "ALL", label: "All" },
+                { id: "CASES", label: "Cases & Route" },
+                { id: "COLLECTIONS", label: "Collections" },
+              ].map((tab) => (
+                <Pressable
+                  key={tab.id}
+                  style={[
+                    {
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 16,
+                      backgroundColor: notifFilter === tab.id ? "#0D5D37" : "#F1F5F9",
+                      borderWidth: 1,
+                      borderColor: notifFilter === tab.id ? "#0D5D37" : "#E2E8F0",
+                    },
+                  ]}
+                  onPress={() => setNotifFilter(tab.id as any)}
+                >
+                  <Text
+                    style={{
+                      fontSize: fontScale(11.5),
+                      fontWeight: "700",
+                      color: notifFilter === tab.id ? "#FFFFFF" : "#475569",
+                    }}
+                  >
+                    {tab.label}
+                  </Text>
+                </Pressable>
+              ))}
             </View>
 
-            <View style={styles.notifItem}>
-              <Text style={[styles.notifDot, { color: "#15803D" }]}>•</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.notifTitle}>Collections Verified</Text>
-                <Text style={styles.notifBody}>All submitted UPI and cash receipts synced to backend.</Text>
-              </View>
-            </View>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380 }}>
+              {/* Notif 1: Route Ready */}
+              {(notifFilter === "ALL" || notifFilter === "CASES") && (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    padding: 12,
+                    borderRadius: 12,
+                    backgroundColor: "#F8FAFC",
+                    borderWidth: 1,
+                    borderColor: "#E2E8F0",
+                    marginBottom: 10,
+                    gap: 12,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: "#EFF6FF",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderWidth: 1,
+                      borderColor: "#BFDBFE",
+                    }}
+                  >
+                    <Ionicons name="navigate-outline" size={18} color="#2563EB" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                      <Text style={{ fontSize: fontScale(13), fontWeight: "800", color: "#0F172A" }}>
+                        Daily Route Assigned
+                      </Text>
+                      <Text style={{ fontSize: fontScale(10.5), color: "#94A3B8" }}>Today, 08:30 AM</Text>
+                    </View>
+                    <Text style={{ fontSize: fontScale(12), color: "#475569", marginTop: 3, lineHeight: 18 }}>
+                      {customers.length} cases assigned in {user?.assignedArea || "your territory"}. Start your field route early for optimal coverage.
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Notif 2: Collections Synced */}
+              {(notifFilter === "ALL" || notifFilter === "COLLECTIONS") && (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    padding: 12,
+                    borderRadius: 12,
+                    backgroundColor: "#F0FDF4",
+                    borderWidth: 1,
+                    borderColor: "#BBF7D0",
+                    marginBottom: 10,
+                    gap: 12,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: "#DCFCE7",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderWidth: 1,
+                      borderColor: "#86EFAC",
+                    }}
+                  >
+                    <Ionicons name="checkmark-circle-outline" size={18} color="#15803D" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                      <Text style={{ fontSize: fontScale(13), fontWeight: "800", color: "#14532D" }}>
+                        Collections Reconciled
+                      </Text>
+                      <Text style={{ fontSize: fontScale(10.5), color: "#166534" }}>Today, 10:15 AM</Text>
+                    </View>
+                    <Text style={{ fontSize: fontScale(12), color: "#166534", marginTop: 3, lineHeight: 18 }}>
+                      Total collected: ₹{(kpis.totalCollectedAmt || 0).toLocaleString("en-IN")}. All receipts and cash logs are successfully synced with server.
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Notif 3: Target Reminder */}
+              {(notifFilter === "ALL" || notifFilter === "CASES") && (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    padding: 12,
+                    borderRadius: 12,
+                    backgroundColor: "#FFFBEB",
+                    borderWidth: 1,
+                    borderColor: "#FDE68A",
+                    marginBottom: 10,
+                    gap: 12,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: "#FEF3C7",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderWidth: 1,
+                      borderColor: "#FCD34D",
+                    }}
+                  >
+                    <Ionicons name="trophy-outline" size={18} color="#D97706" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                      <Text style={{ fontSize: fontScale(13), fontWeight: "800", color: "#92400E" }}>
+                        Monthly Recovery Target
+                      </Text>
+                      <Text style={{ fontSize: fontScale(10.5), color: "#B45309" }}>Yesterday</Text>
+                    </View>
+                    <Text style={{ fontSize: fontScale(12), color: "#92400E", marginTop: 3, lineHeight: 18 }}>
+                      Target: ₹{(user?.monthlyTarget || 250000).toLocaleString("en-IN")}. Maintain consistent daily recovery to achieve 100% target.
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Notif 4: Geofence Policy */}
+              {notifFilter === "ALL" && (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    padding: 12,
+                    borderRadius: 12,
+                    backgroundColor: "#F8FAFC",
+                    borderWidth: 1,
+                    borderColor: "#E2E8F0",
+                    marginBottom: 10,
+                    gap: 12,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: "#F1F5F9",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderWidth: 1,
+                      borderColor: "#CBD5E1",
+                    }}
+                  >
+                    <Ionicons name="shield-checkmark-outline" size={18} color="#0F766E" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                      <Text style={{ fontSize: fontScale(13), fontWeight: "800", color: "#0F172A" }}>
+                        GPS Geofence Audited
+                      </Text>
+                      <Text style={{ fontSize: fontScale(10.5), color: "#94A3B8" }}>2 days ago</Text>
+                    </View>
+                    <Text style={{ fontSize: fontScale(12), color: "#475569", marginTop: 3, lineHeight: 18 }}>
+                      Ensure you are within the 100m geofence radius of customer coordinates when submitting visit logs.
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+
+            <Pressable
+              style={{
+                marginTop: 12,
+                backgroundColor: "#F1F5F9",
+                paddingVertical: 12,
+                borderRadius: 10,
+                alignItems: "center",
+                borderWidth: 1,
+                borderColor: "#CBD5E1",
+              }}
+              onPress={() => {
+                Alert.alert("Notifications", "All notifications marked as read.");
+                setShowNotifModal(false);
+              }}
+            >
+              <Text style={{ fontSize: fontScale(13), fontWeight: "700", color: "#334155" }}>
+                Mark All as Read
+              </Text>
+            </Pressable>
           </View>
         </View>
       </Modal>
@@ -2475,24 +2840,852 @@ export default function DashboardScreen() {
       {/* MODAL 5: PASSWORD CHANGE MODAL */}
       <Modal visible={showPasswordChangeModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
+          <View style={[styles.modalCard, { maxHeight: "90%" }]}>
             <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>Change Password</Text>
-              <Pressable onPress={() => setShowPasswordChangeModal(false)} hitSlop={8}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 10,
+                    backgroundColor: "#FEF3C7",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderWidth: 1,
+                    borderColor: "#FDE68A",
+                  }}
+                >
+                  <Ionicons name="key" size={20} color="#D97706" />
+                </View>
+                <div>
+                  <Text style={styles.modalTitle}>Change Password</Text>
+                  <Text style={{ fontSize: fontScale(11.5), color: "#64748B" }}>Update login credentials</Text>
+                </div>
+              </View>
+              <Pressable
+                onPress={() => {
+                  if (!passwordSubmitting) setShowPasswordChangeModal(false);
+                }}
+                hitSlop={8}
+              >
                 <Ionicons name="close" size={22} color={Colors.light.text} />
               </Pressable>
             </View>
-            <Text style={{ fontSize: fontScale(12.5), color: "#64748B", marginBottom: 14 }}>
-              Enter your current password and choose a secure new password.
-            </Text>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {passwordError ? (
+                <View
+                  style={{
+                    backgroundColor: "#FEF2F2",
+                    borderColor: "#FECACA",
+                    borderWidth: 1,
+                    borderRadius: 10,
+                    padding: 10,
+                    marginBottom: 14,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <Ionicons name="alert-circle" size={18} color="#DC2626" />
+                  <Text style={{ fontSize: fontScale(12), color: "#DC2626", flex: 1, fontWeight: "600" }}>
+                    {passwordError}
+                  </Text>
+                </View>
+              ) : null}
+
+              {passwordSuccess ? (
+                <View
+                  style={{
+                    backgroundColor: "#ECFDF5",
+                    borderColor: "#A7F3D0",
+                    borderWidth: 1,
+                    borderRadius: 10,
+                    padding: 10,
+                    marginBottom: 14,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <Ionicons name="checkmark-circle" size={18} color="#059669" />
+                  <Text style={{ fontSize: fontScale(12), color: "#065F46", flex: 1, fontWeight: "700" }}>
+                    {passwordSuccess}
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Current Password */}
+              <View style={{ marginBottom: 14 }}>
+                <Text style={{ fontSize: fontScale(12.5), fontWeight: "700", color: "#334155", marginBottom: 6 }}>
+                  Current Password *
+                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    borderWidth: 1,
+                    borderColor: "#CBD5E1",
+                    borderRadius: 10,
+                    backgroundColor: "#F8FAFC",
+                    paddingHorizontal: 12,
+                  }}
+                >
+                  <Ionicons name="lock-closed-outline" size={18} color="#94A3B8" />
+                  <TextInput
+                    style={{ flex: 1, height: 44, paddingHorizontal: 10, fontSize: fontScale(14), color: "#0F172A" }}
+                    placeholder="Enter current password"
+                    placeholderTextColor="#94A3B8"
+                    secureTextEntry={!showCurrentPass}
+                    value={currentPassword}
+                    onChangeText={setCurrentPassword}
+                    autoCapitalize="none"
+                  />
+                  <Pressable onPress={() => setShowCurrentPass(!showCurrentPass)} hitSlop={8}>
+                    <Ionicons name={showCurrentPass ? "eye-off-outline" : "eye-outline"} size={20} color="#64748B" />
+                  </Pressable>
+                </View>
+              </View>
+
+              {/* New Password */}
+              <View style={{ marginBottom: 14 }}>
+                <Text style={{ fontSize: fontScale(12.5), fontWeight: "700", color: "#334155", marginBottom: 6 }}>
+                  New Password *
+                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    borderWidth: 1,
+                    borderColor: "#CBD5E1",
+                    borderRadius: 10,
+                    backgroundColor: "#F8FAFC",
+                    paddingHorizontal: 12,
+                  }}
+                >
+                  <Ionicons name="key-outline" size={18} color="#94A3B8" />
+                  <TextInput
+                    style={{ flex: 1, height: 44, paddingHorizontal: 10, fontSize: fontScale(14), color: "#0F172A" }}
+                    placeholder="Enter at least 6 characters"
+                    placeholderTextColor="#94A3B8"
+                    secureTextEntry={!showNewPass}
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    autoCapitalize="none"
+                  />
+                  <Pressable onPress={() => setShowNewPass(!showNewPass)} hitSlop={8}>
+                    <Ionicons name={showNewPass ? "eye-off-outline" : "eye-outline"} size={20} color="#64748B" />
+                  </Pressable>
+                </View>
+                <Text style={{ fontSize: fontScale(11), color: "#64748B", marginTop: 4 }}>
+                  Password must be at least 6 characters.
+                </Text>
+              </View>
+
+              {/* Confirm New Password */}
+              <View style={{ marginBottom: 20 }}>
+                <Text style={{ fontSize: fontScale(12.5), fontWeight: "700", color: "#334155", marginBottom: 6 }}>
+                  Confirm New Password *
+                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    borderWidth: 1,
+                    borderColor: "#CBD5E1",
+                    borderRadius: 10,
+                    backgroundColor: "#F8FAFC",
+                    paddingHorizontal: 12,
+                  }}
+                >
+                  <Ionicons name="shield-checkmark-outline" size={18} color="#94A3B8" />
+                  <TextInput
+                    style={{ flex: 1, height: 44, paddingHorizontal: 10, fontSize: fontScale(14), color: "#0F172A" }}
+                    placeholder="Re-type new password"
+                    placeholderTextColor="#94A3B8"
+                    secureTextEntry={!showConfirmPass}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    autoCapitalize="none"
+                  />
+                  <Pressable onPress={() => setShowConfirmPass(!showConfirmPass)} hitSlop={8}>
+                    <Ionicons name={showConfirmPass ? "eye-off-outline" : "eye-outline"} size={20} color="#64748B" />
+                  </Pressable>
+                </View>
+              </View>
+
+              {/* Buttons */}
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <Pressable
+                  style={{
+                    flex: 1,
+                    paddingVertical: 13,
+                    borderRadius: 10,
+                    backgroundColor: "#F1F5F9",
+                    alignItems: "center",
+                    borderWidth: 1,
+                    borderColor: "#CBD5E1",
+                  }}
+                  onPress={() => setShowPasswordChangeModal(false)}
+                  disabled={passwordSubmitting}
+                >
+                  <Text style={{ fontSize: fontScale(13.5), fontWeight: "700", color: "#475569" }}>Cancel</Text>
+                </Pressable>
+
+                <Pressable
+                  style={{
+                    flex: 2,
+                    paddingVertical: 13,
+                    borderRadius: 10,
+                    backgroundColor: "#00A86B",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexDirection: "row",
+                    gap: 8,
+                  }}
+                  onPress={handleChangePasswordSubmit}
+                  disabled={passwordSubmitting}
+                >
+                  {passwordSubmitting ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Ionicons name="checkmark-sharp" size={18} color="#FFFFFF" />
+                      <Text style={{ fontSize: fontScale(13.5), fontWeight: "800", color: "#FFFFFF" }}>
+                        Update Password
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL 6: MY PROFILE DETAILS MODAL */}
+      <Modal visible={showMyProfileModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { maxHeight: "90%" }]}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 10,
+                    backgroundColor: "#E8F6ED",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderWidth: 1,
+                    borderColor: "#B4E3C9",
+                  }}
+                >
+                  <Ionicons name="person" size={20} color="#0D5D37" />
+                </View>
+                <div>
+                  <Text style={styles.modalTitle}>Staff Profile</Text>
+                  <Text style={{ fontSize: fontScale(11.5), color: "#64748B" }}>Official Field Executive Details</Text>
+                </div>
+              </View>
+              <Pressable onPress={() => setShowMyProfileModal(false)} hitSlop={8}>
+                <Ionicons name="close" size={22} color={Colors.light.text} />
+              </Pressable>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Profile Card Banner */}
+              <View
+                style={{
+                  backgroundColor: "#0B4628",
+                  borderRadius: 14,
+                  padding: 18,
+                  alignItems: "center",
+                  marginBottom: 16,
+                }}
+              >
+                <View
+                  style={{
+                    width: 72,
+                    height: 72,
+                    borderRadius: 36,
+                    backgroundColor: "#10B981",
+                    borderWidth: 3,
+                    borderColor: "#FFFFFF",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    overflow: "hidden",
+                    marginBottom: 10,
+                  }}
+                >
+                  {user?.profilePhoto || user?.avatar ? (
+                    <Image source={{ uri: user.profilePhoto || user.avatar }} style={{ width: "100%", height: "100%" }} />
+                  ) : (
+                    <Text style={{ fontSize: fontScale(26), fontWeight: "900", color: "#FFFFFF" }}>
+                      {(user?.name || "A").substring(0, 1).toUpperCase()}
+                    </Text>
+                  )}
+                </View>
+                <Text style={{ fontSize: fontScale(18), fontWeight: "900", color: "#FFFFFF" }}>
+                  {user?.name || "Field Executive"}
+                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
+                  <Text style={{ fontSize: fontScale(12), color: "rgba(255,255,255,0.85)", fontWeight: "600" }}>
+                    Field Executive
+                  </Text>
+                  <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.6)" }} />
+                  <Text style={{ fontSize: fontScale(12), color: "#A7F3D0", fontWeight: "800" }}>
+                    ID: {user?.employeeId || "STF-101"}
+                  </Text>
+                </View>
+
+                {/* Status chip */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
+                    backgroundColor: "rgba(255,255,255,0.18)",
+                    paddingHorizontal: 12,
+                    paddingVertical: 4,
+                    borderRadius: 12,
+                    marginTop: 10,
+                  }}
+                >
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#10B981" }} />
+                  <Text style={{ fontSize: fontScale(11), fontWeight: "700", color: "#FFFFFF" }}>
+                    Status: Active & Authorized
+                  </Text>
+                </View>
+              </View>
+
+              {/* Information Section */}
+              <View
+                style={{
+                  backgroundColor: "#F8FAFC",
+                  borderRadius: 14,
+                  padding: 14,
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
+                  marginBottom: 14,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: fontScale(12),
+                    fontWeight: "800",
+                    color: "#0F172A",
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                    marginBottom: 10,
+                  }}
+                >
+                  Contact & Operational Details
+                </Text>
+
+                {[
+                  { icon: "call-outline", label: "Mobile Phone", value: `+91 ${user?.phone || "N/A"}` },
+                  { icon: "mail-outline", label: "Email Address", value: user?.email || "Not registered" },
+                  { icon: "location-outline", label: "Operating Territory", value: user?.assignedArea || "Kozhikode Central" },
+                  { icon: "briefcase-outline", label: "Department", value: "Field Collection & Recovery" },
+                  {
+                    icon: "trophy-outline",
+                    label: "Monthly Recovery Target",
+                    value: `₹${(user?.monthlyTarget || 250000).toLocaleString("en-IN")}`,
+                    highlight: true,
+                  },
+                ].map((row, rIdx) => (
+                  <View
+                    key={rIdx}
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      paddingVertical: 9,
+                      borderBottomWidth: rIdx < 4 ? 1 : 0,
+                      borderBottomColor: "#EDF2F7",
+                    }}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <Ionicons name={row.icon as any} size={16} color="#64748B" />
+                      <Text style={{ fontSize: fontScale(12.5), color: "#64748B", fontWeight: "600" }}>{row.label}</Text>
+                    </View>
+                    <Text
+                      style={{
+                        fontSize: fontScale(13),
+                        fontWeight: row.highlight ? "800" : "700",
+                        color: row.highlight ? "#15803D" : "#0F172A",
+                      }}
+                    >
+                      {row.value}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+
+              {/* Performance Snapshot */}
+              <View
+                style={{
+                  backgroundColor: "#F0FDF4",
+                  borderRadius: 14,
+                  padding: 14,
+                  borderWidth: 1,
+                  borderColor: "#BBF7D0",
+                  marginBottom: 16,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: fontScale(12),
+                    fontWeight: "800",
+                    color: "#166534",
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                    marginBottom: 10,
+                  }}
+                >
+                  Performance Snapshot
+                </Text>
+                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                  <View style={{ alignItems: "center" }}>
+                    <Text style={{ fontSize: fontScale(16), fontWeight: "900", color: "#14532D" }}>
+                      {customers.length}
+                    </Text>
+                    <Text style={{ fontSize: fontScale(11), color: "#166534", marginTop: 2 }}>Assigned Cases</Text>
+                  </View>
+                  <View style={{ width: 1, backgroundColor: "#BBF7D0" }} />
+                  <View style={{ alignItems: "center" }}>
+                    <Text style={{ fontSize: fontScale(16), fontWeight: "900", color: "#00A86B" }}>
+                      {kpis.visited}
+                    </Text>
+                    <Text style={{ fontSize: fontScale(11), color: "#166534", marginTop: 2 }}>Visits Completed</Text>
+                  </View>
+                  <View style={{ width: 1, backgroundColor: "#BBF7D0" }} />
+                  <View style={{ alignItems: "center" }}>
+                    <Text style={{ fontSize: fontScale(16), fontWeight: "900", color: "#15803D" }}>
+                      ₹{(kpis.totalCollectedAmt || 0).toLocaleString("en-IN")}
+                    </Text>
+                    <Text style={{ fontSize: fontScale(11), color: "#166534", marginTop: 2 }}>Total Collected</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Action Buttons */}
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <Pressable
+                  style={{
+                    flex: 1,
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    backgroundColor: "#F1F5F9",
+                    alignItems: "center",
+                    borderWidth: 1,
+                    borderColor: "#CBD5E1",
+                    flexDirection: "row",
+                    justifyContent: "center",
+                    gap: 6,
+                  }}
+                  onPress={() => {
+                    refreshUserProfile();
+                    Alert.alert("Refreshed", "Profile data synced with server.");
+                  }}
+                >
+                  <Ionicons name="refresh-outline" size={16} color="#334155" />
+                  <Text style={{ fontSize: fontScale(13), fontWeight: "700", color: "#334155" }}>Refresh</Text>
+                </Pressable>
+
+                <Pressable
+                  style={{
+                    flex: 1,
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    backgroundColor: "#00A86B",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                  onPress={() => setShowMyProfileModal(false)}
+                >
+                  <Text style={{ fontSize: fontScale(13.5), fontWeight: "800", color: "#FFFFFF" }}>Done</Text>
+                </Pressable>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL 7: HELP & SUPPORT MODAL */}
+      <Modal visible={showHelpModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { maxHeight: "90%" }]}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 10,
+                    backgroundColor: "#EFF6FF",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderWidth: 1,
+                    borderColor: "#BFDBFE",
+                  }}
+                >
+                  <Ionicons name="help-buoy" size={20} color="#2563EB" />
+                </View>
+                <div>
+                  <Text style={styles.modalTitle}>Help & Support</Text>
+                  <Text style={{ fontSize: fontScale(11.5), color: "#64748B" }}>Field Staff Assistance Desk</Text>
+                </div>
+              </View>
+              <Pressable onPress={() => setShowHelpModal(false)} hitSlop={8}>
+                <Ionicons name="close" size={22} color={Colors.light.text} />
+              </Pressable>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Working Hours Card */}
+              <View
+                style={{
+                  backgroundColor: "#E8F6ED",
+                  borderRadius: 12,
+                  padding: 12,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                  borderWidth: 1,
+                  borderColor: "#B4E3C9",
+                  marginBottom: 14,
+                }}
+              >
+                <Ionicons name="time-outline" size={20} color="#0D5D37" />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: fontScale(12.5), fontWeight: "800", color: "#0D5D37" }}>
+                    Operations Hours: Mon - Sat
+                  </Text>
+                  <Text style={{ fontSize: fontScale(11.5), color: "#166534", marginTop: 1 }}>
+                    08:30 AM - 07:30 PM IST (Helpline Active)
+                  </Text>
+                </View>
+              </View>
+
+              {/* Direct Contact Options */}
+              <Text style={{ fontSize: fontScale(12), fontWeight: "800", color: "#0F172A", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+                Contact Supervisors & Support
+              </Text>
+
+              {/* Option 1: Call Phone */}
+              <Pressable
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  padding: 14,
+                  borderRadius: 12,
+                  backgroundColor: "#F8FAFC",
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
+                  marginBottom: 10,
+                  gap: 12,
+                }}
+                onPress={() => Linking.openURL("tel:9876543210")}
+              >
+                <View
+                  style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 12,
+                    backgroundColor: "#EFF6FF",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderWidth: 1,
+                    borderColor: "#BFDBFE",
+                  }}
+                >
+                  <Ionicons name="call" size={20} color="#2563EB" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: fontScale(13.5), fontWeight: "800", color: "#0F172A" }}>
+                    Call Field Operations Desk
+                  </Text>
+                  <Text style={{ fontSize: fontScale(11.5), color: "#64748B", marginTop: 2 }}>
+                    +91 98765 43210 • Tap to place phone call
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+              </Pressable>
+
+              {/* Option 2: WhatsApp Chat */}
+              <Pressable
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  padding: 14,
+                  borderRadius: 12,
+                  backgroundColor: "#F0FDF4",
+                  borderWidth: 1,
+                  borderColor: "#BBF7D0",
+                  marginBottom: 10,
+                  gap: 12,
+                }}
+                onPress={() =>
+                  Linking.openURL(
+                    "https://wa.me/919876543210?text=Hello%20FieldFlow%20Support,%20I%20am%20a%20field%20staff%20executive%20and%20need%20assistance."
+                  )
+                }
+              >
+                <View
+                  style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 12,
+                    backgroundColor: "#DCFCE7",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderWidth: 1,
+                    borderColor: "#86EFAC",
+                  }}
+                >
+                  <Ionicons name="logo-whatsapp" size={20} color="#15803D" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: fontScale(13.5), fontWeight: "800", color: "#14532D" }}>
+                    WhatsApp Field Chat
+                  </Text>
+                  <Text style={{ fontSize: fontScale(11.5), color: "#166534", marginTop: 2 }}>
+                    Instant messaging support for recovery queries
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#86EFAC" />
+              </Pressable>
+
+              {/* Option 3: Email Support */}
+              <Pressable
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  padding: 14,
+                  borderRadius: 12,
+                  backgroundColor: "#F8FAFC",
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
+                  marginBottom: 16,
+                  gap: 12,
+                }}
+                onPress={() =>
+                  Linking.openURL(
+                    "mailto:support@fieldflow.in?subject=FieldFlow%20Field%20Staff%20Assistance%20Request"
+                  )
+                }
+              >
+                <View
+                  style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 12,
+                    backgroundColor: "#F5F3FF",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderWidth: 1,
+                    borderColor: "#DDD6FE",
+                  }}
+                >
+                  <Ionicons name="mail" size={20} color="#7C3AED" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: fontScale(13.5), fontWeight: "800", color: "#0F172A" }}>
+                    Email Support Desk
+                  </Text>
+                  <Text style={{ fontSize: fontScale(11.5), color: "#64748B", marginTop: 2 }}>
+                    support@fieldflow.in • Detailed complaints
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+              </Pressable>
+
+              {/* Operational FAQs */}
+              <Text style={{ fontSize: fontScale(12), fontWeight: "800", color: "#0F172A", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+                Quick Field FAQs
+              </Text>
+
+              {[
+                {
+                  q: "Customer not at registered address?",
+                  a: "If customer promised to pay later, choose PTP with promised date. If untraceable or address wrong, select Non-Workable.",
+                },
+                {
+                  q: "GPS geofence mismatch warning?",
+                  a: "Ensure phone GPS is on High Accuracy. Ensure you check-in within 100 metres of the registered customer location.",
+                },
+                {
+                  q: "How to share visit photo directly to WhatsApp?",
+                  a: "Capture the house/customer evidence photo in the Visit screen, tap Share on WhatsApp, and the actual photo will open in WhatsApp with all pre-filled details.",
+                },
+              ].map((faq, fIdx) => (
+                <View
+                  key={fIdx}
+                  style={{
+                    backgroundColor: "#F8FAFC",
+                    borderRadius: 10,
+                    padding: 12,
+                    borderWidth: 1,
+                    borderColor: "#E2E8F0",
+                    marginBottom: 8,
+                  }}
+                >
+                  <Text style={{ fontSize: fontScale(12.5), fontWeight: "800", color: "#0F172A" }}>
+                    Q: {faq.q}
+                  </Text>
+                  <Text style={{ fontSize: fontScale(12), color: "#475569", marginTop: 4, lineHeight: 18 }}>
+                    {faq.a}
+                  </Text>
+                </View>
+              ))}
+
+              <Pressable
+                style={{
+                  marginTop: 10,
+                  backgroundColor: "#00A86B",
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  alignItems: "center",
+                }}
+                onPress={() => setShowHelpModal(false)}
+              >
+                <Text style={{ fontSize: fontScale(13.5), fontWeight: "800", color: "#FFFFFF" }}>Close</Text>
+              </Pressable>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL 8: OFFLINE DATA MODAL */}
+      <Modal visible={showOfflineModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { maxHeight: "80%" }]}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 10,
+                    backgroundColor: "#EFF6FF",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderWidth: 1,
+                    borderColor: "#BFDBFE",
+                  }}
+                >
+                  <Ionicons name="cloud-download" size={20} color="#2563EB" />
+                </View>
+                <div>
+                  <Text style={styles.modalTitle}>Offline Data & Cache</Text>
+                  <Text style={{ fontSize: fontScale(11.5), color: "#64748B" }}>Local encrypted storage</Text>
+                </div>
+              </View>
+              <Pressable onPress={() => setShowOfflineModal(false)} hitSlop={8}>
+                <Ionicons name="close" size={22} color={Colors.light.text} />
+              </Pressable>
+            </View>
+
+            <View style={{ backgroundColor: "#F8FAFC", borderRadius: 12, padding: 16, borderWidth: 1, borderColor: "#E2E8F0", marginBottom: 16 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#EDF2F7" }}>
+                <Text style={{ fontSize: fontScale(13), color: "#64748B" }}>Cached Customers</Text>
+                <Text style={{ fontSize: fontScale(13.5), fontWeight: "800", color: "#0F172A" }}>{customers.length} cases</Text>
+              </View>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#EDF2F7" }}>
+                <Text style={{ fontSize: fontScale(13), color: "#64748B" }}>Active Portfolios</Text>
+                <Text style={{ fontSize: fontScale(13.5), fontWeight: "800", color: "#0F172A" }}>{availablePortfolios.length} portfolios</Text>
+              </View>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 8 }}>
+                <Text style={{ fontSize: fontScale(13), color: "#64748B" }}>Sync Status</Text>
+                <Text style={{ fontSize: fontScale(13.5), fontWeight: "800", color: "#15803D" }}>● Online & Synchronized</Text>
+              </View>
+            </View>
+
             <Pressable
-              style={[styles.modalBtn, { backgroundColor: "#00A86B", width: "100%" }]}
+              style={{
+                backgroundColor: "#00A86B",
+                paddingVertical: 13,
+                borderRadius: 10,
+                alignItems: "center",
+                flexDirection: "row",
+                justifyContent: "center",
+                gap: 8,
+                marginBottom: 10,
+              }}
               onPress={() => {
-                Alert.alert("Password Updated", "Your password has been changed successfully.");
-                setShowPasswordChangeModal(false);
+                fetchAssignedCases(token);
+                Alert.alert("Sync Complete", "Offline customer cases refreshed from cloud server.");
+                setShowOfflineModal(false);
               }}
             >
-              <Text style={[styles.modalBtnText, { color: "#FFFFFF" }]}>Done</Text>
+              <Ionicons name="sync" size={18} color="#FFFFFF" />
+              <Text style={{ fontSize: fontScale(13.5), fontWeight: "800", color: "#FFFFFF" }}>Sync Now with Server</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL 9: ABOUT FIELDFLOW MODAL */}
+      <Modal visible={showAboutModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { maxHeight: "80%" }]}>
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>About FieldFlow</Text>
+              <Pressable onPress={() => setShowAboutModal(false)} hitSlop={8}>
+                <Ionicons name="close" size={22} color={Colors.light.text} />
+              </Pressable>
+            </View>
+
+            <View style={{ alignItems: "center", paddingVertical: 16 }}>
+              <View
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 16,
+                  backgroundColor: "#0D5D37",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: 12,
+                }}
+              >
+                <Ionicons name="leaf" size={28} color="#10B981" />
+              </View>
+              <Text style={{ fontSize: fontScale(20), fontWeight: "900", color: "#0F172A" }}>FieldFlow</Text>
+              <Text style={{ fontSize: fontScale(12), color: "#64748B", fontWeight: "600", marginTop: 2 }}>
+                Collect • Track • Grow
+              </Text>
+              <Text style={{ fontSize: fontScale(11), color: "#00A86B", fontWeight: "800", marginTop: 4, textTransform: "uppercase" }}>
+                Powered by GETLUX
+              </Text>
+            </View>
+
+            <View style={{ backgroundColor: "#F8FAFC", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "#E2E8F0", marginBottom: 16 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: "#EDF2F7" }}>
+                <Text style={{ fontSize: fontScale(12.5), color: "#64748B" }}>Release Version</Text>
+                <Text style={{ fontSize: fontScale(12.5), fontWeight: "700", color: "#0F172A" }}>1.0.0 (Production)</Text>
+              </View>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: "#EDF2F7" }}>
+                <Text style={{ fontSize: fontScale(12.5), color: "#64748B" }}>Channel</Text>
+                <Text style={{ fontSize: fontScale(12.5), fontWeight: "700", color: "#00A86B" }}>production-apk</Text>
+              </View>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 6 }}>
+                <Text style={{ fontSize: fontScale(12.5), color: "#64748B" }}>Geofence Auditing</Text>
+                <Text style={{ fontSize: fontScale(12.5), fontWeight: "700", color: "#0F172A" }}>100m Precision</Text>
+              </View>
+            </View>
+
+            <Pressable
+              style={{
+                backgroundColor: "#00A86B",
+                paddingVertical: 12,
+                borderRadius: 10,
+                alignItems: "center",
+              }}
+              onPress={() => setShowAboutModal(false)}
+            >
+              <Text style={{ fontSize: fontScale(13.5), fontWeight: "800", color: "#FFFFFF" }}>Close</Text>
             </Pressable>
           </View>
         </View>

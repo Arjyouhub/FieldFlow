@@ -288,10 +288,106 @@ export async function logout(req, res) {
 }
 
 export async function getMe(req, res) {
-  return res.json({
-    success: true,
-    user: req.user,
-  });
+  try {
+    const user = await User.findById(req.user._id).select('-password');
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+    return res.json({
+      success: true,
+      user,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+export async function changePassword(req, res) {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Current password and new password are required.',
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password must be at least 6 characters long.',
+      });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    const isMatch = await user.comparePassword(currentPassword);
+    if (!isMatch) {
+      return res.status(400).json({
+        success: false,
+        message: 'Current password is incorrect. Please verify and try again.',
+      });
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    await AuditLog.create({
+      actorId: user._id,
+      actorName: user.name,
+      actorRole: user.role,
+      action: 'CHANGE_PASSWORD',
+      entityType: 'User',
+      entityId: user._id.toString(),
+      details: { message: 'Password updated by authenticated user' },
+    }).catch(() => {});
+
+    return res.json({
+      success: true,
+      message: 'Password changed successfully. You can now use your new password.',
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+export async function updateProfile(req, res) {
+  try {
+    const { name, email, assignedArea, profilePhoto } = req.body;
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    if (name) user.name = name.trim();
+    if (email !== undefined) user.email = email.trim().toLowerCase();
+    if (assignedArea !== undefined) user.assignedArea = assignedArea.trim();
+    if (profilePhoto !== undefined) user.profilePhoto = profilePhoto;
+
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: 'Profile updated successfully.',
+      user: {
+        id: user._id,
+        name: user.name,
+        employeeId: user.employeeId,
+        phone: user.phone,
+        email: user.email,
+        role: user.role,
+        assignedArea: user.assignedArea,
+        profilePhoto: user.profilePhoto,
+        monthlyTarget: user.monthlyTarget,
+        status: user.status,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
 }
 
 // Development helper to seed demo initial accounts, portfolios, batches, cases
